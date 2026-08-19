@@ -102,7 +102,7 @@ function PayEbShareModal({ bill, share, user, onClose, onDone }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-      <form onSubmit={submit} className="bg-white rounded-2xl shadow-lg w-full max-w-sm p-6 space-y-3">
+      <form onSubmit={submit} className="bg-white rounded-2xl shadow-lg w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto space-y-3">
         <h3 className="font-semibold text-slate-800">Pay {bill.cycleLabel} — ₹{share.shareAmount}</h3>
 
         <input required type="date" value={form.dateSent} onChange={(e) => setForm({ ...form, dateSent: e.target.value })}

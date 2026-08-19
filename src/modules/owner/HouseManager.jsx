@@ -20,7 +20,7 @@ export default function HouseManager() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-800">Houses</h2>
           <p className="text-sm text-slate-500">
@@ -29,7 +29,7 @@ export default function HouseManager() {
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="bg-brand text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-brand-dark"
+          className="bg-brand text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-brand-dark self-start sm:self-auto"
         >
           + Add House
         </button>
@@ -117,8 +117,10 @@ function CreateHouseModal({ onClose, onCreated }) {
 
 function BookHouseModal({ house, onClose, onDone }) {
   const [form, setForm] = useState({
-    name: '', phone: '', email: '', password: '', rentAmount: '', advanceAmount: '',
+    name: '', phone: '', email: '', password: '', rentAmount: '', advanceAmount: '', aadhaarNumber: '',
   })
+  const [customerId, setCustomerId] = useState(null)
+
   async function submit(e) {
     e.preventDefault()
     const tenant = await createTenantAccount({
@@ -127,6 +129,7 @@ function BookHouseModal({ house, onClose, onDone }) {
       name: form.name,
       phone: form.phone,
       houseId: house.id,
+      aadhaarNumber: form.aadhaarNumber,
     })
     await bookHouse(house.id, {
       tenantId: tenant.uid,
@@ -136,9 +139,23 @@ function BookHouseModal({ house, onClose, onDone }) {
       rentAmount: Number(form.rentAmount),
       advanceAmount: Number(form.advanceAmount),
     })
+    setCustomerId(tenant.customerId)
     onDone()
-    onClose()
   }
+
+  if (customerId) {
+    return (
+      <Modal title="House Booked" onClose={onClose}>
+        <div className="text-center space-y-2 py-2">
+          <p className="text-sm text-slate-600">Tenant login created. Share this Customer ID with them —</p>
+          <p className="text-2xl font-semibold text-brand">{customerId}</p>
+          <p className="text-xs text-slate-400">They can sign in with this ID + the password you set, with their email + password, or with Google.</p>
+          <button onClick={onClose} className="mt-4 w-full bg-brand text-white py-2 rounded-lg text-sm font-medium">Done</button>
+        </div>
+      </Modal>
+    )
+  }
+
   return (
     <Modal title={`Book ${house.internalDoorNumber}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
@@ -146,6 +163,7 @@ function BookHouseModal({ house, onClose, onDone }) {
         <input required placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <input required type="email" placeholder="Email (used as login)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <input required type="password" placeholder="Temporary password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <input placeholder="Aadhaar number (links repeat tenants to one Customer ID)" value={form.aadhaarNumber} onChange={(e) => setForm({ ...form, aadhaarNumber: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <input required type="number" placeholder="Rent amount" value={form.rentAmount} onChange={(e) => setForm({ ...form, rentAmount: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <input required type="number" placeholder="Advance amount" value={form.advanceAmount} onChange={(e) => setForm({ ...form, advanceAmount: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <button className="w-full bg-brand text-white py-2 rounded-lg text-sm font-medium">Book House</button>
@@ -197,7 +215,7 @@ function VacateHouseModal({ house, onClose, onDone }) {
 function Modal({ title, children, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-6">
+      <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-slate-800">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">✕</button>

@@ -1,6 +1,6 @@
 const { initializeApp } = require('firebase-admin/app')
 const { getAuth } = require('firebase-admin/auth')
-const { getFirestore } = require('firebase-admin/firestore')
+const { getFirestore, FieldValue } = require('firebase-admin/firestore')
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore')
 const { onSchedule } = require('firebase-functions/v2/scheduler')
 
@@ -57,4 +57,79 @@ exports.revokeAccessAfterVacate = onSchedule('every 15 minutes', async () => {
     // Clear the flag so this house isn't reprocessed every 15 minutes
     await doc.ref.update({ accessRevokeScheduledAt: 0 })
   }
+})
+
+// ---- createTenantAccountAdmin ----
+// Creating a Firebase Auth user with the CLIENT SDK auto-switches the active
+// session to that new user — which would log the owner out mid-booking. This
+// callable function uses the Admin SDK instead, so the owner's own session is
+// never touched. It also mints/reuses the bank-style Customer ID and writes
+// both the users/{uid} and customers/{customerId} docs.
+const { HttpsError, onCall } = require('firebase-functions/v2/https')
+
+exports.createTenantAccountAdmin = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Sign in required.')
+  }
+  const callerDoc = await db.collection('users').doc(request.auth.uid).get()
+  if (callerDoc.data()?.role !== 'owner') {
+    throw new HttpsError('permission-denied', 'Only the owner can create tenant accounts.')
+  }
+
+  const { email, password, name, phone, houseId, aadhaarNumber } = request.data
+
+  const userRecord = await auth.createUser({ email, password, displayName: name })
+  await auth.setCustomUserClaims(userRecord.uid, { role: 'tenant' })
+
+  // Reuse an existing Customer ID if this Aadhaar number already has one.
+  let customerId
+  if (aadhaarNumber) {
+    const existing = await db
+      .collection('customers')
+      .where('aadhaarNumber', '==', aadhaarNumber)
+      .limit(1)
+      .get()
+    if (!existing.empty) {
+      customerId = existing.docs[0].id
+      await existing.docs[0].ref.update({
+        linkedUids: FieldValue.arrayUnion(userRecord.uid),
+        linkedHouseIds: FieldValue.arrayUnion(houseId),
+      })
+    }
+  }
+
+  if (!customerId) {
+    customerId = await db.runTransaction(async (tx) => {
+      const counterRef = db.collection('counters').doc('customerId')
+      const counterSnap = await tx.get(counterRef)
+      const current = counterSnap.exists ? counterSnap.data().value : 1000
+      const next = current + 1
+      tx.set(counterRef, { value: next }, { merge: true })
+      const id = `RM${next}`
+      tx.set(db.collection('customers').doc(id), {
+        customerId: id,
+        name,
+        phone,
+        email,
+        aadhaarNumber: aadhaarNumber || null,
+        linkedUids: [userRecord.uid],
+        linkedHouseIds: [houseId],
+        createdAt: Date.now(),
+      })
+      tx.set(db.collection('customerLookup').doc(id), { email })
+      return id
+    })
+  }
+
+  await db.collection('users').doc(userRecord.uid).set({
+    role: 'tenant',
+    name,
+    email,
+    phone,
+    houseId,
+    customerId,
+    createdAt: Date.now(),
+  })
+
+  return { uid: userRecord.uid, customerId }
 })

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { watchAuthState } from '../services/authService'
+import { watchAuthState, handleGoogleRedirectResult } from '../services/authService'
 
 const AuthContext = createContext(null)
 
@@ -7,6 +7,10 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(undefined) // undefined = loading, null = logged out
 
   useEffect(() => {
+    // Picks up the result if the user just came back from a Google redirect
+    // sign-in (mobile/in-app browser flow). Safe to call even if there's nothing
+    // to resolve — it just resolves to null.
+    handleGoogleRedirectResult().catch(() => {})
     const unsub = watchAuthState(setUser)
     return unsub
   }, [])

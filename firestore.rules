@@ -75,10 +75,15 @@ service cloud.firestore {
     }
 
     // ---- complaints ----
-    // Tenant can create a complaint (from -> owner) and read only their own.
-    // Owner can read/write all (including owner -> house complaints).
+    // Tenant can create a complaint (from -> owner) and read: their own filed
+    // complaints, plus owner -> house complaints addressed to their house (or 'all').
+    // Owner can read/write everything.
     match /complaints/{complaintId} {
-      allow read: if isOwner() || (isTenant() && resource.data.fromHouseId == myHouseId());
+      allow read: if isOwner()
+        || (isTenant() && resource.data.fromHouseId == myHouseId())
+        || (isTenant() && resource.data.direction == 'owner_to_house'
+            && (resource.data.targetHouseIds == 'all'
+                || (resource.data.targetHouseIds is list && myHouseId() in resource.data.targetHouseIds)));
       allow create: if isOwner() || (isTenant() && request.resource.data.fromHouseId == myHouseId());
       allow update, delete: if isOwner();
     }
@@ -93,6 +98,27 @@ service cloud.firestore {
     // ---- vacateRecords ----
     match /vacateRecords/{recordId} {
       allow read, write: if isOwner();
+    }
+
+    // ---- customers (bank-style unique Customer ID per real person) ----
+    // Full profile: owner can read/write anyone; a customer can read their own
+    // record (matched via linkedUids, since one customer can hold several house logins).
+    match /customers/{customerId} {
+      allow read: if isOwner() || (isSignedIn() && request.auth.uid in resource.data.linkedUids);
+      allow write: if isOwner();
+    }
+
+    // Minimal public lookup (customerId -> email only) so "login with Customer ID"
+    // can resolve an email BEFORE the user is authenticated. No other field lives here.
+    match /customerLookup/{customerId} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
+    // ---- counters (sequential Customer ID generator) ----
+    match /counters/{counterId} {
+      allow read: if isOwner();
+      allow write: if isSignedIn(); // transaction runs during tenant creation, before the new user doc exists
     }
   }
 }
