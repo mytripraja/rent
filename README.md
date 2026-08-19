@@ -1,6 +1,6 @@
 # Rental Manager — MVP
 
-Core built: **Owner/Tenant auth (email/password, Google, Customer ID) · Bank-style unique Customer ID system · House profiles (create/book/vacate) · Rent submission + approval flow (UPI/bank/cash/neighbor) · EB bill split calculator + full UI · Pinned color-coded notices · Complaints (tenant→owner private, owner→house targeted) · Security rules · Vacate access-revoke Cloud Function · Mobile-responsive layout**
+Core built: **Owner/Tenant auth (email/password, Google, Customer ID) · Bank-style unique Customer ID system · House profiles (create/book/vacate) · Rent submission + approval flow (UPI/bank/cash/neighbor) · EB bill split calculator + full UI · Pinned color-coded notices · Complaints (tenant→owner private, owner→house targeted) · Directory (neighbors + vacant houses, phone-hide toggle) · Service contacts (click-to-call, Google Maps links) · Security rules · Vacate access-revoke Cloud Function · Mobile-responsive layout**
 
 ## Setup
 
@@ -59,15 +59,22 @@ firebase deploy --only firestore:rules,storage:rules,functions
 - **Complaints:**
   - Owner (`ComplaintInbox.jsx`): all tenant complaints in one inbox (private — tenants never see each other's), filter by open/resolved/all, mark resolved. Also send a complaint outward to one house, several, or all.
   - Tenant (`RaiseComplaint.jsx`): submit a private complaint to the owner, and see any complaints the owner has sent to their house, with status
+- **Directory:**
+  - New `directory` collection mirrors only safe fields (door number, name, phone-if-visible, status) off the `houses` collection, so tenants never read each other's full house doc (which holds rent/advance amounts). Kept in sync automatically whenever a house is booked, vacated, or a tenant flips their own visibility toggle.
+  - Tenant (`Directory.jsx`): list of neighbors with phone (if they've allowed it), a self-service "show my phone to neighbors" toggle, and the list of currently vacant houses
+- **Service Contacts:**
+  - Owner (`ServiceContactsManager.jsx`): add/delete contacts by category (EB staff, EB office, AC technician, mechanic, puncture shop, electrician, other), each with a phone number and/or Google Maps link
+  - Tenant (`ServiceContacts.jsx`): read-only grouped list with tap-to-call and tap-to-open-in-Maps
+  - Shared `ServiceContactsList.jsx` renders both views so the grouping/format only lives in one place
 
 **Not yet built** (from the full spec doc) — tell me the order you want:
 - Community message board
-- Directory (neighbor contact list, phone-hide toggle)
-- Service contacts (EB office, mechanic, electrician, Google Maps links)
 - Rent revision announcement banner (backend function `updateHouseRent` exists, needs UI)
 - Document upload (Aadhaar/ration card) + consent signature
 - Owner-assisted manual entry screen (logic exists in rentService via `uploadedByOwner` flag, needs its own simple UI)
 - Onboarding tour + animations
+
+**Note on existing houses:** the `directory` mirror only gets created/updated going forward (on create/book/vacate/visibility-toggle). If you add houses before this update reaches production, run a one-time backfill — happy to write a small script for that when you're ready to deploy.
 
 ## File structure
 

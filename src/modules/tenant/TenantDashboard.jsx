@@ -3,6 +3,8 @@ import RentHistory from './RentHistory'
 import EBBillShare from './EBBillShare'
 import NoticeFeed from './NoticeFeed'
 import RaiseComplaint from './RaiseComplaint'
+import Directory from './Directory'
+import ServiceContacts from './ServiceContacts'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 
@@ -28,6 +30,8 @@ export default function TenantDashboard() {
         <RentHistory />
         <EBBillShare />
         <RaiseComplaint />
+        <Directory />
+        <ServiceContacts />
       </main>
     </div>
   )

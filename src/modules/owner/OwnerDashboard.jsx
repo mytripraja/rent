@@ -5,6 +5,7 @@ import EBBillCreator from './EBBillCreator'
 import EBApprovalQueue from './EBApprovalQueue'
 import NoticeManager from './NoticeManager'
 import ComplaintInbox from './ComplaintInbox'
+import ServiceContactsManager from './ServiceContactsManager'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 
@@ -15,6 +16,7 @@ const TABS = [
   { id: 'ebApprovals', label: 'EB Approvals' },
   { id: 'notices', label: 'Notices' },
   { id: 'complaints', label: 'Complaints' },
+  { id: 'contacts', label: 'Service Contacts' },
 ]
 
 export default function OwnerDashboard() {
@@ -51,6 +53,7 @@ export default function OwnerDashboard() {
         {tab === 'ebApprovals' && <EBApprovalQueue />}
         {tab === 'notices' && <NoticeManager />}
         {tab === 'complaints' && <ComplaintInbox />}
+        {tab === 'contacts' && <ServiceContactsManager />}
       </main>
     </div>
   )

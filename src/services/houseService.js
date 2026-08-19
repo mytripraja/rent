@@ -5,6 +5,7 @@ import {
   getDocs,
   addDoc,
   updateDoc,
+  setDoc,
   query,
   where,
   orderBy,
@@ -12,6 +13,19 @@ import {
 import { db } from './firebase'
 
 const housesRef = collection(db, 'houses')
+
+// Keeps a safe-fields-only mirror in `directory` so tenants can browse neighbors
+// without a Firestore rule ever exposing rentAmount/advanceAmount to them
+// (rules can't redact individual fields on a single doc read).
+async function syncDirectoryEntry(houseId, house) {
+  await setDoc(doc(db, 'directory', houseId), {
+    internalDoorNumber: house.internalDoorNumber,
+    status: house.status,
+    tenantName: house.status === 'occupied' ? house.tenantName : null,
+    tenantPhone: house.status === 'occupied' && house.phoneVisibleToNeighbors ? house.tenantPhone : null,
+    phoneVisibleToNeighbors: !!house.phoneVisibleToNeighbors,
+  })
+}
 
 export async function listHouses() {
   const snap = await getDocs(query(housesRef, orderBy('internalDoorNumber')))
@@ -25,7 +39,7 @@ export async function getHouse(houseId) {
 
 // Create a brand new physical house record (done once per unit, not per tenant)
 export async function createHouse({ govtDoorNumber, internalDoorNumber, floor, ebNumber }) {
-  return addDoc(housesRef, {
+  const ref = await addDoc(housesRef, {
     govtDoorNumber,
     internalDoorNumber,
     floor,
@@ -34,15 +48,18 @@ export async function createHouse({ govtDoorNumber, internalDoorNumber, floor, e
     currentTenantId: null,
     rentAmount: 0,
     advanceAmount: 0,
+    phoneVisibleToNeighbors: true,
     ebShareOverrideMonths: null, // e.g. 1 => only occupied 1 of the 2 months in this bill cycle
     hasOwnEbMeter: false, // if true, this house is excluded from the shared EB split entirely
     createdAt: Date.now(),
   })
+  await syncDirectoryEntry(ref.id, { internalDoorNumber, status: 'vacant' })
+  return ref
 }
 
 // Book a vacant house: attach a new tenant profile without deleting history
-export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmount, advanceAmount }) {
-  await updateDoc(doc(db, 'houses', houseId), {
+export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmount, advanceAmount, phoneVisibleToNeighbors = true }) {
+  const houseUpdate = {
     status: 'occupied',
     currentTenantId: tenantId,
     tenantName: name,
@@ -50,8 +67,13 @@ export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmo
     tenantEmail: email,
     rentAmount,
     advanceAmount,
+    phoneVisibleToNeighbors,
     movedInAt: Date.now(),
-  })
+  }
+  await updateDoc(doc(db, 'houses', houseId), houseUpdate)
+
+  const house = await getHouse(houseId)
+  await syncDirectoryEntry(houseId, house)
 
   await addDoc(collection(db, 'houses', houseId, 'history'), {
     tenantId,
@@ -79,6 +101,8 @@ export async function vacateHouse(houseId, { advanceDeducted, deductionReason, b
     tenantEmail: null,
     accessRevokeScheduledAt: Date.now() + 60 * 60 * 1000, // 1 hour from now
   })
+
+  await syncDirectoryEntry(houseId, { internalDoorNumber: house.internalDoorNumber, status: 'vacant' })
 
   // Close the most recent open history entry
   const historySnap = await getDocs(
@@ -119,4 +143,18 @@ export async function setEbOverride(houseId, { hasOwnEbMeter, ebShareOverrideMon
     hasOwnEbMeter: !!hasOwnEbMeter,
     ebShareOverrideMonths: ebShareOverrideMonths ?? null,
   })
+}
+
+// Tenant-controlled: hide their phone number from the neighbor directory.
+// It's always still visible to the owner via the full house doc.
+export async function setPhoneVisibility(houseId, visible) {
+  await updateDoc(doc(db, 'houses', houseId), { phoneVisibleToNeighbors: visible })
+  const house = await getHouse(houseId)
+  await syncDirectoryEntry(houseId, house)
+}
+
+// Safe-fields-only list for the tenant-facing neighbor directory / vacant house browser.
+export async function listDirectory() {
+  const snap = await getDocs(query(collection(db, 'directory'), orderBy('internalDoorNumber')))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }

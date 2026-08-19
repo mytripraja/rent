@@ -117,7 +117,7 @@ function CreateHouseModal({ onClose, onCreated }) {
 
 function BookHouseModal({ house, onClose, onDone }) {
   const [form, setForm] = useState({
-    name: '', phone: '', email: '', password: '', rentAmount: '', advanceAmount: '', aadhaarNumber: '',
+    name: '', phone: '', email: '', password: '', rentAmount: '', advanceAmount: '', aadhaarNumber: '', phoneVisibleToNeighbors: true,
   })
   const [customerId, setCustomerId] = useState(null)
 
@@ -138,6 +138,7 @@ function BookHouseModal({ house, onClose, onDone }) {
       email: form.email,
       rentAmount: Number(form.rentAmount),
       advanceAmount: Number(form.advanceAmount),
+      phoneVisibleToNeighbors: form.phoneVisibleToNeighbors,
     })
     setCustomerId(tenant.customerId)
     onDone()
@@ -166,6 +167,10 @@ function BookHouseModal({ house, onClose, onDone }) {
         <input placeholder="Aadhaar number (links repeat tenants to one Customer ID)" value={form.aadhaarNumber} onChange={(e) => setForm({ ...form, aadhaarNumber: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <input required type="number" placeholder="Rent amount" value={form.rentAmount} onChange={(e) => setForm({ ...form, rentAmount: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <input required type="number" placeholder="Advance amount" value={form.advanceAmount} onChange={(e) => setForm({ ...form, advanceAmount: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input type="checkbox" checked={form.phoneVisibleToNeighbors} onChange={(e) => setForm({ ...form, phoneVisibleToNeighbors: e.target.checked })} />
+          Show phone number to neighbors in directory
+        </label>
         <button className="w-full bg-brand text-white py-2 rounded-lg text-sm font-medium">Book House</button>
       </form>
     </Modal>

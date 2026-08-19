@@ -38,12 +38,24 @@ service cloud.firestore {
     // per-field redaction on a single read.
     match /houses/{houseId} {
       allow read: if isOwner() || (isTenant() && myHouseId() == houseId);
-      // Tenants should never write directly to house docs.
-      allow write: if isOwner();
+      // Tenants may only self-update their own phone-visibility toggle — everything
+      // else about a house (rent, advance, status, etc.) stays owner-only.
+      allow update: if isOwner()
+        || (isTenant() && myHouseId() == houseId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phoneVisibleToNeighbors']));
+      allow create, delete: if isOwner();
 
       match /history/{entryId} {
         allow read, write: if isOwner();
       }
+    }
+
+    // ---- directory ----
+    // Safe-fields-only mirror of houses (no rent/advance amounts) so tenants can
+    // browse neighbors and vacant units without ever reading each other's house doc.
+    match /directory/{houseId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner() || (isTenant() && myHouseId() == houseId);
     }
 
     // ---- rentPayments ----
@@ -98,6 +110,12 @@ service cloud.firestore {
     // ---- vacateRecords ----
     match /vacateRecords/{recordId} {
       allow read, write: if isOwner();
+    }
+
+    // ---- serviceContacts ----
+    match /serviceContacts/{contactId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner();
     }
 
     // ---- customers (bank-style unique Customer ID per real person) ----
