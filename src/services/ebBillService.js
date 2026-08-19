@@ -1,5 +1,6 @@
-import { collection, addDoc, getDocs, query, orderBy } from 'firebase/firestore'
-import { db } from './firebase'
+import { collection, addDoc, getDocs, query, orderBy, where, updateDoc, doc } from 'firebase/firestore'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, storage } from './firebase'
 import { listHouses } from './houseService'
 
 const billsRef = collection(db, 'ebBills')
@@ -79,4 +80,88 @@ export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, 
 export async function listEbBillCycles() {
   const snap = await getDocs(query(billsRef, orderBy('createdAt', 'desc')))
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
+export function houseShareFromBill(bill, houseId) {
+  return bill.shares.find((s) => s.houseId === houseId) || null
+}
+
+// ---------- EB bill payments (mirrors rentService, tagged to a billId) ----------
+
+const ebPaymentsRef = collection(db, 'ebBillPayments')
+
+function generateEbApplicationNumber() {
+  const rand = Math.floor(1000 + Math.random() * 9000)
+  return `EB-${Date.now().toString().slice(-6)}-${rand}`
+}
+
+export async function submitEbPayment({
+  billId,
+  houseId,
+  tenantId,
+  amount,
+  dateSent,
+  mode, // 'upi' | 'bank' | 'cash' | 'neighbor'
+  cashReceivedBy,
+  neighborHouseId,
+  proofFile,
+  uploadedByOwner = false,
+}) {
+  let proofUrl = null
+  if (proofFile) {
+    const path = `eb-proofs/${houseId}/${billId}-${Date.now()}`
+    const storageRef = ref(storage, path)
+    await uploadBytes(storageRef, proofFile)
+    proofUrl = await getDownloadURL(storageRef)
+  }
+
+  const applicationNumber = generateEbApplicationNumber()
+
+  await addDoc(ebPaymentsRef, {
+    billId,
+    houseId,
+    tenantId,
+    amount,
+    dateSent,
+    mode,
+    cashReceivedBy: mode === 'cash' ? cashReceivedBy : null,
+    neighborHouseId: mode === 'neighbor' ? neighborHouseId : null,
+    neighborCollectedBy: null,
+    proofUrl,
+    applicationNumber,
+    status: 'waiting_approval',
+    uploadedByOwner,
+    rejectionReason: null,
+    submittedAt: Date.now(),
+    approvedAt: null,
+  })
+
+  return applicationNumber
+}
+
+export async function listPendingEbApprovals() {
+  const snap = await getDocs(query(ebPaymentsRef, where('status', '==', 'waiting_approval')))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
+export async function listEbPaymentsForHouse(houseId) {
+  const snap = await getDocs(
+    query(ebPaymentsRef, where('houseId', '==', houseId), orderBy('submittedAt', 'desc'))
+  )
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
+export async function approveEbPayment(paymentId, { neighborCollectedBy } = {}) {
+  await updateDoc(doc(db, 'ebBillPayments', paymentId), {
+    status: 'approved',
+    approvedAt: Date.now(),
+    ...(neighborCollectedBy ? { neighborCollectedBy } : {}),
+  })
+}
+
+export async function rejectEbPayment(paymentId, reason) {
+  await updateDoc(doc(db, 'ebBillPayments', paymentId), {
+    status: 'rejected',
+    rejectionReason: reason,
+  })
 }

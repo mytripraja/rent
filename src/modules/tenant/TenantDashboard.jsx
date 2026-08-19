@@ -1,5 +1,6 @@
 import RentSubmission from './RentSubmission'
 import RentHistory from './RentHistory'
+import EBBillShare from './EBBillShare'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 
@@ -19,6 +20,7 @@ export default function TenantDashboard() {
       <main className="p-6 grid md:grid-cols-2 gap-6">
         <RentSubmission onSubmitted={() => {}} />
         <RentHistory />
+        <EBBillShare />
       </main>
     </div>
   )

@@ -1,6 +1,6 @@
 # Rental Manager — MVP
 
-Core built: **Owner/Tenant auth · House profiles (create/book/vacate) · Rent submission + approval flow (UPI/bank/cash/neighbor) · EB bill split calculator with redistribution + own-meter opt-out**
+Core built: **Owner/Tenant auth · House profiles (create/book/vacate) · Rent submission + approval flow (UPI/bank/cash/neighbor) · EB bill split calculator + full UI (create cycle, per-house override, approvals, tenant payment) · Security rules · Vacate access-revoke Cloud Function**
 
 ## Setup
 
@@ -37,20 +37,20 @@ firebase deploy --only firestore:rules,storage:rules,functions
 **Built (this MVP):**
 - Owner: house grid (occupied/vacant), create house, book house (creates tenant login), vacate house (advance return fields), rent approval queue (cash/neighbor-aware)
 - Tenant: rent submission (UPI/bank/cash/neighbor + screenshot upload), rent history with status badges
-- EB bill split logic (`ebBillService.js`) — ready, just needs a UI screen
+- **EB Bill (full):**
+  - Owner: per-house override panel (own-meter opt-out, partial-months-occupied), live split preview before creating a cycle, past cycles list, approval queue for EB payments
+  - Tenant: sees their share per cycle with due date and status badge, pays via the same UPI/bank/cash/neighbor flow as rent
 
 **Not yet built** (from the full spec doc) — tell me the order you want:
-- EB Bill Creator + tenant EB payment screen (logic is done, needs UI)
-- Notices (pinned, color-coded)
+- Notices (pinned, color-coded) — `NoticeBanner.jsx` component exists, needs owner create-screen + tenant feed
 - Complaints (tenant→owner, owner→houses)
 - Community message board
 - Directory (neighbor contact list, phone-hide toggle)
 - Service contacts (EB office, mechanic, electrician, Google Maps links)
-- Rent revision announcement banner
+- Rent revision announcement banner (backend function `updateHouseRent` exists, needs UI)
 - Document upload (Aadhaar/ration card) + consent signature
 - Owner-assisted manual entry screen (logic exists in rentService via `uploadedByOwner` flag, needs its own simple UI)
 - Onboarding tour + animations
-- Cloud Function for the 1-hour access-revoke-after-vacate timer (currently just stores the timestamp; the actual revoke needs a scheduled function)
 
 ## File structure
 

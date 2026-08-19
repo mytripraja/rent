@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import HouseManager from './HouseManager'
 import RentApprovalQueue from './RentApprovalQueue'
+import EBBillCreator from './EBBillCreator'
+import EBApprovalQueue from './EBApprovalQueue'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 
 const TABS = [
   { id: 'houses', label: 'Houses' },
   { id: 'approvals', label: 'Rent Approvals' },
+  { id: 'eb', label: 'EB Bill' },
+  { id: 'ebApprovals', label: 'EB Approvals' },
 ]
 
 export default function OwnerDashboard() {
@@ -40,6 +44,8 @@ export default function OwnerDashboard() {
       <main className="p-6">
         {tab === 'houses' && <HouseManager />}
         {tab === 'approvals' && <RentApprovalQueue />}
+        {tab === 'eb' && <EBBillCreator />}
+        {tab === 'ebApprovals' && <EBApprovalQueue />}
       </main>
     </div>
   )
