@@ -1,0 +1,39 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Firestore reads aren't directly available in Storage rules, so we rely on
+    // custom claims OR keep this simple: any signed-in user can upload proof to
+    // their own house's folder path, and only the owner (checked by a custom
+    // claim set via Cloud Function, see note below) can read Aadhaar/ration docs.
+    //
+    // Simplest working version for now: authenticated users can upload;
+    // reading private documents requires the 'owner' custom claim.
+    // I recommend adding a Cloud Function that sets a custom claim
+    // request.auth.token.role == 'owner' when an owner account is created,
+    // so these rules can check it directly (Storage rules can't query Firestore).
+
+    match /rent-proofs/{houseId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /eb-proofs/{houseId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Private: Aadhaar / ration card / tenant photo — owner-only read.
+    // Requires the custom claim mentioned above; until that's set up,
+    // this will deny all reads except via the Firebase console/admin SDK.
+    match /private-documents/{houseId}/{fileName} {
+      allow read: if isSignedIn() && request.auth.token.role == 'owner';
+      allow write: if isSignedIn();
+    }
+  }
+}

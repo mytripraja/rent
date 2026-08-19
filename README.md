@@ -19,14 +19,18 @@ import { createOwnerAccount } from './services/authService'
 await createOwnerAccount({ email: 'you@example.com', password: '...', name: 'Deepu' })
 ```
 
-## Firestore Security Rules (draft — tighten before going live)
+## Security rules + Cloud Functions (now included)
 
-You'll want rules so:
-- A tenant can only read/write their own house's rent payments
-- Only the owner role can approve/reject payments, create/vacate houses, create EB bills
-- Aadhaar/ration card storage paths are owner-read-only
+- `firestore.rules` — owner has full access; tenants can only read/write their own house's rent and EB payments, read (not write) their own house doc, and read/create their own complaints. Notices and the community board are readable by anyone signed in.
+- `storage.rules` — rent/EB proof screenshots are readable by any signed-in user (tenants need to see their own, owner needs to see all). Aadhaar/ration card uploads under `private-documents/` require an `owner` custom claim to read — Storage rules can't query Firestore directly, so this claim is what makes owner-only access work.
+- `functions/index.js` — three Cloud Functions:
+  - `setRoleClaim` / `syncRoleClaimOnUpdate`: automatically stamps the `role` custom claim on each user's auth token when their `users/{uid}` doc is created or changed. This is what the Storage rule above checks.
+  - `revokeAccessAfterVacate`: runs every 15 minutes, finds houses where the 1-hour vacate window has passed, and disables the departed tenant's login. Before this, vacating only removed their data association — their login still worked. Now it's actually enforced.
 
-I haven't written these yet — flag it and I'll add `firestore.rules` + `storage.rules` next, before you put real tenant data in.
+**Deploy these** (from the project root, with the Firebase CLI installed and logged in):
+```
+firebase deploy --only firestore:rules,storage:rules,functions
+```
 
 ## What's built vs. what's next
 

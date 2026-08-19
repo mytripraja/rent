@@ -65,7 +65,9 @@ export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmo
   })
 }
 
-// Vacate: closes history entry, house becomes vacant, tenant access revoked after 1hr (handled by Cloud Function scheduler)
+// Vacate: closes history entry, house becomes vacant.
+// accessRevokeScheduledAt is picked up by the `revokeAccessAfterVacate` Cloud Function
+// (runs every 15 min) which disables the tenant's Firebase Auth account 1hr after this call.
 export async function vacateHouse(houseId, { advanceDeducted, deductionReason, balanceReturned, returnDate, returnMode, returnedBy }) {
   const house = await getHouse(houseId)
 

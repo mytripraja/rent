@@ -1,0 +1,98 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isOwner() {
+      return isSignedIn() && userDoc().data.role == 'owner';
+    }
+
+    function isTenant() {
+      return isSignedIn() && userDoc().data.role == 'tenant';
+    }
+
+    function myHouseId() {
+      return userDoc().data.houseId;
+    }
+
+    // ---- users ----
+    // A user can read their own profile. Only the owner can create/edit user docs
+    // (tenant accounts are created by the owner via createTenantAccount()).
+    match /users/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isOwner());
+      allow write: if isOwner();
+    }
+
+    // ---- houses ----
+    // Owner: full access. Tenant: can read their own house, and read a *limited*
+    // public view of other houses is handled client-side (only expose safe fields
+    // in the directory query — see note below) since Firestore rules can't do
+    // per-field redaction on a single read.
+    match /houses/{houseId} {
+      allow read: if isOwner() || (isTenant() && myHouseId() == houseId);
+      // Tenants should never write directly to house docs.
+      allow write: if isOwner();
+
+      match /history/{entryId} {
+        allow read, write: if isOwner();
+      }
+    }
+
+    // ---- rentPayments ----
+    // Tenant can create a submission for their own house, and read only their own house's payments.
+    // Only the owner can approve/reject (update status).
+    match /rentPayments/{paymentId} {
+      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow update: if isOwner();
+      allow delete: if isOwner();
+    }
+
+    // ---- ebBills / ebBillPayments ----
+    match /ebBills/{billId} {
+      allow read: if isOwner() || isTenant();
+      allow write: if isOwner();
+    }
+    match /ebBillPayments/{paymentId} {
+      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow update: if isOwner();
+    }
+
+    // ---- notices ----
+    // Everyone signed in can read; only owner writes.
+    match /notices/{noticeId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner();
+    }
+
+    // ---- complaints ----
+    // Tenant can create a complaint (from -> owner) and read only their own.
+    // Owner can read/write all (including owner -> house complaints).
+    match /complaints/{complaintId} {
+      allow read: if isOwner() || (isTenant() && resource.data.fromHouseId == myHouseId());
+      allow create: if isOwner() || (isTenant() && request.resource.data.fromHouseId == myHouseId());
+      allow update, delete: if isOwner();
+    }
+
+    // ---- community board ----
+    match /communityMessages/{msgId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isOwner();
+    }
+
+    // ---- vacateRecords ----
+    match /vacateRecords/{recordId} {
+      allow read, write: if isOwner();
+    }
+  }
+}
