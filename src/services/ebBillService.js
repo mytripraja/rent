@@ -1,6 +1,6 @@
 import { collection, addDoc, getDocs, query, orderBy, where, updateDoc, doc } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage } from './firebase'
+import { db } from './firebase'
+import { uploadUnsigned } from './cloudinaryService'
 import { listHouses } from './houseService'
 
 const billsRef = collection(db, 'ebBills')
@@ -109,10 +109,8 @@ export async function submitEbPayment({
 }) {
   let proofUrl = null
   if (proofFile) {
-    const path = `eb-proofs/${houseId}/${billId}-${Date.now()}`
-    const storageRef = ref(storage, path)
-    await uploadBytes(storageRef, proofFile)
-    proofUrl = await getDownloadURL(storageRef)
+    const { url } = await uploadUnsigned(proofFile, `eb-proofs/${houseId}`)
+    proofUrl = url
   }
 
   const applicationNumber = generateEbApplicationNumber()

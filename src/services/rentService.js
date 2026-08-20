@@ -8,8 +8,8 @@ import {
   where,
   orderBy,
 } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage } from './firebase'
+import { db } from './firebase'
+import { uploadUnsigned } from './cloudinaryService'
 
 const paymentsRef = collection(db, 'rentPayments')
 
@@ -33,10 +33,8 @@ export async function submitRentPayment({
 }) {
   let proofUrl = null
   if (proofFile) {
-    const path = `rent-proofs/${houseId}/${month}-${Date.now()}`
-    const storageRef = ref(storage, path)
-    await uploadBytes(storageRef, proofFile)
-    proofUrl = await getDownloadURL(storageRef)
+    const { url } = await uploadUnsigned(proofFile, `rent-proofs/${houseId}`)
+    proofUrl = url
   }
 
   const applicationNumber = generateApplicationNumber()

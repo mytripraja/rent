@@ -10,11 +10,9 @@ import {
   linkWithCredential,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { getFunctions, httpsCallable } from 'firebase/functions'
-import { auth, db, app } from './firebase'
+import { httpsCallable } from 'firebase/functions'
+import { auth, db, functions } from './firebase'
 import { resolveEmailFromCustomerId } from './customerService'
-
-const functions = getFunctions(app)
 
 // users/{uid} => { role: 'owner' | 'tenant', houseId?: string, name, email }
 

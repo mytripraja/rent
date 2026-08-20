@@ -5,6 +5,9 @@ import NoticeFeed from './NoticeFeed'
 import RaiseComplaint from './RaiseComplaint'
 import Directory from './Directory'
 import ServiceContacts from './ServiceContacts'
+import RentRevisionBanner from './RentRevisionBanner'
+import DocumentUpload from './DocumentUpload'
+import CommunityBoard from '../shared/CommunityBoard'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 
@@ -22,6 +25,7 @@ export default function TenantDashboard() {
       </header>
 
       <div className="p-4 sm:p-6 pb-0">
+        <RentRevisionBanner />
         <NoticeFeed />
       </div>
 
@@ -32,6 +36,8 @@ export default function TenantDashboard() {
         <RaiseComplaint />
         <Directory />
         <ServiceContacts />
+        <DocumentUpload />
+        <CommunityBoard user={user} />
       </main>
     </div>
   )

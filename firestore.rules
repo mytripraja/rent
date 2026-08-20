@@ -107,7 +107,15 @@ service cloud.firestore {
       allow update, delete: if isOwner();
     }
 
-    // ---- vacateRecords ----
+    // ---- documents (Aadhaar / ration card, private) ----
+    // Firestore metadata is separate from the actual file — the file itself sits
+    // under private-documents/ in Storage, which requires the owner custom claim
+    // to read (see storage.rules). This collection just tracks who uploaded what.
+    match /documents/{docId} {
+      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow update, delete: if isOwner();
+    }
     match /vacateRecords/{recordId} {
       allow read, write: if isOwner();
     }

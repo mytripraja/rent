@@ -8,8 +8,10 @@ initializeApp()
 const auth = getAuth()
 const db = getFirestore()
 
-// When a users/{uid} doc is created with role 'owner', set a custom claim
-// so Storage rules (which can't query Firestore) can check request.auth.token.role.
+// When a users/{uid} doc is created with role 'owner', set a custom claim on
+// their auth token. Not required by any Firestore rule (those check Firestore
+// directly), but kept around since it's a cheap, standard way to expose role
+// to any future client-side or third-party check without another read.
 exports.setRoleClaim = onDocumentCreated('users/{uid}', async (event) => {
   const data = event.data.data()
   if (!data?.role) return
@@ -132,4 +134,66 @@ exports.createTenantAccountAdmin = onCall(async (request) => {
   })
 
   return { uid: userRecord.uid, customerId }
+})
+
+// ---- Cloudinary signed uploads/views ----
+// Rent/EB proof screenshots go straight to Cloudinary from the browser using
+// an unsigned upload preset (no function needed). Aadhaar/ration card uploads
+// need to be private, which Cloudinary only allows via a signed request — the
+// signature has to be computed server-side with the API secret, hence these
+// two functions.
+const cloudinary = require('cloudinary').v2
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+})
+
+// Returns the params needed for a signed upload with type: 'authenticated',
+// which makes the resulting asset unreachable by any plain URL — only a
+// freshly signed one (see getCloudinarySignedUrl) can view it.
+exports.getCloudinarySignature = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Sign in required.')
+  }
+
+  const timestamp = Math.round(Date.now() / 1000)
+  const paramsToSign = {
+    timestamp,
+    folder: request.data.folder,
+    type: 'authenticated',
+  }
+  const signature = cloudinary.utils.api_sign_request(paramsToSign, process.env.CLOUDINARY_API_SECRET)
+
+  return {
+    signature,
+    timestamp,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+  }
+})
+
+// Owner-only. Mints a short-lived signed URL to view a private document.
+exports.getCloudinarySignedUrl = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Sign in required.')
+  }
+  const callerDoc = await db.collection('users').doc(request.auth.uid).get()
+  if (callerDoc.data()?.role !== 'owner') {
+    throw new HttpsError('permission-denied', 'Only the owner can view these documents.')
+  }
+
+  const { publicId, resourceType } = request.data
+  const expiresAt = Math.round(Date.now() / 1000) + 5 * 60 // 5 minutes
+
+  const url = cloudinary.url(publicId, {
+    resource_type: resourceType || 'image',
+    type: 'authenticated',
+    sign_url: true,
+    secure: true,
+    expires_at: expiresAt,
+  })
+
+  return { url }
 })

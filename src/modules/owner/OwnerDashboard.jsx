@@ -6,17 +6,27 @@ import EBApprovalQueue from './EBApprovalQueue'
 import NoticeManager from './NoticeManager'
 import ComplaintInbox from './ComplaintInbox'
 import ServiceContactsManager from './ServiceContactsManager'
+import RentRevision from './RentRevision'
+import ManualEntryForTenant from './ManualEntryForTenant'
+import DocumentVerification from './DocumentVerification'
+import CommunityBoard from '../shared/CommunityBoard'
+import PropertySetup from './PropertySetup'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 
 const TABS = [
   { id: 'houses', label: 'Houses' },
   { id: 'approvals', label: 'Rent Approvals' },
+  { id: 'manualEntry', label: 'Manual Entry' },
+  { id: 'rentRevision', label: 'Rent Revision' },
   { id: 'eb', label: 'EB Bill' },
   { id: 'ebApprovals', label: 'EB Approvals' },
   { id: 'notices', label: 'Notices' },
   { id: 'complaints', label: 'Complaints' },
   { id: 'contacts', label: 'Service Contacts' },
+  { id: 'documents', label: 'Documents' },
+  { id: 'community', label: 'Community' },
+  { id: 'setup', label: 'Setup' },
 ]
 
 export default function OwnerDashboard() {
@@ -54,6 +64,11 @@ export default function OwnerDashboard() {
         {tab === 'notices' && <NoticeManager />}
         {tab === 'complaints' && <ComplaintInbox />}
         {tab === 'contacts' && <ServiceContactsManager />}
+        {tab === 'manualEntry' && <ManualEntryForTenant />}
+        {tab === 'rentRevision' && <RentRevision />}
+        {tab === 'documents' && <DocumentVerification />}
+        {tab === 'community' && <CommunityBoard user={user} canModerate />}
+        {tab === 'setup' && <PropertySetup />}
       </main>
     </div>
   )

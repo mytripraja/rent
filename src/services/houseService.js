@@ -130,11 +130,33 @@ export async function getHouseHistory(houseId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
-export async function updateHouseRent(houseId, newRentAmount, effectiveMonth) {
+// Announce a future rent increase without changing the current rent yet.
+// The tenant sees a banner ("From July, rent will be ₹X") until you apply it.
+export async function announceRentRevision(houseId, newRentAmount, effectiveMonth) {
   await updateDoc(doc(db, 'houses', houseId), {
-    rentAmount: newRentAmount,
-    rentEffectiveMonth: effectiveMonth,
+    pendingRentAmount: newRentAmount,
+    pendingRentEffectiveMonth: effectiveMonth, // e.g. '2026-09'
     rentRevisionAnnouncedAt: Date.now(),
+  })
+}
+
+// Call once the effective month arrives to actually switch the standing rent.
+// Kept as a manual owner action rather than a cron job, so you stay in control
+// of exactly when it takes effect.
+export async function applyRentRevision(houseId) {
+  const house = await getHouse(houseId)
+  if (!house?.pendingRentAmount) return
+  await updateDoc(doc(db, 'houses', houseId), {
+    rentAmount: house.pendingRentAmount,
+    pendingRentAmount: null,
+    pendingRentEffectiveMonth: null,
+  })
+}
+
+export async function cancelRentRevision(houseId) {
+  await updateDoc(doc(db, 'houses', houseId), {
+    pendingRentAmount: null,
+    pendingRentEffectiveMonth: null,
   })
 }
 

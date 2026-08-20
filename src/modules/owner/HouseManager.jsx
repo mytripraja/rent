@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { listHouses, createHouse, bookHouse, vacateHouse } from '../../services/houseService'
+import { listHouses, bookHouse, vacateHouse } from '../../services/houseService'
 import { createTenantAccount } from '../../services/authService'
 
 export default function HouseManager() {
   const [houses, setHouses] = useState([])
-  const [showCreate, setShowCreate] = useState(false)
   const [bookingHouse, setBookingHouse] = useState(null)
   const [vacatingHouse, setVacatingHouse] = useState(null)
 
@@ -20,19 +19,11 @@ export default function HouseManager() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-800">Houses</h2>
-          <p className="text-sm text-slate-500">
-            {occupiedCount} occupied · {houses.length - occupiedCount} vacant · {houses.length} total
-          </p>
-        </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="bg-brand text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-brand-dark self-start sm:self-auto"
-        >
-          + Add House
-        </button>
+      <div>
+        <h2 className="text-lg font-semibold text-slate-800">Houses</h2>
+        <p className="text-sm text-slate-500">
+          {occupiedCount} occupied · {houses.length - occupiedCount} vacant · {houses.length} total
+        </p>
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -73,11 +64,13 @@ export default function HouseManager() {
             )}
           </div>
         ))}
+        {houses.length === 0 && (
+          <p className="text-sm text-slate-400 col-span-full">
+            No houses yet — add your properties once under Setup, then manage bookings and vacates here.
+          </p>
+        )}
       </div>
 
-      {showCreate && (
-        <CreateHouseModal onClose={() => setShowCreate(false)} onCreated={refresh} />
-      )}
       {bookingHouse && (
         <BookHouseModal house={bookingHouse} onClose={() => setBookingHouse(null)} onDone={refresh} />
       )}
@@ -88,32 +81,6 @@ export default function HouseManager() {
   )
 }
 
-function CreateHouseModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({ govtDoorNumber: '', internalDoorNumber: '', floor: '', ebNumber: '' })
-  async function submit(e) {
-    e.preventDefault()
-    await createHouse(form)
-    onCreated()
-    onClose()
-  }
-  return (
-    <Modal title="Add House" onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3">
-        {['govtDoorNumber', 'internalDoorNumber', 'floor', 'ebNumber'].map((field) => (
-          <input
-            key={field}
-            required
-            placeholder={field}
-            value={form[field]}
-            onChange={(e) => setForm({ ...form, [field]: e.target.value })}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-          />
-        ))}
-        <button className="w-full bg-brand text-white py-2 rounded-lg text-sm font-medium">Create</button>
-      </form>
-    </Modal>
-  )
-}
 
 function BookHouseModal({ house, onClose, onDone }) {
   const [form, setForm] = useState({
