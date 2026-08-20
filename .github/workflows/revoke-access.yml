@@ -1,0 +1,17 @@
+name: Revoke Vacated Tenant Access
+
+on:
+  schedule:
+    # Every 15 minutes. GitHub's scheduler can also run a few minutes late under
+    # load, same as any free scheduler — fine for a 1-hour access window.
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {} # lets you trigger it manually from the Actions tab too
+
+jobs:
+  revoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call revoke endpoint
+        run: |
+          curl -sf -X POST "https://${{ vars.VERCEL_APP_DOMAIN }}/api/revoke-vacated-access" \
+            -H "x-cron-secret: ${{ secrets.REVOKE_CRON_SECRET }}"

@@ -11,6 +11,8 @@ import ManualEntryForTenant from './ManualEntryForTenant'
 import DocumentVerification from './DocumentVerification'
 import CommunityBoard from '../shared/CommunityBoard'
 import PropertySetup from './PropertySetup'
+import OnboardingTour from '../shared/OnboardingTour'
+import { OWNER_TOUR_STEPS } from './ownerTourSteps'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 
@@ -32,6 +34,7 @@ const TABS = [
 export default function OwnerDashboard() {
   const { user } = useAuth()
   const [tab, setTab] = useState('houses')
+  const [replayTour, setReplayTour] = useState(false)
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -40,7 +43,10 @@ export default function OwnerDashboard() {
           <h1 className="font-semibold text-slate-800 text-base sm:text-lg">Owner Dashboard</h1>
           <p className="text-xs text-slate-400">{user?.name}</p>
         </div>
-        <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-700 shrink-0">Log out</button>
+        <div className="flex items-center gap-3 shrink-0">
+          <button onClick={() => setReplayTour(true)} className="text-sm text-brand hover:text-brand-dark">Help</button>
+          <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-700">Log out</button>
+        </div>
       </header>
 
       <nav className="px-4 sm:px-6 pt-4 flex gap-2 overflow-x-auto pb-1">
@@ -70,6 +76,13 @@ export default function OwnerDashboard() {
         {tab === 'community' && <CommunityBoard user={user} canModerate />}
         {tab === 'setup' && <PropertySetup />}
       </main>
+
+      <OnboardingTour
+        steps={OWNER_TOUR_STEPS}
+        storageKey={`tour_seen_owner_${user?.uid}`}
+        forceOpen={replayTour ? true : undefined}
+        onClose={() => setReplayTour(false)}
+      />
     </div>
   )
 }

@@ -10,8 +10,7 @@ import {
   linkWithCredential,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { httpsCallable } from 'firebase/functions'
-import { auth, db, functions } from './firebase'
+import { auth, db, authedFetch } from './firebase'
 import { resolveEmailFromCustomerId } from './customerService'
 
 // users/{uid} => { role: 'owner' | 'tenant', houseId?: string, name, email }
@@ -105,15 +104,15 @@ export async function logout() {
 
 // Owner uses this to create a tenant login when a house is booked.
 // Tenant never self-registers.
-// Delegates to a Cloud Function (Admin SDK) so creating the account doesn't
-// hijack the owner's own signed-in session — the client SDK's
-// createUserWithEmailAndPassword would otherwise switch you to the new tenant.
-// Also mints (or reuses, if this Aadhaar already has one) a bank-style unique
-// Customer ID that stays with the person across every house they ever rent.
+// Delegates to a Vercel serverless function (Admin SDK) so creating the
+// account doesn't hijack the owner's own signed-in session — the client
+// SDK's createUserWithEmailAndPassword would otherwise switch you to the
+// new tenant. Also mints (or reuses, if this Aadhaar already has one) a
+// bank-style unique Customer ID that stays with the person across every
+// house they ever rent.
 export async function createTenantAccount({ email, password, name, houseId, phone, aadhaarNumber }) {
-  const call = httpsCallable(functions, 'createTenantAccountAdmin')
-  const result = await call({ email, password, name, phone, houseId, aadhaarNumber })
-  return result.data // { uid, customerId }
+  return authedFetch('/api/create-tenant', { email, password, name, houseId, phone, aadhaarNumber })
+  // returns { uid, customerId }
 }
 
 export async function createOwnerAccount({ email, password, name }) {

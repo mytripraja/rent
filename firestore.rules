@@ -142,9 +142,12 @@ service cloud.firestore {
     }
 
     // ---- counters (sequential Customer ID generator) ----
+    // Tightened to owner-only: tenant creation now runs entirely through the
+    // /api/create-tenant Admin SDK function (see lib/firebaseAdmin.js), which
+    // bypasses these rules anyway, so client-side writes are never needed here.
     match /counters/{counterId} {
       allow read: if isOwner();
-      allow write: if isSignedIn(); // transaction runs during tenant creation, before the new user doc exists
+      allow write: if isOwner();
     }
   }
 }

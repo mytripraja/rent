@@ -1,5 +1,4 @@
-import { httpsCallable } from 'firebase/functions'
-import { functions } from './firebase'
+import { authedFetch } from './firebase'
 
 const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
 const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
@@ -27,13 +26,13 @@ export async function uploadUnsigned(file, folder) {
 }
 
 // ---- Signed private uploads ----
-// Used for Aadhaar/ration card. The upload is signed by a Cloud Function
-// (so your Cloudinary API secret never reaches the browser) and stored with
-// Cloudinary's 'authenticated' delivery type — meaning the resulting file is
-// NOT reachable by a plain URL at all, signed or not, to anyone but you.
+// Used for Aadhaar/ration card. The upload is signed by a Vercel serverless
+// function (so your Cloudinary API secret never reaches the browser) and
+// stored with Cloudinary's 'authenticated' delivery type — meaning the
+// resulting file is NOT reachable by a plain URL at all, signed or not, to
+// anyone but you.
 export async function uploadPrivate(file, folder) {
-  const getSignature = httpsCallable(functions, 'getCloudinarySignature')
-  const { data: sig } = await getSignature({ folder })
+  const sig = await authedFetch('/api/sign-upload', { folder })
 
   const formData = new FormData()
   formData.append('file', file)
@@ -56,7 +55,6 @@ export async function uploadPrivate(file, folder) {
 // document. Called on demand (e.g. when the owner clicks "View"), not stored,
 // so the link expires rather than staying valid forever.
 export async function getPrivateViewUrl(publicId, resourceType) {
-  const getUrl = httpsCallable(functions, 'getCloudinarySignedUrl')
-  const { data } = await getUrl({ publicId, resourceType })
+  const data = await authedFetch('/api/get-signed-url', { publicId, resourceType })
   return data.url
 }
