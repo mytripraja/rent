@@ -1,0 +1,85 @@
+import { useEffect, useState } from 'react'
+import { listOwners, createOwnerAccountAdmin, deleteOwnerAccount } from '../../services/authService'
+import { useAuth } from '../../context/AuthContext'
+
+export default function OwnerManager() {
+  const { user } = useAuth()
+  const [owners, setOwners] = useState([])
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    refresh()
+  }, [])
+
+  async function refresh() {
+    setOwners(await listOwners())
+  }
+
+  async function submit(e) {
+    e.preventDefault()
+    setError('')
+    setSaving(true)
+    try {
+      await createOwnerAccountAdmin(form)
+      setForm({ name: '', email: '', phone: '', password: '' })
+      refresh()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete(uid, name) {
+    if (!confirm(`Remove ${name}'s owner access? This can't be undone.`)) return
+    await deleteOwnerAccount(uid)
+    refresh()
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-800">Owner Management</h2>
+        <p className="text-sm text-slate-500">Add family or staff who need full owner access. Only you (the admin) can add or remove owners.</p>
+      </div>
+
+      <form onSubmit={submit} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3 max-w-md">
+        <input required placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <input required type="email" placeholder="Email (used as login)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <input required type="password" placeholder="Temporary password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <button disabled={saving} className="w-full bg-brand text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
+          {saving ? 'Adding…' : 'Add Owner'}
+        </button>
+      </form>
+
+      <div className="space-y-2 max-w-md">
+        {owners.map((o) => (
+          <div key={o.uid} className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-slate-100 overflow-hidden flex items-center justify-center text-xs text-slate-500 shrink-0">
+                {o.profilePhotoUrl ? <img src={o.profilePhotoUrl} alt="" className="w-full h-full object-cover" /> : o.name?.[0]}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-700">{o.name} {o.role === 'admin' && <span className="text-xs text-brand font-normal">(Super Admin)</span>}</p>
+                <p className="text-xs text-slate-400">{o.email}</p>
+              </div>
+            </div>
+            {o.role === 'owner' && (
+              <button onClick={() => handleDelete(o.uid, o.name)} className="text-xs text-red-600 hover:underline shrink-0">
+                Remove
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}

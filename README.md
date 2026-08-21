@@ -1,6 +1,6 @@
 # Rental Manager — MVP
 
-Core built: **Owner/Tenant auth (email/password, Google, Customer ID) · Bank-style unique Customer ID system · House profiles (create/book/vacate, one-time Setup + everyday Houses tab split) · Rent submission + approval flow (UPI/bank/cash/neighbor) · Owner-assisted manual entry · Rent revision announcements · EB bill split calculator + full UI · Pinned color-coded notices · Complaints (tenant→owner private, owner→house targeted) · Directory (neighbors + vacant houses, phone-hide toggle) · Service contacts (click-to-call, Google Maps links) · Document verification (Aadhaar/ration card + consent signature, private Cloudinary storage) · Community message board · Animated onboarding tour · Security rules · Vacate access-revoke sweep · Mobile-responsive layout**
+Core built: **Multi-owner accounts (super-admin + co-owners) with audit trail on every entry · Owner/Tenant auth (email/password, Google, Customer ID) · Bank-style unique Customer ID system · House profiles (create/book/vacate, one-time Setup + everyday Houses tab split) · Tenants section (All/Current/Old/Rent Pending) with full tenant profiles · Editable tenant contact info · Partial advance payment ledger · Rent submission + approval flow (UPI/bank/cash/neighbor) · Owner-assisted manual entry · Customizable per-house rent revision · EB bill split calculator + full UI · Pinned color-coded notices · Complaints (tenant→owner private, owner→house targeted) · Directory (neighbors + vacant houses, phone-hide toggle) · Service contacts (click-to-call, Google Maps links) · Document verification (Aadhaar/ration card + consent signature, private Cloudinary storage) · Community message board · Owner profile + photo · Global search · Animated onboarding tour · Security rules · Vacate access-revoke sweep · Mobile-responsive layout**
 
 **Every module from the original spec is now built** — including the onboarding tour.
 
@@ -58,24 +58,59 @@ Every tenant gets a unique ID (`RM1001`, `RM1002`, …) the moment their account
 
 ## Adding your houses (one-time)
 
-House creation lives under the **Setup** tab, separate from the everyday **Houses** tab — since you said you'll only add the 13 houses once, not routinely. **Houses** stays focused on booking/vacating/occupancy; **Setup** is where you add a house record if you ever add a new physical unit to the property later.
+House creation lives under **More → Property Setup**, separate from the everyday **Houses** tab — since you said you'll only add the 13 houses once, not routinely. **Houses** stays focused on booking/vacating/occupancy.
 
-## Create your owner account
+## Create your admin account (do this first)
 
-There's no signup UI yet on purpose (you don't want random signups). Create the first owner account by running this once in the browser console on the login page, or I can add a one-time setup script — tell me which you'd prefer.
+There's no signup UI on purpose (no random signups). Create your own account — as the **super-admin**, not a regular owner — by running this once in the browser console on the login page:
 
 ```js
 import { createOwnerAccount } from './services/authService'
 await createOwnerAccount({ email: 'you@example.com', password: '...', name: 'Deepu' })
 ```
 
+This is a one-time bootstrap step. Every co-owner added after this goes through **More → Owner Management** instead (admin-only), which uses `api/create-owner.js` so adding them doesn't log you out.
+
+## Multi-owner accounts (super-admin + co-owners)
+
+- **You (super-admin)**: the only one who can add or remove other owner accounts, via **More → Owner Management**.
+- **Co-owners** (dad, brother, mom, staff, etc.): everything else — houses, rent, EB bills, notices, complaints, documents, community — is identical access to yours. `firestore.rules`' `isOwner()` now means "admin OR owner," while a separate `isAdmin()` gates account management specifically.
+- Every co-owner gets their own login and their own profile photo (**More → My Profile**, or the avatar in the header).
+
+## Who did what — audit trail
+
+Every rent/EB payment now records **`recordedBy`** (who submitted it — the tenant, or whichever owner used Manual Entry) and **`actionedBy`** (who approved/rejected it). Shows as "Entered by [name]" in the approval queues. Useful once more than one person is touching the app — you'll be able to tell your entries apart from your brother's or mom's.
+
+## Tenants section
+
+A new **Tenants** tab, separate from **Houses** (which stays focused on occupancy/vacancy management):
+
+- **All / Current / Old / Rent Pending** filter tabs. "Old" pulls every past occupant across all houses via a Firestore collection-group query on each house's `history` subcollection — **the first time this runs, Firestore will show a "create index" link in the browser console error; click it once and it's done** (composite index on `movedOutAt`, one-time setup).
+- "Rent Pending" shows name, photo, and how many consecutive months they're behind (`countMonthsPending()` in `rentService.js` — walks backward from the current month until it finds an approved payment).
+- Clicking any tenant opens their full profile: contact info (with an **Edit** button — see below), move-in date, rent, the advance-payment ledger, full rent history, and — if the house has had previous occupants — their history too.
+- The global **search bar** in the owner header (name, door number, or phone) jumps straight into a tenant's profile from anywhere in the app.
+
+## Editing tenant contact info
+
+From a tenant's profile, **Edit** next to Contact Info lets you change their email or phone. Email changes go through `api/update-tenant-contact.js` — a client can't change another Firebase user's login email directly, so this runs through the Admin SDK and keeps their `users`, `houses`, and `directory` records in sync in one call.
+
+## Partial advance payments
+
+Booking a house now asks for the **agreed advance amount** (target) separately from **advance paid now** (what they're actually handing over that day — can be less, e.g. ₹5,000 of a ₹10,000 target). The rest gets added later from the tenant's profile via **Add Payment**, which logs to a running ledger (`advanceLedgerService.js`) rather than overwriting a single number — so you keep a full history of who paid what, when, and by which mode, and the profile shows "Collected ₹X of ₹Y agreed."
+
+## Rent Revision — now customizable per house
+
+Moved into **More → Rent Revision** (used once or twice a year, so it doesn't need a permanent tab). Redesigned to handle your actual case — different increases for different houses in one go: tick the houses going up, type each one's *own* new amount (₹500 for one, ₹1,000 for another, whatever), pick one effective month for the batch, and announce them all together. Each house still gets its own pending-revision banner and its own "Apply now" button on your side.
+
 ## Security rules + serverless functions (now included)
 
 - `firestore.rules` — owner has full access; tenants can only read/write their own house's rent and EB payments, read (not write) their own house doc, and read/create their own complaints. Notices and the community board are readable by anyone signed in.
-- `api/create-tenant.js` — creates a tenant's Firebase Auth account + Customer ID via Admin SDK, without disturbing the owner's session.
+- `api/create-tenant.js` — creates a tenant's Firebase Auth account + Customer ID via Admin SDK, without disturbing the caller's session.
+- `api/create-owner.js` / `api/delete-owner.js` — admin-only: add/remove co-owner accounts.
+- `api/update-tenant-contact.js` — owner-level: edit a tenant's email/phone (email changes need the Admin SDK since a client can't change another user's Auth email).
 - `api/sign-upload.js` / `api/get-signed-url.js` — sign private Cloudinary uploads and mint short-lived view links for Aadhaar/ration card documents (see the Cloudinary section above).
 - `api/revoke-vacated-access.js` — disables a vacated tenant's login once their 1-hour access window passes. Triggered by the GitHub Actions schedule, not Vercel cron (see above for why).
-- `lib/firebaseAdmin.js` — shared Admin SDK setup + auth-checking helpers (`requireAuth`, `requireOwner`) used by all four functions above.
+- `lib/firebaseAdmin.js` — shared Admin SDK setup + auth-checking helpers (`requireAuth`, `requireOwnerLevel`, `requireAdmin`) used by all the functions above.
 
 There's no `setRoleClaim` equivalent anymore — it existed to support the old Firebase Storage rules, which are gone now that everything's on Cloudinary. Nothing in the current `firestore.rules` checks a custom claim; `isOwner()`/`isTenant()` both read the `users/{uid}` Firestore doc directly.
 
@@ -122,6 +157,26 @@ Everything in `/api` deploys automatically with the rest of the app whenever you
 **Not yet built:** nothing — every module from your original spec is done.
 
 **Note on existing houses:** the `directory` mirror only gets created/updated going forward (on create/book/vacate/visibility-toggle). If you add houses before this update reaches production, run a one-time backfill — happy to write a small script for that when you're ready to deploy.
+
+## Packaging as an Android app (Capacitor)
+
+Same approach as MyTripRaja. `@capacitor/core`, `@capacitor/cli`, and `@capacitor/android` are already installed, and a full native Android project has been generated at `/android` (verified — `npx cap add android` was actually run, not just described; the project builds against the real Capacitor toolchain, package name `com.rds.rentalmanager`).
+
+**How it's wired:** `capacitor.config.json` points the app's WebView at your **live Vercel deployment** rather than bundling the static files into the app. This matters here specifically because of the `/api` routes and Firebase Auth — bundling static files would mean the app runs from a `capacitor://` or `file://` origin, which Firebase Auth doesn't recognize and which can't reach `/api/*` without extra CORS setup. Pointing at the real HTTPS domain sidesteps both problems entirely: the app is essentially a dedicated browser window into your already-deployed site.
+
+**Before building:**
+1. Open `capacitor.config.json` and replace `REPLACE-WITH-YOUR-VERCEL-DOMAIN.vercel.app` with your actual deployed domain.
+2. Firebase Console → Authentication → Settings → Authorized domains → make sure that same domain is listed (it already should be, from setting up Google Sign-In on the web).
+3. Run `npm run cap:sync` to rebuild the web assets and sync them into the native project.
+
+**To build and test:**
+- Install [Android Studio](https://developer.android.com/studio) (needed for the Android SDK — not something that can run in this environment, so you'll do this step locally).
+- `npm run cap:android` — builds the web app, syncs it, and opens the project in Android Studio.
+- From there: Run ▶ on an emulator or your phone over USB, or Build → Generate Signed Bundle/APK when you're ready for the Play Store.
+
+**One thing to test carefully once it's running:** Google Sign-In inside a native WebView can't use the popup flow — `authService.js` already detects this (`isLikelyInAppBrowser()`) and falls back to redirect, but Capacitor's WebView doesn't always identify itself the same way a mobile browser does. If Google Sign-In doesn't work smoothly on first test, the fix is either adjusting that detection or switching to the dedicated `@capacitor-firebase/authentication` plugin, which handles native Google Sign-In properly — flag it and I'll wire that in.
+
+**App icon and splash screen:** still the Capacitor defaults. `npx @capacitor/assets generate` can generate a full icon/splash set from a single source image once you have one ready.
 
 ## File structure
 

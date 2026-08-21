@@ -1,4 +1,4 @@
-import { requireOwner } from '../lib/firebaseAdmin.js'
+import { requireOwnerLevel } from '../lib/firebaseAdmin.js'
 import { v2 as cloudinary } from 'cloudinary'
 
 cloudinary.config({
@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   try {
-    await requireOwner(req)
+    await requireOwnerLevel(req)
 
     const { publicId, resourceType } = req.body || {}
     const expiresAt = Math.round(Date.now() / 1000) + 5 * 60 // 5 minutes

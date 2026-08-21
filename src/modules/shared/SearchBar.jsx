@@ -1,0 +1,66 @@
+import { useEffect, useRef, useState } from 'react'
+import { listHouses } from '../../services/houseService'
+
+export default function SearchBar({ onSelectHouse }) {
+  const [houses, setHouses] = useState([])
+  const [term, setTerm] = useState('')
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    listHouses().then(setHouses)
+  }, [])
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const results = term.trim()
+    ? houses.filter((h) => {
+        const q = term.trim().toLowerCase()
+        return (
+          h.internalDoorNumber?.toLowerCase().includes(q) ||
+          h.tenantName?.toLowerCase().includes(q) ||
+          h.tenantPhone?.includes(q)
+        )
+      }).slice(0, 8)
+    : []
+
+  function select(house) {
+    onSelectHouse(house.id)
+    setTerm('')
+    setOpen(false)
+  }
+
+  return (
+    <div ref={wrapRef} className="relative w-full max-w-xs">
+      <input
+        value={term}
+        onChange={(e) => { setTerm(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        placeholder="Search tenant, house, phone…"
+        className="w-full border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+      />
+      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">⌕</span>
+
+      {open && results.length > 0 && (
+        <div className="absolute mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg z-50 overflow-hidden">
+          {results.map((h) => (
+            <button
+              key={h.id}
+              onClick={() => select(h)}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between"
+            >
+              <span className="text-slate-700">{h.tenantName || 'Vacant'} · {h.internalDoorNumber}</span>
+              <span className="text-xs text-slate-400">{h.status}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

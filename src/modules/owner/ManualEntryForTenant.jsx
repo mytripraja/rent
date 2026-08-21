@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { listHouses } from '../../services/houseService'
 import { submitRentPayment, approvePayment, listPendingApprovals } from '../../services/rentService'
+import { useAuth } from '../../context/AuthContext'
 
 const CASH_RECEIVERS = ['deepu', 'rajavel', 'siva', 'hemalathe', 'others']
 
 export default function ManualEntryForTenant() {
+  const { user } = useAuth()
   const [houses, setHouses] = useState([])
   const [form, setForm] = useState({
     houseId: '', month: '', amount: '', dateSent: '', mode: 'cash', cashReceivedBy: 'deepu',
@@ -33,6 +35,7 @@ export default function ManualEntryForTenant() {
         cashReceivedBy: form.mode === 'cash' ? form.cashReceivedBy : null,
         proofFile,
         uploadedByOwner: true,
+        recordedBy: { uid: user.uid, name: user.name },
       })
       setDone(applicationNumber)
     } finally {
@@ -45,7 +48,7 @@ export default function ManualEntryForTenant() {
     // immediately (rather than going through the approval queue) is expected.
     const pending = await listPendingApprovals()
     const match = pending.find((p) => p.applicationNumber === applicationNumber)
-    if (match) await approvePayment(match.id)
+    if (match) await approvePayment(match.id, { actionedBy: { uid: user.uid, name: user.name } })
     setDone(null)
     setForm({ houseId: '', month: '', amount: '', dateSent: '', mode: 'cash', cashReceivedBy: 'deepu' })
   }

@@ -9,7 +9,7 @@ import {
   getRedirectResult,
   linkWithCredential,
 } from 'firebase/auth'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { auth, db, authedFetch } from './firebase'
 import { resolveEmailFromCustomerId } from './customerService'
 
@@ -115,13 +115,58 @@ export async function createTenantAccount({ email, password, name, houseId, phon
   // returns { uid, customerId }
 }
 
+// ---- Bootstrap only ----
+// Creates the very first account (you, the super-admin) before anyone else
+// exists to grant access via the admin API. Run this once (e.g. from the
+// browser console on the login page) when setting up a brand-new project.
+// Every owner added after this should go through createOwnerAccountAdmin()
+// instead, which goes through you (the admin) rather than self-registering.
 export async function createOwnerAccount({ email, password, name }) {
   const cred = await createUserWithEmailAndPassword(auth, email, password)
   await setDoc(doc(db, 'users', cred.user.uid), {
-    role: 'owner',
+    role: 'admin',
     name,
     email,
+    profilePhotoUrl: null,
     createdAt: Date.now(),
   })
   return cred.user
+}
+
+// ---- Multi-owner management (admin only) ----
+// Adds a co-owner (dad, brother, mom, etc). They get the same day-to-day
+// access as you except managing other owner accounts. Runs server-side so
+// creating their login doesn't hijack your own session.
+export async function createOwnerAccountAdmin({ email, password, name, phone }) {
+  return authedFetch('/api/create-owner', { email, password, name, phone })
+}
+
+export async function deleteOwnerAccount(uid) {
+  return authedFetch('/api/delete-owner', { uid })
+}
+
+export async function listOwners() {
+  const snap = await getDocs(
+    query(collection(db, 'users'), where('role', 'in', ['owner', 'admin']))
+  )
+  return snap.docs.map((d) => ({ uid: d.id, ...d.data() }))
+}
+
+// ---- Profile self-editing ----
+// Anyone (owner-level or tenant) can update their own name/phone/photo directly
+// — the Firestore rule only allows those three fields to be self-edited, never role/houseId.
+export async function updateOwnProfile({ uid, name, phone, profilePhotoUrl }) {
+  const updates = {}
+  if (name !== undefined) updates.name = name
+  if (phone !== undefined) updates.phone = phone
+  if (profilePhotoUrl !== undefined) updates.profilePhotoUrl = profilePhotoUrl
+  await updateDoc(doc(db, 'users', uid), updates)
+}
+
+// ---- Editing a tenant's contact info (owner-level) ----
+// Email changes have to go through the Admin SDK (a client can't change
+// another user's Firebase Auth email), so this hits /api rather than
+// writing Firestore directly.
+export async function updateTenantContact({ tenantUid, houseId, newEmail, newPhone }) {
+  return authedFetch('/api/update-tenant-contact', { tenantUid, houseId, newEmail, newPhone })
 }

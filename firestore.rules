@@ -11,8 +11,16 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    function isAdmin() {
+      return isSignedIn() && userDoc().data.role == 'admin';
+    }
+
+    // "Owner-level" access - the super-admin (Deepu) AND any co-owner (dad,
+    // brother, mom, etc.) get the same day-to-day permissions. Only isAdmin()
+    // is checked separately, for the one thing co-owners can't do: managing
+    // other owner accounts.
     function isOwner() {
-      return isSignedIn() && userDoc().data.role == 'owner';
+      return isSignedIn() && (userDoc().data.role == 'admin' || userDoc().data.role == 'owner');
     }
 
     function isTenant() {
@@ -24,11 +32,20 @@ service cloud.firestore {
     }
 
     // ---- users ----
-    // A user can read their own profile. Only the owner can create/edit user docs
-    // (tenant accounts are created by the owner via createTenantAccount()).
+    // Anyone can read their own profile; owner-level accounts can read anyone's.
+    // A signed-in user can update their OWN name/phone/profile photo (self-service
+    // profile editing) but never their own role or houseId. Creating or deleting
+    // an owner-level account is admin-only — enforced both here and, more
+    // importantly, in api/create-owner.js / api/delete-owner.js which actually
+    // perform those actions via the Admin SDK (client-side create/delete of
+    // another Firebase Auth user isn't possible anyway; this rule just protects
+    // the Firestore doc from being spoofed independently of that).
     match /users/{uid} {
       allow read: if isSignedIn() && (request.auth.uid == uid || isOwner());
-      allow write: if isOwner();
+      allow update: if isAdmin()
+        || (isSignedIn() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'profilePhotoUrl']));
+      allow create, delete: if isAdmin();
     }
 
     // ---- houses ----
@@ -108,9 +125,10 @@ service cloud.firestore {
     }
 
     // ---- documents (Aadhaar / ration card, private) ----
-    // Firestore metadata is separate from the actual file — the file itself sits
-    // under private-documents/ in Storage, which requires the owner custom claim
-    // to read (see storage.rules). This collection just tracks who uploaded what.
+    // Firestore metadata is separate from the actual file — the file itself is a
+    // private Cloudinary asset (type: 'authenticated'), viewable only via a
+    // freshly-signed URL that api/get-signed-url.js mints for owner-level accounts.
+    // This collection just tracks who uploaded what.
     match /documents/{docId} {
       allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
       allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
@@ -148,6 +166,12 @@ service cloud.firestore {
     match /counters/{counterId} {
       allow read: if isOwner();
       allow write: if isOwner();
+    }
+
+    // ---- advanceLedger (partial advance payments over time) ----
+    match /advanceLedger/{entryId} {
+      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
+      allow create, update, delete: if isOwner();
     }
   }
 }

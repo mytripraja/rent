@@ -93,6 +93,7 @@ function PayEbShareModal({ bill, share, user, onClose, onDone }) {
         cashReceivedBy: form.cashReceivedBy,
         neighborHouseId: form.neighborHouseId,
         proofFile,
+        recordedBy: { uid: user.uid, name: user.name },
       })
       onDone()
     } finally {

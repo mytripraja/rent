@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { listPendingEbApprovals, approveEbPayment, rejectEbPayment } from '../../services/ebBillService'
+import { useAuth } from '../../context/AuthContext'
 
 export default function EBApprovalQueue() {
+  const { user } = useAuth()
   const [pending, setPending] = useState([])
   const [rejectingId, setRejectingId] = useState(null)
   const [reason, setReason] = useState('')
@@ -19,12 +21,12 @@ export default function EBApprovalQueue() {
     if (payment.mode === 'neighbor') {
       neighborCollectedBy = prompt('Who actually collected this from the neighbor? (deepu / rajavel / siva)')
     }
-    await approveEbPayment(payment.id, { neighborCollectedBy })
+    await approveEbPayment(payment.id, { neighborCollectedBy, actionedBy: { uid: user.uid, name: user.name } })
     refresh()
   }
 
   async function handleReject() {
-    await rejectEbPayment(rejectingId, reason)
+    await rejectEbPayment(rejectingId, reason, { uid: user.uid, name: user.name })
     setRejectingId(null)
     setReason('')
     refresh()
@@ -48,6 +50,7 @@ export default function EBApprovalQueue() {
               Mode: {p.mode}{p.mode === 'cash' && ` · Received by ${p.cashReceivedBy}`}{p.mode === 'neighbor' && ` · Via neighbor house ${p.neighborHouseId}`}
             </p>
             <p className="text-xs text-slate-400">Sent: {p.dateSent} · App# {p.applicationNumber}</p>
+            {p.recordedBy && <p className="text-xs text-slate-400">Entered by {p.recordedBy.name}</p>}
             {p.proofUrl && (
               <a href={p.proofUrl} target="_blank" rel="noreferrer" className="text-xs text-brand hover:underline">
                 View proof screenshot

@@ -1,4 +1,4 @@
-import { auth, db, requireOwner } from '../lib/firebaseAdmin.js'
+import { auth, db, requireOwnerLevel } from '../lib/firebaseAdmin.js'
 import { FieldValue } from 'firebase-admin/firestore'
 
 // This is exactly what used to be the createTenantAccountAdmin Cloud Function.
@@ -10,7 +10,9 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   try {
-    await requireOwner(req)
+    const decoded = await requireOwnerLevel(req)
+    const callerDoc = await db.collection('users').doc(decoded.uid).get()
+    const recordedBy = { uid: decoded.uid, name: callerDoc.data()?.name || 'Owner' }
 
     const { email, password, name, phone, houseId, aadhaarNumber } = req.body || {}
     if (!email || !password || !name || !houseId) {
@@ -67,6 +69,7 @@ export default async function handler(req, res) {
       houseId,
       customerId,
       createdAt: Date.now(),
+      createdBy: recordedBy,
     })
 
     res.status(200).json({ uid: userRecord.uid, customerId })

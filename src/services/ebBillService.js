@@ -106,6 +106,7 @@ export async function submitEbPayment({
   neighborHouseId,
   proofFile,
   uploadedByOwner = false,
+  recordedBy,
 }) {
   let proofUrl = null
   if (proofFile) {
@@ -129,9 +130,11 @@ export async function submitEbPayment({
     applicationNumber,
     status: 'waiting_approval',
     uploadedByOwner,
+    recordedBy: recordedBy || null,
     rejectionReason: null,
     submittedAt: Date.now(),
     approvedAt: null,
+    actionedBy: null,
   })
 
   return applicationNumber
@@ -149,17 +152,19 @@ export async function listEbPaymentsForHouse(houseId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
-export async function approveEbPayment(paymentId, { neighborCollectedBy } = {}) {
+export async function approveEbPayment(paymentId, { neighborCollectedBy, actionedBy } = {}) {
   await updateDoc(doc(db, 'ebBillPayments', paymentId), {
     status: 'approved',
     approvedAt: Date.now(),
+    actionedBy: actionedBy || null,
     ...(neighborCollectedBy ? { neighborCollectedBy } : {}),
   })
 }
 
-export async function rejectEbPayment(paymentId, reason) {
+export async function rejectEbPayment(paymentId, reason, actionedBy) {
   await updateDoc(doc(db, 'ebBillPayments', paymentId), {
     status: 'rejected',
     rejectionReason: reason,
+    actionedBy: actionedBy || null,
   })
 }

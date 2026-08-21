@@ -3,3 +3,12 @@ dist
 .env
 .env.local
 .DS_Store
+
+# Android (Capacitor) - keep the project structure in git, but not build output
+android/app/build
+android/build
+android/.gradle
+android/local.properties
+android/captures
+android/.idea
+*.iml

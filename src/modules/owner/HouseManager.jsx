@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import { listHouses, bookHouse, vacateHouse } from '../../services/houseService'
 import { createTenantAccount } from '../../services/authService'
+import { addAdvancePayment } from '../../services/advanceLedgerService'
+import { uploadUnsigned } from '../../services/cloudinaryService'
+import { useAuth } from '../../context/AuthContext'
 
 export default function HouseManager() {
+  const { user } = useAuth()
   const [houses, setHouses] = useState([])
   const [bookingHouse, setBookingHouse] = useState(null)
   const [vacatingHouse, setVacatingHouse] = useState(null)
@@ -72,24 +76,32 @@ export default function HouseManager() {
       </div>
 
       {bookingHouse && (
-        <BookHouseModal house={bookingHouse} onClose={() => setBookingHouse(null)} onDone={refresh} />
+        <BookHouseModal house={bookingHouse} user={user} onClose={() => setBookingHouse(null)} onDone={refresh} />
       )}
       {vacatingHouse && (
-        <VacateHouseModal house={vacatingHouse} onClose={() => setVacatingHouse(null)} onDone={refresh} />
+        <VacateHouseModal house={vacatingHouse} user={user} onClose={() => setVacatingHouse(null)} onDone={refresh} />
       )}
     </div>
   )
 }
 
 
-function BookHouseModal({ house, onClose, onDone }) {
+function BookHouseModal({ house, user, onClose, onDone }) {
   const [form, setForm] = useState({
     name: '', phone: '', email: '', password: '', rentAmount: '', advanceAmount: '', aadhaarNumber: '', phoneVisibleToNeighbors: true,
+    moveInDate: '', advancePaidNow: '',
   })
+  const [photoFile, setPhotoFile] = useState(null)
   const [customerId, setCustomerId] = useState(null)
 
   async function submit(e) {
     e.preventDefault()
+    const recordedBy = { uid: user.uid, name: user.name }
+    let photoUrl = null
+    if (photoFile) {
+      const uploaded = await uploadUnsigned(photoFile, `tenant-photos/${house.id}`)
+      photoUrl = uploaded.url
+    }
     const tenant = await createTenantAccount({
       email: form.email,
       password: form.password,
@@ -106,7 +118,24 @@ function BookHouseModal({ house, onClose, onDone }) {
       rentAmount: Number(form.rentAmount),
       advanceAmount: Number(form.advanceAmount),
       phoneVisibleToNeighbors: form.phoneVisibleToNeighbors,
+      moveInDate: form.moveInDate,
+      recordedBy,
+      photoUrl,
     })
+    // Advance is often paid partially — e.g. ₹5,000 now, the rest added over
+    // future months. Whatever's paid at booking becomes the first ledger entry;
+    // more can be added later from the tenant's profile.
+    if (Number(form.advancePaidNow) > 0) {
+      await addAdvancePayment({
+        houseId: house.id,
+        tenantId: tenant.uid,
+        amount: Number(form.advancePaidNow),
+        date: form.moveInDate || new Date().toISOString().slice(0, 10),
+        mode: 'cash',
+        note: 'Paid at booking',
+        recordedBy,
+      })
+    }
     setCustomerId(tenant.customerId)
     onDone()
   }
@@ -132,8 +161,20 @@ function BookHouseModal({ house, onClose, onDone }) {
         <input required type="email" placeholder="Email (used as login)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <input required type="password" placeholder="Temporary password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <input placeholder="Aadhaar number (links repeat tenants to one Customer ID)" value={form.aadhaarNumber} onChange={(e) => setForm({ ...form, aadhaarNumber: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <div>
+          <label className="text-xs text-slate-500">Profile photo (optional)</label>
+          <input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files[0])} className="w-full text-sm mt-1" />
+        </div>
+        <div>
+          <label className="text-xs text-slate-500">Move-in date</label>
+          <input required type="date" value={form.moveInDate} onChange={(e) => setForm({ ...form, moveInDate: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mt-1" />
+        </div>
         <input required type="number" placeholder="Rent amount" value={form.rentAmount} onChange={(e) => setForm({ ...form, rentAmount: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        <input required type="number" placeholder="Advance amount" value={form.advanceAmount} onChange={(e) => setForm({ ...form, advanceAmount: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <input required type="number" placeholder="Advance amount agreed (target)" value={form.advanceAmount} onChange={(e) => setForm({ ...form, advanceAmount: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <div>
+          <label className="text-xs text-slate-500">Advance actually paid now (can be less — add the rest later)</label>
+          <input type="number" placeholder="e.g. 5000" value={form.advancePaidNow} onChange={(e) => setForm({ ...form, advancePaidNow: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mt-1" />
+        </div>
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" checked={form.phoneVisibleToNeighbors} onChange={(e) => setForm({ ...form, phoneVisibleToNeighbors: e.target.checked })} />
           Show phone number to neighbors in directory
@@ -144,7 +185,7 @@ function BookHouseModal({ house, onClose, onDone }) {
   )
 }
 
-function VacateHouseModal({ house, onClose, onDone }) {
+function VacateHouseModal({ house, user, onClose, onDone }) {
   const [form, setForm] = useState({
     advanceDeducted: '', deductionReason: '', balanceReturned: '', returnDate: '', returnMode: 'cash', returnedBy: 'deepu',
   })
@@ -157,6 +198,7 @@ function VacateHouseModal({ house, onClose, onDone }) {
       returnDate: form.returnDate,
       returnMode: form.returnMode,
       returnedBy: form.returnedBy,
+      recordedBy: { uid: user.uid, name: user.name },
     })
     onDone()
     onClose()

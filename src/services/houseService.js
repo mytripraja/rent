@@ -1,5 +1,6 @@
 import {
   collection,
+  collectionGroup,
   doc,
   getDoc,
   getDocs,
@@ -58,16 +59,18 @@ export async function createHouse({ govtDoorNumber, internalDoorNumber, floor, e
 }
 
 // Book a vacant house: attach a new tenant profile without deleting history
-export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmount, advanceAmount, phoneVisibleToNeighbors = true }) {
+export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmount, advanceAmount, phoneVisibleToNeighbors = true, moveInDate, recordedBy, photoUrl }) {
   const houseUpdate = {
     status: 'occupied',
     currentTenantId: tenantId,
     tenantName: name,
     tenantPhone: phone,
     tenantEmail: email,
+    tenantPhotoUrl: photoUrl || null,
     rentAmount,
     advanceAmount,
     phoneVisibleToNeighbors,
+    moveInDate: moveInDate || null, // the date they actually moved in, as entered by the owner
     movedInAt: Date.now(),
   }
   await updateDoc(doc(db, 'houses', houseId), houseUpdate)
@@ -80,17 +83,31 @@ export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmo
     name,
     phone,
     email,
+    photoUrl: photoUrl || null,
     rentAmount,
     advanceAmount,
+    moveInDate: moveInDate || null,
     movedInAt: Date.now(),
     movedOutAt: null,
+    recordedBy: recordedBy || null,
   })
+}
+
+// Past tenants across every house — used by the "Old Tenants" tab. Reads the
+// `history` subcollection across all houses at once via a collection group
+// query. Firestore will prompt you to create a composite index the first time
+// this runs (console link appears in the error) — click it once and it's done.
+export async function listPastTenants() {
+  const snap = await getDocs(
+    query(collectionGroup(db, 'history'), where('movedOutAt', '!=', null), orderBy('movedOutAt', 'desc'))
+  )
+  return snap.docs.map((d) => ({ id: d.id, houseId: d.ref.parent.parent.id, ...d.data() }))
 }
 
 // Vacate: closes history entry, house becomes vacant.
 // accessRevokeScheduledAt is picked up by the `revokeAccessAfterVacate` Cloud Function
 // (runs every 15 min) which disables the tenant's Firebase Auth account 1hr after this call.
-export async function vacateHouse(houseId, { advanceDeducted, deductionReason, balanceReturned, returnDate, returnMode, returnedBy }) {
+export async function vacateHouse(houseId, { advanceDeducted, deductionReason, balanceReturned, returnDate, returnMode, returnedBy, recordedBy }) {
   const house = await getHouse(houseId)
 
   await updateDoc(doc(db, 'houses', houseId), {
@@ -117,6 +134,7 @@ export async function vacateHouse(houseId, { advanceDeducted, deductionReason, b
       returnDate,
       returnMode, // 'cash' | 'upi'
       returnedBy, // 'deepu' | 'rajavel' | 'siva' | ...
+      vacatedBy: recordedBy || null,
     })
   }
 

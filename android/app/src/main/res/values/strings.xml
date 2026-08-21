@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Rental Manager</string>
+    <string name="title_activity_main">Rental Manager</string>
+    <string name="package_name">com.rds.rentalmanager</string>
+    <string name="custom_url_scheme">com.rds.rentalmanager</string>
+</resources>

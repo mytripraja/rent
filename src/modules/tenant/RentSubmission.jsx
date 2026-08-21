@@ -32,6 +32,7 @@ export default function RentSubmission({ onSubmitted }) {
         cashReceivedBy: form.cashReceivedBy,
         neighborHouseId: form.neighborHouseId,
         proofFile,
+        recordedBy: { uid: user.uid, name: user.name },
       })
       setApplicationNumber(appNo)
       onSubmitted && onSubmitted()
