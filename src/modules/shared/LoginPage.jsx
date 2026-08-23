@@ -54,11 +54,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 px-4 py-8">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-md p-6 sm:p-8 space-y-5">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-paper px-4 py-8">
+      <div className="w-full max-w-sm bg-paper-raised rounded-2xl shadow-md border border-brass/20 p-6 sm:p-8 space-y-5">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800">Rental Manager</h1>
-          <p className="text-sm text-slate-500 mt-1">Sign in to continue</p>
+          <h1 className="font-display text-2xl text-ink">Rental Manager</h1>
+          <p className="text-sm text-ink-soft mt-1">Sign in to continue</p>
         </div>
 
         {/* Method switcher - horizontally scrollable so it never breaks on small screens */}
@@ -69,7 +69,7 @@ export default function LoginPage() {
               type="button"
               onClick={() => { setMethod(m.id); setError('') }}
               className={`shrink-0 text-xs sm:text-sm px-3 py-2 rounded-lg font-medium whitespace-nowrap ${
-                method === m.id ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600'
+                method === m.id ? 'bg-brand text-white' : 'bg-paper text-ink-soft border border-brass/20'
               }`}
             >
               {m.label}
@@ -134,7 +134,7 @@ export default function LoginPage() {
 
         {method === 'google' && (
           <div className="space-y-4">
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-ink-soft">
               Only works if your Google email matches the one on file with the owner.
             </p>
             {error && <p className="text-sm text-red-600">{error}</p>}
@@ -142,7 +142,7 @@ export default function LoginPage() {
               type="button"
               onClick={handleGoogleClick}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 border border-slate-300 rounded-lg py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              className="w-full flex items-center justify-center gap-2 border border-brass/30 rounded-lg py-2.5 text-sm font-medium text-ink hover:bg-paper disabled:opacity-60"
             >
               <GoogleIcon />
               {loading ? 'Signing in…' : 'Continue with Google'}
@@ -150,7 +150,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        <p className="text-xs text-slate-400 text-center pt-1">
+        <p className="text-xs text-ink-soft/80 text-center pt-1">
           Tenant accounts are created by the owner. Contact the owner if you don't have a login.
         </p>
       </div>
@@ -159,14 +159,14 @@ export default function LoginPage() {
 }
 
 const inputClass =
-  'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand'
+  'mt-1 w-full rounded-lg border border-brass/30 bg-paper px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand'
 
 function Field({ label, hint, children }) {
   return (
     <div>
-      <label className="text-sm text-slate-600">{label}</label>
+      <label className="text-sm text-ink-soft">{label}</label>
       {children}
-      {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-ink-soft/70 mt-1">{hint}</p>}
     </div>
   )
 }

@@ -1,22 +1,24 @@
-const STYLES = {
-  paid: 'bg-green-100 text-green-700 border border-green-300',
-  waiting_approval: 'bg-amber-100 text-amber-700 border border-amber-300',
-  not_paid: 'bg-red-100 text-red-700 border border-red-300',
-  approved: 'bg-green-100 text-green-700 border border-green-300',
-  rejected: 'bg-red-100 text-red-700 border border-red-300',
+// The app's signature element: a rubber-stamp badge instead of a flat pill,
+// echoing the passbook/ledger visual language (see index.css .stamp).
+const STAMP_CLASS = {
+  paid: 'stamp-green',
+  waiting_approval: 'stamp-amber',
+  not_paid: 'stamp-red',
+  approved: 'stamp-green',
+  rejected: 'stamp-red',
 }
 
 const LABELS = {
-  paid: 'Rent Paid',
-  waiting_approval: 'Waiting for Approval',
-  not_paid: 'Rent Not Paid',
+  paid: 'Paid',
+  waiting_approval: 'Pending',
+  not_paid: 'Not Paid',
   approved: 'Approved',
   rejected: 'Rejected',
 }
 
 export default function ApprovalStatusBadge({ status }) {
   return (
-    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${STYLES[status] || 'bg-gray-100 text-gray-600'}`}>
+    <span className={`stamp ${STAMP_CLASS[status] || 'stamp-ink'}`}>
       {LABELS[status] || status}
     </span>
   )

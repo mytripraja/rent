@@ -1,14 +1,88 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
+/*
+  DESIGN SYSTEM — "Ledger"
+  Grounded in the product itself: the Customer ID system is explicitly modeled
+  on a bank passbook, so the whole visual language follows that thread —
+  aged ledger paper, an oxblood passbook cover, brass door-plate accents, and
+  rubber-stamp status badges instead of generic pill badges. Signature element:
+  the rotated ink-stamp badge (see .stamp-* classes), used everywhere a
+  paid/pending/not-paid status appears.
+*/
 @theme {
-  --color-brand: #2563eb;
-  --color-brand-dark: #1d4ed8;
-  --color-paid: #16a34a;
-  --color-waiting: #d97706;
-  --color-notpaid: #dc2626;
+  --color-paper: #f5f1e4;       /* aged ledger paper — page background */
+  --color-paper-raised: #fbf8ef; /* cards sitting slightly "above" the paper */
+  --color-ink: #2b2620;         /* warm near-black — body text */
+  --color-ink-soft: #6b6255;    /* muted ledger-pencil text */
+  --color-cover: #5b2a2a;       /* oxblood passbook cover — header, primary actions */
+  --color-cover-dark: #45201f;
+  --color-brass: #b8873d;       /* brass door-plate accent — highlights, active state */
+  --color-brass-light: #e4c98a;
+  --color-stamp-green: #2f6e4f; /* paid / approved */
+  --color-stamp-amber: #b8873d; /* waiting */
+  --color-stamp-red: #a63a32;   /* not paid / urgent */
+
+  /* Backward-compatible aliases so existing bg-brand / text-brand classes
+     across the app pick up the new palette without a full find-replace. */
+  --color-brand: #5b2a2a;
+  --color-brand-dark: #45201f;
+  --color-paid: #2f6e4f;
+  --color-waiting: #b8873d;
+  --color-notpaid: #a63a32;
+
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
 }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
-  background-color: #f8fafc;
+  font-family: var(--font-sans);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono-tab {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Signature element: a rubber-stamp status badge. Ink color per status,
+   slight rotation and a double-ring border to read as an actual stamp
+   impression rather than a flat pill. */
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.65rem;
+  border-radius: 4px;
+  border: 1.5px solid currentColor;
+  outline: 1px solid currentColor;
+  outline-offset: 2px;
+  transform: rotate(-2deg);
+  background: transparent;
+}
+
+.stamp-green { color: var(--color-stamp-green); }
+.stamp-amber { color: var(--color-stamp-amber); }
+.stamp-red { color: var(--color-stamp-red); }
+.stamp-ink { color: var(--color-ink-soft); }
+
+/* Ledger rule — a warm hairline divider used on the home/summary screens
+   instead of plain gray borders, echoing ruled ledger paper. */
+.ledger-rule {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-brass) 35%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
+import { DoorOpen, Phone } from 'lucide-react'
 import { listHouses, bookHouse, vacateHouse } from '../../services/houseService'
 import { createTenantAccount } from '../../services/authService'
 import { addAdvancePayment } from '../../services/advanceLedgerService'
@@ -23,54 +25,63 @@ export default function HouseManager() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-800">Houses</h2>
-        <p className="text-sm text-slate-500">
-          {occupiedCount} occupied · {houses.length - occupiedCount} vacant · {houses.length} total
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-xl text-ink">Houses</h2>
+          <p className="font-mono-tab text-xs text-ink-soft mt-0.5">
+            {occupiedCount} occupied · {houses.length - occupiedCount} vacant · {houses.length} total
+          </p>
+        </div>
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {houses.map((h) => (
-          <div key={h.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-semibold text-slate-800">{h.internalDoorNumber}</span>
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  h.status === 'occupied'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-slate-100 text-slate-500'
-                }`}
-              >
+        {houses.map((h, i) => (
+          <motion.div
+            key={h.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.03 }}
+            className="bg-paper-raised rounded-2xl shadow-sm border border-brass/20 overflow-hidden"
+          >
+            {/* Door plate header */}
+            <div className="bg-cover text-paper px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <DoorOpen size={16} className="text-brass-light" />
+                <span className="font-display text-lg tracking-wide">{h.internalDoorNumber}</span>
+              </div>
+              <span className={`stamp ${h.status === 'occupied' ? 'stamp-green' : 'stamp-ink'} !rotate-0 !text-[0.62rem]`}>
                 {h.status}
               </span>
             </div>
-            <p className="text-xs text-slate-400 mb-1">Govt door no: {h.govtDoorNumber}</p>
-            {h.status === 'occupied' ? (
-              <>
-                <p className="text-sm text-slate-700">{h.tenantName}</p>
-                <p className="text-xs text-slate-500">{h.tenantPhone}</p>
-                <p className="text-xs text-slate-500 mt-1">Rent: ₹{h.rentAmount}</p>
+
+            <div className="p-4">
+              <p className="text-xs text-ink-soft mb-2">Govt door no: {h.govtDoorNumber}</p>
+              {h.status === 'occupied' ? (
+                <>
+                  <p className="text-sm font-medium text-ink">{h.tenantName}</p>
+                  <p className="text-xs text-ink-soft flex items-center gap-1 mt-0.5"><Phone size={11} />{h.tenantPhone}</p>
+                  <p className="font-mono-tab text-sm text-brass mt-2">₹{h.rentAmount}<span className="text-ink-soft">/mo</span></p>
+                  <button
+                    onClick={() => setVacatingHouse(h)}
+                    className="mt-3 text-xs text-stamp-red font-medium hover:underline"
+                  >
+                    Mark Vacate
+                  </button>
+                </>
+              ) : (
                 <button
-                  onClick={() => setVacatingHouse(h)}
-                  className="mt-3 text-xs text-red-600 font-medium hover:underline"
+                  onClick={() => setBookingHouse(h)}
+                  className="mt-1 text-xs bg-cover text-paper px-3 py-1.5 rounded-full font-medium hover:bg-cover-dark transition"
                 >
-                  Mark Vacate
+                  Book this house
                 </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setBookingHouse(h)}
-                className="mt-3 text-xs text-brand font-medium hover:underline"
-              >
-                Book this house
-              </button>
-            )}
-          </div>
+              )}
+            </div>
+          </motion.div>
         ))}
         {houses.length === 0 && (
-          <p className="text-sm text-slate-400 col-span-full">
-            No houses yet — add your properties once under Setup, then manage bookings and vacates here.
+          <p className="text-sm text-ink-soft col-span-full">
+            No houses yet — add your properties once under More → Property Setup, then manage bookings and vacates here.
           </p>
         )}
       </div>

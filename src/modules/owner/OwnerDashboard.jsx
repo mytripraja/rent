@@ -1,4 +1,10 @@
 import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import {
+  Home, DoorOpen, Users, CheckCircle2, PenSquare, Zap, ZapOff,
+  Bell, MessageSquareWarning, Phone, FileText, MessagesSquare, MoreHorizontal, LogOut, HelpCircle,
+} from 'lucide-react'
+import OwnerHome from './OwnerHome'
 import HouseManager from './HouseManager'
 import TenantsSection from './TenantsSection'
 import RentApprovalQueue from './RentApprovalQueue'
@@ -17,27 +23,25 @@ import { OWNER_TOUR_STEPS } from './ownerTourSteps'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 
-// "Houses" and "Tenants" cover the everyday work; Rent Revision and Property
-// Setup moved into the More menu since those only come up a couple times a
-// year, not something that should take up a tab every day.
 const TABS = [
-  { id: 'houses', label: 'Houses' },
-  { id: 'tenants', label: 'Tenants' },
-  { id: 'approvals', label: 'Rent Approvals' },
-  { id: 'manualEntry', label: 'Manual Entry' },
-  { id: 'eb', label: 'EB Bill' },
-  { id: 'ebApprovals', label: 'EB Approvals' },
-  { id: 'notices', label: 'Notices' },
-  { id: 'complaints', label: 'Complaints' },
-  { id: 'contacts', label: 'Service Contacts' },
-  { id: 'documents', label: 'Documents' },
-  { id: 'community', label: 'Community' },
-  { id: 'more', label: 'More' },
+  { id: 'home', label: 'Home', icon: Home },
+  { id: 'houses', label: 'Houses', icon: DoorOpen },
+  { id: 'tenants', label: 'Tenants', icon: Users },
+  { id: 'approvals', label: 'Rent Approvals', icon: CheckCircle2 },
+  { id: 'manualEntry', label: 'Manual Entry', icon: PenSquare },
+  { id: 'eb', label: 'EB Bill', icon: Zap },
+  { id: 'ebApprovals', label: 'EB Approvals', icon: ZapOff },
+  { id: 'notices', label: 'Notices', icon: Bell },
+  { id: 'complaints', label: 'Complaints', icon: MessageSquareWarning },
+  { id: 'contacts', label: 'Service Contacts', icon: Phone },
+  { id: 'documents', label: 'Documents', icon: FileText },
+  { id: 'community', label: 'Community', icon: MessagesSquare },
+  { id: 'more', label: 'More', icon: MoreHorizontal },
 ]
 
 export default function OwnerDashboard() {
   const { user } = useAuth()
-  const [tab, setTab] = useState('houses')
+  const [tab, setTab] = useState('home')
   const [replayTour, setReplayTour] = useState(false)
   const [searchHouseId, setSearchHouseId] = useState(null)
 
@@ -47,54 +51,73 @@ export default function OwnerDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-100 px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+    <div className="min-h-screen bg-paper">
+      {/* Cover band — the passbook-cover header */}
+      <header className="bg-cover text-paper px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-slate-100 overflow-hidden flex items-center justify-center text-sm text-slate-500 shrink-0">
+          <div className="w-9 h-9 rounded-full bg-brass/30 border border-brass overflow-hidden flex items-center justify-center text-sm font-semibold shrink-0">
             {user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} alt="" className="w-full h-full object-cover" /> : user?.name?.[0]}
           </div>
           <div>
-            <h1 className="font-semibold text-slate-800 text-base sm:text-lg">Owner Dashboard</h1>
-            <p className="text-xs text-slate-400">{user?.name}{user?.role === 'admin' ? ' · Super Admin' : ''}</p>
+            <h1 className="font-display text-lg leading-tight">Rental Manager</h1>
+            <p className="text-xs text-brass-light">{user?.name}{user?.role === 'admin' ? ' · Super Admin' : ''}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
           <SearchBar onSelectHouse={handleSearchSelect} />
-          <button onClick={() => setReplayTour(true)} className="text-sm text-brand hover:text-brand-dark whitespace-nowrap">Help</button>
-          <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-700 whitespace-nowrap">Log out</button>
+          <button onClick={() => setReplayTour(true)} className="text-brass-light hover:text-paper" title="Help">
+            <HelpCircle size={18} />
+          </button>
+          <button onClick={logout} className="text-brass-light hover:text-paper" title="Log out">
+            <LogOut size={18} />
+          </button>
         </div>
       </header>
 
-      <nav className="px-4 sm:px-6 pt-4 flex gap-2 overflow-x-auto pb-1">
+      <nav className="bg-paper-raised border-b border-brass/25 px-4 sm:px-6 flex gap-1 overflow-x-auto">
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`shrink-0 text-sm px-4 py-2 rounded-lg font-medium whitespace-nowrap ${
-              tab === t.id ? 'bg-brand text-white' : 'bg-white text-slate-600 border border-slate-200'
+            className={`shrink-0 flex items-center gap-1.5 text-sm px-3.5 py-3 border-b-2 whitespace-nowrap transition ${
+              tab === t.id
+                ? 'border-brass text-cover font-semibold'
+                : 'border-transparent text-ink-soft hover:text-ink'
             }`}
           >
+            <t.icon size={15} />
             {t.label}
           </button>
         ))}
       </nav>
 
-      <main className="p-4 sm:p-6">
-        {tab === 'houses' && <HouseManager />}
-        {tab === 'tenants' && (
-          <TenantsSection openHouseId={searchHouseId} onOpenHouseHandled={() => setSearchHouseId(null)} />
-        )}
-        {tab === 'approvals' && <RentApprovalQueue />}
-        {tab === 'eb' && <EBBillCreator />}
-        {tab === 'ebApprovals' && <EBApprovalQueue />}
-        {tab === 'notices' && <NoticeManager />}
-        {tab === 'complaints' && <ComplaintInbox />}
-        {tab === 'contacts' && <ServiceContactsManager />}
-        {tab === 'manualEntry' && <ManualEntryForTenant />}
-        {tab === 'documents' && <DocumentVerification />}
-        {tab === 'community' && <CommunityBoard user={user} canModerate />}
-        {tab === 'more' && <MoreMenu />}
+      <main className="p-4 sm:p-6 max-w-5xl mx-auto">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.18 }}
+          >
+            {tab === 'home' && <OwnerHome onNavigate={setTab} />}
+            {tab === 'houses' && <HouseManager />}
+            {tab === 'tenants' && (
+              <TenantsSection openHouseId={searchHouseId} onOpenHouseHandled={() => setSearchHouseId(null)} />
+            )}
+            {tab === 'approvals' && <RentApprovalQueue />}
+            {tab === 'eb' && <EBBillCreator />}
+            {tab === 'ebApprovals' && <EBApprovalQueue />}
+            {tab === 'notices' && <NoticeManager />}
+            {tab === 'complaints' && <ComplaintInbox />}
+            {tab === 'contacts' && <ServiceContactsManager />}
+            {tab === 'manualEntry' && <ManualEntryForTenant />}
+            {tab === 'documents' && <DocumentVerification />}
+            {tab === 'community' && <CommunityBoard user={user} canModerate />}
+            {tab === 'more' && <MoreMenu />}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       <OnboardingTour
