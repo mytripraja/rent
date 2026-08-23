@@ -32,8 +32,8 @@ export default function ComplaintInbox() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">Complaints</h2>
-          <p className="text-sm text-slate-500">Only visible to you.</p>
+          <h2 className="text-lg font-semibold text-ink">Complaints</h2>
+          <p className="text-sm text-ink-soft">Only visible to you.</p>
         </div>
         <button
           onClick={() => setShowSend(true)}
@@ -49,7 +49,7 @@ export default function ComplaintInbox() {
             key={f}
             onClick={() => setFilter(f)}
             className={`text-xs px-3 py-1.5 rounded-full font-medium capitalize ${
-              filter === f ? 'bg-brand text-white' : 'bg-white text-slate-600 border border-slate-200'
+              filter === f ? 'bg-brand text-white' : 'bg-paper-raised text-ink-soft border border-brass/25'
             }`}
           >
             {f}
@@ -59,28 +59,28 @@ export default function ComplaintInbox() {
 
       <div className="space-y-2">
         {filtered.map((c) => (
-          <div key={c.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+          <div key={c.id} className="bg-paper-raised rounded-xl border border-brass/20 shadow-sm p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-medium text-slate-500 mb-1">
+                <p className="text-xs font-medium text-ink-soft mb-1">
                   {c.direction === 'tenant_to_owner'
                     ? `From House ${houseLabel(c.fromHouseId)}`
                     : `To: ${c.targetHouseIds === 'all' ? 'All houses' : c.targetHouseIds.map(houseLabel).join(', ')}`}
                 </p>
-                <p className="text-sm text-slate-700">{c.message}</p>
-                <p className="text-xs text-slate-400 mt-1">{new Date(c.createdAt).toLocaleString()}</p>
+                <p className="text-sm text-ink">{c.message}</p>
+                <p className="text-xs text-ink-soft mt-1">{new Date(c.createdAt).toLocaleString()}</p>
               </div>
               {c.status === 'open' ? (
                 <button onClick={() => handleResolve(c.id)} className="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-medium shrink-0">
                   Mark Resolved
                 </button>
               ) : (
-                <span className="text-xs bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg shrink-0">Resolved</span>
+                <span className="text-xs bg-paper text-ink-soft px-3 py-1.5 rounded-lg shrink-0">Resolved</span>
               )}
             </div>
           </div>
         ))}
-        {filtered.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No complaints here.</p>}
+        {filtered.length === 0 && <p className="text-sm text-ink-soft py-6 text-center">No complaints here.</p>}
       </div>
 
       {showSend && (
@@ -119,15 +119,15 @@ function SendComplaintModal({ houses, onClose, onSent }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-      <form onSubmit={submit} className="bg-white rounded-2xl shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto space-y-3">
+      <form onSubmit={submit} className="bg-paper-raised rounded-2xl shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto space-y-3">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="font-semibold text-slate-800">Send Complaint</h3>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">✕</button>
+          <h3 className="font-semibold text-ink">Send Complaint</h3>
+          <button type="button" onClick={onClose} className="text-ink-soft hover:text-ink-soft">✕</button>
         </div>
 
         <textarea required rows={3} placeholder="Message" value={message}
           onChange={(e) => setMessage(e.target.value)}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
 
         <div className="flex gap-4 text-sm">
           <label className="flex items-center gap-1.5">
@@ -150,7 +150,7 @@ function SendComplaintModal({ houses, onClose, onSent }) {
                 className={`text-xs px-3 py-1.5 rounded-full border ${
                   selectedHouseIds.includes(h.id)
                     ? 'bg-brand text-white border-brand'
-                    : 'bg-white text-slate-600 border-slate-300'
+                    : 'bg-paper-raised text-ink-soft border-brass/30'
                 }`}
               >
                 {h.internalDoorNumber}

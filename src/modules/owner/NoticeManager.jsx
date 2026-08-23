@@ -71,27 +71,27 @@ export default function NoticeManager() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-lg font-semibold text-slate-800">Notices</h2>
-        <p className="text-sm text-slate-500">Pinned banners tenants see on their dashboard.</p>
+        <h2 className="text-lg font-semibold text-ink">Notices</h2>
+        <p className="text-sm text-ink-soft">Pinned banners tenants see on their dashboard.</p>
       </div>
 
-      <form onSubmit={submit} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3 max-w-lg">
+      <form onSubmit={submit} className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 space-y-3 max-w-lg">
         <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
           {TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
 
         <textarea required rows={2} placeholder="Message" value={form.message}
           onChange={(e) => setForm({ ...form, message: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
 
         <input placeholder="Time window (e.g. 10 AM – 2 PM)" value={form.windowText}
           onChange={(e) => setForm({ ...form, windowText: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
 
         <input type="number" min="1" placeholder="Auto-expire after (hours) — leave blank to stay pinned"
           value={form.durationHours} onChange={(e) => setForm({ ...form, durationHours: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
 
         <div className="flex gap-4 text-sm">
           <label className="flex items-center gap-1.5">
@@ -114,7 +114,7 @@ export default function NoticeManager() {
                 className={`text-xs px-3 py-1.5 rounded-full border ${
                   form.selectedHouseIds.includes(h.id)
                     ? 'bg-brand text-white border-brand'
-                    : 'bg-white text-slate-600 border-slate-300'
+                    : 'bg-paper-raised text-ink-soft border-brass/30'
                 }`}
               >
                 {h.internalDoorNumber}
@@ -129,7 +129,7 @@ export default function NoticeManager() {
       </form>
 
       <div>
-        <h3 className="text-sm font-semibold text-slate-700 mb-2">All Notices</h3>
+        <h3 className="text-sm font-semibold text-ink mb-2">All Notices</h3>
         <div className="space-y-2 max-w-lg">
           {notices.map((n) => {
             const expired = n.expiresAt && n.expiresAt <= now
@@ -137,7 +137,7 @@ export default function NoticeManager() {
               <div key={n.id} className={expired ? 'opacity-40' : ''}>
                 <NoticeBanner notice={n} />
                 <div className="flex items-center justify-between -mt-2 mb-3 px-1">
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-ink-soft">
                     {expired ? 'Expired' : 'Active'} · {n.targetHouseIds === 'all' ? 'All houses' : `${n.targetHouseIds.length} house(s)`}
                   </span>
                   <button onClick={() => handleDelete(n.id)} className="text-xs text-red-600 hover:underline">Delete</button>
@@ -145,7 +145,7 @@ export default function NoticeManager() {
               </div>
             )
           })}
-          {notices.length === 0 && <p className="text-sm text-slate-400">No notices yet.</p>}
+          {notices.length === 0 && <p className="text-sm text-ink-soft">No notices yet.</p>}
         </div>
       </div>
     </div>

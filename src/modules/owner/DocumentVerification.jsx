@@ -37,30 +37,30 @@ export default function DocumentVerification() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-slate-800">Document Verification</h2>
-        <p className="text-sm text-slate-500">Aadhaar / ration card uploads — visible to you only.</p>
+        <h2 className="text-lg font-semibold text-ink">Document Verification</h2>
+        <p className="text-sm text-ink-soft">Aadhaar / ration card uploads — visible to you only.</p>
       </div>
 
       {Object.keys(grouped).length === 0 && (
-        <p className="text-sm text-slate-400">No documents uploaded yet.</p>
+        <p className="text-sm text-ink-soft">No documents uploaded yet.</p>
       )}
 
       <div className="space-y-5">
         {Object.entries(grouped).map(([houseId, items]) => (
-          <div key={houseId} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">House {houseLabel(houseId)}</h3>
+          <div key={houseId} className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-ink mb-3">House {houseLabel(houseId)}</h3>
             <div className="grid sm:grid-cols-2 gap-3">
               {items.map((d) => (
                 <button
                   key={d.id}
                   onClick={() => handleView(d)}
                   disabled={loadingId === d.id}
-                  className="text-left border border-slate-100 rounded-lg overflow-hidden hover:shadow-sm p-3 disabled:opacity-60"
+                  className="text-left border border-brass/20 rounded-lg overflow-hidden hover:shadow-sm p-3 disabled:opacity-60"
                 >
-                  <p className="font-medium text-slate-700 text-sm">
+                  <p className="font-medium text-ink text-sm">
                     {d.docType === 'aadhaar' ? 'Aadhaar' : 'Ration Card'} · {d.residentName}
                   </p>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-ink-soft mt-0.5">
                     Signed: {d.consentSignatureName} · {new Date(d.uploadedAt).toLocaleDateString()}
                   </p>
                   <p className="text-xs text-brand mt-1.5">

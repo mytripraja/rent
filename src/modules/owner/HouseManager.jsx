@@ -155,9 +155,9 @@ function BookHouseModal({ house, user, onClose, onDone }) {
     return (
       <Modal title="House Booked" onClose={onClose}>
         <div className="text-center space-y-2 py-2">
-          <p className="text-sm text-slate-600">Tenant login created. Share this Customer ID with them —</p>
+          <p className="text-sm text-ink-soft">Tenant login created. Share this Customer ID with them —</p>
           <p className="text-2xl font-semibold text-brand">{customerId}</p>
-          <p className="text-xs text-slate-400">They can sign in with this ID + the password you set, with their email + password, or with Google.</p>
+          <p className="text-xs text-ink-soft">They can sign in with this ID + the password you set, with their email + password, or with Google.</p>
           <button onClick={onClose} className="mt-4 w-full bg-brand text-white py-2 rounded-lg text-sm font-medium">Done</button>
         </div>
       </Modal>
@@ -167,26 +167,26 @@ function BookHouseModal({ house, user, onClose, onDone }) {
   return (
     <Modal title={`Book ${house.internalDoorNumber}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
-        <input required placeholder="Tenant name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        <input required placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        <input required type="email" placeholder="Email (used as login)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        <input required type="password" placeholder="Temporary password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        <input placeholder="Aadhaar number (links repeat tenants to one Customer ID)" value={form.aadhaarNumber} onChange={(e) => setForm({ ...form, aadhaarNumber: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <input required placeholder="Tenant name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <input required placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <input required type="email" placeholder="Email (used as login)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <input required type="password" placeholder="Temporary password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <input placeholder="Aadhaar number (links repeat tenants to one Customer ID)" value={form.aadhaarNumber} onChange={(e) => setForm({ ...form, aadhaarNumber: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
         <div>
-          <label className="text-xs text-slate-500">Profile photo (optional)</label>
+          <label className="text-xs text-ink-soft">Profile photo (optional)</label>
           <input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files[0])} className="w-full text-sm mt-1" />
         </div>
         <div>
-          <label className="text-xs text-slate-500">Move-in date</label>
-          <input required type="date" value={form.moveInDate} onChange={(e) => setForm({ ...form, moveInDate: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mt-1" />
+          <label className="text-xs text-ink-soft">Move-in date</label>
+          <input required type="date" value={form.moveInDate} onChange={(e) => setForm({ ...form, moveInDate: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm mt-1" />
         </div>
-        <input required type="number" placeholder="Rent amount" value={form.rentAmount} onChange={(e) => setForm({ ...form, rentAmount: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        <input required type="number" placeholder="Advance amount agreed (target)" value={form.advanceAmount} onChange={(e) => setForm({ ...form, advanceAmount: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <input required type="number" placeholder="Rent amount" value={form.rentAmount} onChange={(e) => setForm({ ...form, rentAmount: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <input required type="number" placeholder="Advance amount agreed (target)" value={form.advanceAmount} onChange={(e) => setForm({ ...form, advanceAmount: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
         <div>
-          <label className="text-xs text-slate-500">Advance actually paid now (can be less — add the rest later)</label>
-          <input type="number" placeholder="e.g. 5000" value={form.advancePaidNow} onChange={(e) => setForm({ ...form, advancePaidNow: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mt-1" />
+          <label className="text-xs text-ink-soft">Advance actually paid now (can be less — add the rest later)</label>
+          <input type="number" placeholder="e.g. 5000" value={form.advancePaidNow} onChange={(e) => setForm({ ...form, advancePaidNow: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm mt-1" />
         </div>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
+        <label className="flex items-center gap-2 text-sm text-ink-soft">
           <input type="checkbox" checked={form.phoneVisibleToNeighbors} onChange={(e) => setForm({ ...form, phoneVisibleToNeighbors: e.target.checked })} />
           Show phone number to neighbors in directory
         </label>
@@ -217,15 +217,15 @@ function VacateHouseModal({ house, user, onClose, onDone }) {
   return (
     <Modal title={`Vacate ${house.internalDoorNumber}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
-        <input type="number" placeholder="Advance deducted (₹)" value={form.advanceDeducted} onChange={(e) => setForm({ ...form, advanceDeducted: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        <input placeholder="Reason for deduction" value={form.deductionReason} onChange={(e) => setForm({ ...form, deductionReason: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        <input type="number" placeholder="Balance returned (₹)" value={form.balanceReturned} onChange={(e) => setForm({ ...form, balanceReturned: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        <input type="date" value={form.returnDate} onChange={(e) => setForm({ ...form, returnDate: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        <select value={form.returnMode} onChange={(e) => setForm({ ...form, returnMode: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+        <input type="number" placeholder="Advance deducted (₹)" value={form.advanceDeducted} onChange={(e) => setForm({ ...form, advanceDeducted: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <input placeholder="Reason for deduction" value={form.deductionReason} onChange={(e) => setForm({ ...form, deductionReason: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <input type="number" placeholder="Balance returned (₹)" value={form.balanceReturned} onChange={(e) => setForm({ ...form, balanceReturned: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <input type="date" value={form.returnDate} onChange={(e) => setForm({ ...form, returnDate: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <select value={form.returnMode} onChange={(e) => setForm({ ...form, returnMode: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
           <option value="cash">Cash</option>
           <option value="upi">UPI</option>
         </select>
-        <select value={form.returnedBy} onChange={(e) => setForm({ ...form, returnedBy: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+        <select value={form.returnedBy} onChange={(e) => setForm({ ...form, returnedBy: e.target.value })} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
           <option value="deepu">Deepu</option>
           <option value="rajavel">Rajavel</option>
           <option value="siva">Siva</option>
@@ -240,10 +240,10 @@ function VacateHouseModal({ house, user, onClose, onDone }) {
 function Modal({ title, children, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+      <div className="bg-paper-raised rounded-2xl shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-slate-800">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">✕</button>
+          <h3 className="font-semibold text-ink">{title}</h3>
+          <button onClick={onClose} className="text-ink-soft hover:text-ink-soft">✕</button>
         </div>
         {children}
       </div>

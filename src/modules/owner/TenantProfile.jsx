@@ -31,79 +31,79 @@ export default function TenantProfile({ houseId, onBack }) {
     }
   }
 
-  if (!house) return <p className="text-sm text-slate-400 py-8 text-center">Loading…</p>
+  if (!house) return <p className="text-sm text-ink-soft py-8 text-center">Loading…</p>
 
   const isVacant = house.status !== 'occupied'
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <button onClick={onBack} className="text-sm text-slate-500 hover:text-slate-700">← Back to Tenants</button>
+      <button onClick={onBack} className="text-sm text-ink-soft hover:text-ink">← Back to Tenants</button>
 
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex items-center gap-4">
-        <div className="w-16 h-16 rounded-full bg-slate-100 overflow-hidden flex items-center justify-center text-lg text-slate-500 shrink-0">
+      <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 flex items-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-paper overflow-hidden flex items-center justify-center text-lg text-ink-soft shrink-0">
           {house.tenantPhotoUrl ? <img src={house.tenantPhotoUrl} alt="" className="w-full h-full object-cover" /> : (house.tenantName || '?')[0]}
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">{house.tenantName || 'Vacant house'}</h2>
-          <p className="text-sm text-slate-500">House {house.internalDoorNumber} {isVacant && '· Currently vacant'}</p>
+          <h2 className="text-lg font-semibold text-ink">{house.tenantName || 'Vacant house'}</h2>
+          <p className="text-sm text-ink-soft">House {house.internalDoorNumber} {isVacant && '· Currently vacant'}</p>
         </div>
       </div>
 
       {!isVacant && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-2">
+        <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-slate-800 text-sm">Contact Info</h3>
+            <h3 className="font-semibold text-ink text-sm">Contact Info</h3>
             <button onClick={() => setEditingContact(true)} className="text-xs text-brand hover:underline">Edit</button>
           </div>
-          <p className="text-sm text-slate-600">Phone: {house.tenantPhone}</p>
-          <p className="text-sm text-slate-600">Email: {house.tenantEmail}</p>
-          <p className="text-sm text-slate-600">Move-in date: {house.moveInDate || '—'}</p>
-          <p className="text-sm text-slate-600">EB Number: {house.ebNumber || '—'}</p>
-          <p className="text-sm text-slate-600">Rent: ₹{house.rentAmount}</p>
+          <p className="text-sm text-ink-soft">Phone: {house.tenantPhone}</p>
+          <p className="text-sm text-ink-soft">Email: {house.tenantEmail}</p>
+          <p className="text-sm text-ink-soft">Move-in date: {house.moveInDate || '—'}</p>
+          <p className="text-sm text-ink-soft">EB Number: {house.ebNumber || '—'}</p>
+          <p className="text-sm text-ink-soft">Rent: ₹{house.rentAmount}</p>
         </div>
       )}
 
       {!isVacant && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+        <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-slate-800 text-sm">Advance Payment</h3>
+            <h3 className="font-semibold text-ink text-sm">Advance Payment</h3>
             <button onClick={() => setAddingAdvance(true)} className="text-xs text-brand hover:underline">Add Payment</button>
           </div>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-ink-soft">
             Collected ₹{collected} of ₹{house.advanceAmount} agreed
             {collected < house.advanceAmount && <span className="text-amber-600"> · ₹{house.advanceAmount - collected} remaining</span>}
           </p>
           <div className="space-y-1.5">
             {ledger.map((entry) => (
-              <div key={entry.id} className="flex justify-between text-xs text-slate-500 border-b border-slate-50 pb-1">
+              <div key={entry.id} className="flex justify-between text-xs text-ink-soft border-b border-brass/15 pb-1">
                 <span>{entry.date} · {entry.mode}{entry.note ? ` · ${entry.note}` : ''}</span>
-                <span className="font-medium text-slate-700">₹{entry.amount}</span>
+                <span className="font-medium text-ink">₹{entry.amount}</span>
               </div>
             ))}
-            {ledger.length === 0 && <p className="text-xs text-slate-400">No advance payments recorded yet.</p>}
+            {ledger.length === 0 && <p className="text-xs text-ink-soft">No advance payments recorded yet.</p>}
           </div>
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-        <h3 className="font-semibold text-slate-800 text-sm mb-3">Rent History</h3>
+      <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
+        <h3 className="font-semibold text-ink text-sm mb-3">Rent History</h3>
         <div className="space-y-1.5">
           {rentHistory.map((p) => (
-            <div key={p.id} className="flex items-center justify-between text-sm border-b border-slate-50 pb-1.5">
-              <span className="text-slate-600">{p.month} · ₹{p.amount}</span>
+            <div key={p.id} className="flex items-center justify-between text-sm border-b border-brass/15 pb-1.5">
+              <span className="text-ink-soft">{p.month} · ₹{p.amount}</span>
               <ApprovalStatusBadge status={p.status === 'approved' ? 'paid' : p.status} />
             </div>
           ))}
-          {rentHistory.length === 0 && <p className="text-xs text-slate-400">No rent history yet.</p>}
+          {rentHistory.length === 0 && <p className="text-xs text-ink-soft">No rent history yet.</p>}
         </div>
       </div>
 
       {pastOccupants.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <h3 className="font-semibold text-slate-800 text-sm mb-3">Previous Occupants of This House</h3>
+        <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
+          <h3 className="font-semibold text-ink text-sm mb-3">Previous Occupants of This House</h3>
           <div className="space-y-1.5">
             {pastOccupants.map((o) => (
-              <div key={o.id} className="text-xs text-slate-500 border-b border-slate-50 pb-1.5">
+              <div key={o.id} className="text-xs text-ink-soft border-b border-brass/15 pb-1.5">
                 {o.name} · {o.moveInDate || '—'} to {new Date(o.movedOutAt).toLocaleDateString()}
               </div>
             ))}
@@ -149,12 +149,12 @@ function EditContactModal({ house, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-      <form onSubmit={submit} className="bg-white rounded-2xl shadow-lg w-full max-w-sm p-6 space-y-3">
-        <h3 className="font-semibold text-slate-800">Edit Contact Info</h3>
+      <form onSubmit={submit} className="bg-paper-raised rounded-2xl shadow-lg w-full max-w-sm p-6 space-y-3">
+        <h3 className="font-semibold text-ink">Edit Contact Info</h3>
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Email" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" placeholder="Email" />
         <input value={phone} onChange={(e) => setPhone(e.target.value)}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Phone" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" placeholder="Phone" />
         {email !== house.tenantEmail && (
           <p className="text-xs text-amber-600">Changing the email also changes their login.</p>
         )}
@@ -163,7 +163,7 @@ function EditContactModal({ house, onClose, onSaved }) {
           <button disabled={saving} className="flex-1 bg-brand text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
             {saving ? 'Saving…' : 'Save'}
           </button>
-          <button type="button" onClick={onClose} className="flex-1 bg-slate-100 py-2 rounded-lg text-sm font-medium">Cancel</button>
+          <button type="button" onClick={onClose} className="flex-1 bg-paper border border-brass/30 text-ink-soft py-2 rounded-lg text-sm font-medium">Cancel</button>
         </div>
       </form>
     </div>
@@ -196,25 +196,25 @@ function AddAdvanceModal({ house, user, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-      <form onSubmit={submit} className="bg-white rounded-2xl shadow-lg w-full max-w-sm p-6 space-y-3">
-        <h3 className="font-semibold text-slate-800">Add Advance Payment</h3>
+      <form onSubmit={submit} className="bg-paper-raised rounded-2xl shadow-lg w-full max-w-sm p-6 space-y-3">
+        <h3 className="font-semibold text-ink">Add Advance Payment</h3>
         <input required type="number" placeholder="Amount (₹)" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
         <input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
         <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
           <option value="cash">Cash</option>
           <option value="upi">UPI</option>
           <option value="bank">Bank Transfer</option>
         </select>
         <input placeholder="Note (optional)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
         <div className="flex gap-2">
           <button disabled={saving} className="flex-1 bg-brand text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
             {saving ? 'Saving…' : 'Add'}
           </button>
-          <button type="button" onClick={onClose} className="flex-1 bg-slate-100 py-2 rounded-lg text-sm font-medium">Cancel</button>
+          <button type="button" onClick={onClose} className="flex-1 bg-paper border border-brass/30 text-ink-soft py-2 rounded-lg text-sm font-medium">Cancel</button>
         </div>
       </form>
     </div>

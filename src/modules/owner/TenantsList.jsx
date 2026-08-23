@@ -48,8 +48,8 @@ export default function TenantsList({ onSelectHouse }) {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-slate-800">Tenants</h2>
-        <p className="text-sm text-slate-500">{current.length} current · {old.length} past · {pending.length} rent pending</p>
+        <h2 className="text-lg font-semibold text-ink">Tenants</h2>
+        <p className="text-sm text-ink-soft">{current.length} current · {old.length} past · {pending.length} rent pending</p>
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -58,7 +58,7 @@ export default function TenantsList({ onSelectHouse }) {
             key={f.id}
             onClick={() => setFilter(f.id)}
             className={`shrink-0 text-sm px-3 py-1.5 rounded-full font-medium whitespace-nowrap ${
-              filter === f.id ? 'bg-brand text-white' : 'bg-white text-slate-600 border border-slate-200'
+              filter === f.id ? 'bg-brand text-white' : 'bg-paper-raised text-ink-soft border border-brass/25'
             }`}
           >
             {f.label}
@@ -66,23 +66,23 @@ export default function TenantsList({ onSelectHouse }) {
         ))}
       </div>
 
-      {loading && <p className="text-sm text-slate-400 py-6 text-center">Loading…</p>}
+      {loading && <p className="text-sm text-ink-soft py-6 text-center">Loading…</p>}
 
       <div className="space-y-2">
         {!loading && listToShow.map((t) => (
           <button
             key={t.houseId ? `${t.houseId}-${t.id}` : t.id}
             onClick={() => onSelectHouse(t.houseId || t.id)}
-            className="w-full bg-white rounded-xl border border-slate-100 shadow-sm p-3 flex items-center gap-3 text-left hover:shadow-md transition"
+            className="w-full bg-paper-raised rounded-xl border border-brass/20 shadow-sm p-3 flex items-center gap-3 text-left hover:shadow-md transition"
           >
-            <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden flex items-center justify-center text-sm text-slate-500 shrink-0">
+            <div className="w-10 h-10 rounded-full bg-paper overflow-hidden flex items-center justify-center text-sm text-ink-soft shrink-0">
               {t.tenantPhotoUrl || t.photoUrl
                 ? <img src={t.tenantPhotoUrl || t.photoUrl} alt="" className="w-full h-full object-cover" />
                 : (t.tenantName || t.name || '?')[0]}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-700 truncate">{t.tenantName || t.name}</p>
-              <p className="text-xs text-slate-400">
+              <p className="text-sm font-medium text-ink truncate">{t.tenantName || t.name}</p>
+              <p className="text-xs text-ink-soft">
                 {t.internalDoorNumber ? `House ${t.internalDoorNumber}` : 'Past tenant'}
                 {filter === 'old' && t.movedOutAt && ` · Moved out ${new Date(t.movedOutAt).toLocaleDateString()}`}
               </p>
@@ -95,7 +95,7 @@ export default function TenantsList({ onSelectHouse }) {
           </button>
         ))}
         {!loading && listToShow.length === 0 && (
-          <p className="text-sm text-slate-400 py-8 text-center">Nobody here.</p>
+          <p className="text-sm text-ink-soft py-8 text-center">Nobody here.</p>
         )}
       </div>
     </div>

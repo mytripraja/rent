@@ -21,7 +21,7 @@ export default function MoreMenu() {
   if (view) {
     return (
       <div className="space-y-4">
-        <button onClick={() => setView(null)} className="text-sm text-slate-500 hover:text-slate-700">← Back</button>
+        <button onClick={() => setView(null)} className="text-sm text-ink-soft hover:text-ink">← Back</button>
         {view === 'profile' && <OwnerProfile />}
         {view === 'rentRevision' && <RentRevision />}
         {view === 'setup' && <PropertySetup />}
@@ -32,16 +32,16 @@ export default function MoreMenu() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-800">More Tools</h2>
+      <h2 className="text-lg font-semibold text-ink">More Tools</h2>
       <div className="grid sm:grid-cols-2 gap-3 max-w-lg">
         {items.map((item) => (
           <button
             key={item.id}
             onClick={() => setView(item.id)}
-            className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 text-left hover:shadow-md transition flex items-center gap-3"
+            className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 text-left hover:shadow-md transition flex items-center gap-3"
           >
             <span className="text-2xl">{item.icon}</span>
-            <span className="text-sm font-medium text-slate-700">{item.label}</span>
+            <span className="text-sm font-medium text-ink">{item.label}</span>
           </button>
         ))}
       </div>

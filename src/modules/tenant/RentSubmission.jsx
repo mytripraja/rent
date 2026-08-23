@@ -54,21 +54,21 @@ export default function RentSubmission({ onSubmitted }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 max-w-md">
-      <h3 className="font-semibold text-slate-800">Submit Rent Payment</h3>
+    <form onSubmit={handleSubmit} className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-3 max-w-md">
+      <h3 className="font-semibold text-ink">Submit Rent Payment</h3>
 
       <input type="month" required value={form.month} onChange={(e) => setForm({ ...form, month: e.target.value })}
-        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
 
       <input type="number" required placeholder="Amount sent (₹)" value={form.amount}
         onChange={(e) => setForm({ ...form, amount: e.target.value })}
-        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
 
       <input type="date" required value={form.dateSent} onChange={(e) => setForm({ ...form, dateSent: e.target.value })}
-        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
 
       <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}
-        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+        className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
         <option value="upi">UPI</option>
         <option value="bank">Bank Transfer</option>
         <option value="cash">Cash</option>
@@ -77,7 +77,7 @@ export default function RentSubmission({ onSubmitted }) {
 
       {form.mode === 'cash' && (
         <select value={form.cashReceivedBy} onChange={(e) => setForm({ ...form, cashReceivedBy: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
           {CASH_RECEIVERS.map((r) => (
             <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
           ))}
@@ -87,12 +87,12 @@ export default function RentSubmission({ onSubmitted }) {
       {form.mode === 'neighbor' && (
         <input placeholder="Neighbor's door number" value={form.neighborHouseId}
           onChange={(e) => setForm({ ...form, neighborHouseId: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
       )}
 
       {(form.mode === 'upi' || form.mode === 'bank') && (
         <div>
-          <label className="text-xs text-slate-500">Payment screenshot</label>
+          <label className="text-xs text-ink-soft">Payment screenshot</label>
           <input type="file" accept="image/*" onChange={(e) => setProofFile(e.target.files[0])}
             className="w-full text-sm mt-1" />
         </div>

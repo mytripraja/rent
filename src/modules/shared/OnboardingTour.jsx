@@ -50,7 +50,7 @@ export default function OnboardingTour({ steps, storageKey, forceOpen, onClose }
         exit={{ opacity: 0 }}
       >
         <motion.div
-          className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
+          className="bg-paper-raised rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
@@ -84,8 +84,8 @@ export default function OnboardingTour({ steps, storageKey, forceOpen, onClose }
                 exit={{ x: direction > 0 ? -40 : 40, opacity: 0 }}
                 transition={{ duration: 0.22 }}
               >
-                <h3 className="text-lg font-semibold text-slate-800 text-center">{step.title}</h3>
-                <p className="text-sm text-slate-500 text-center mt-2 leading-relaxed">{step.description}</p>
+                <h3 className="text-lg font-semibold text-ink text-center">{step.title}</h3>
+                <p className="text-sm text-ink-soft text-center mt-2 leading-relaxed">{step.description}</p>
               </motion.div>
             </AnimatePresence>
 
@@ -94,7 +94,7 @@ export default function OnboardingTour({ steps, storageKey, forceOpen, onClose }
                 <span
                   key={i}
                   className={`h-1.5 rounded-full transition-all ${
-                    i === index ? 'w-6 bg-brand' : 'w-1.5 bg-slate-200'
+                    i === index ? 'w-6 bg-brand' : 'w-1.5 bg-brass/20'
                   }`}
                 />
               ))}
@@ -102,7 +102,7 @@ export default function OnboardingTour({ steps, storageKey, forceOpen, onClose }
 
             <div className="flex gap-2 mt-6">
               {index > 0 && (
-                <button onClick={back} className="flex-1 bg-slate-100 text-slate-600 py-2.5 rounded-xl text-sm font-medium">
+                <button onClick={back} className="flex-1 bg-paper text-ink-soft py-2.5 rounded-xl text-sm font-medium">
                   Back
                 </button>
               )}

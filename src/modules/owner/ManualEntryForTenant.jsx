@@ -55,13 +55,13 @@ export default function ManualEntryForTenant() {
 
   if (done) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 max-w-md text-center space-y-3">
-        <p className="text-sm text-slate-600">Entry submitted. Application #{done}</p>
-        <p className="text-xs text-slate-400">It'll show on the tenant's page as "Uploaded by Owner" once approved.</p>
+      <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-6 max-w-md text-center space-y-3">
+        <p className="text-sm text-ink-soft">Entry submitted. Application #{done}</p>
+        <p className="text-xs text-ink-soft">It'll show on the tenant's page as "Uploaded by Owner" once approved.</p>
         <button onClick={() => approveNow(done)} className="w-full bg-green-600 text-white py-2 rounded-lg text-sm font-medium">
           Approve immediately
         </button>
-        <button onClick={() => setDone(null)} className="w-full bg-slate-100 text-slate-600 py-2 rounded-lg text-sm font-medium">
+        <button onClick={() => setDone(null)} className="w-full bg-paper text-ink-soft py-2 rounded-lg text-sm font-medium">
           Enter another
         </button>
       </div>
@@ -71,13 +71,13 @@ export default function ManualEntryForTenant() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-slate-800">Manual Entry for Tenant</h2>
-        <p className="text-sm text-slate-500">For tenants who can't submit through the app themselves.</p>
+        <h2 className="text-lg font-semibold text-ink">Manual Entry for Tenant</h2>
+        <p className="text-sm text-ink-soft">For tenants who can't submit through the app themselves.</p>
       </div>
 
-      <form onSubmit={submit} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3 max-w-md">
+      <form onSubmit={submit} className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 space-y-3 max-w-md">
         <select required value={form.houseId} onChange={(e) => setForm({ ...form, houseId: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
           <option value="">Select house</option>
           {houses.map((h) => (
             <option key={h.id} value={h.id}>{h.internalDoorNumber} · {h.tenantName}</option>
@@ -85,17 +85,17 @@ export default function ManualEntryForTenant() {
         </select>
 
         <input type="month" required value={form.month} onChange={(e) => setForm({ ...form, month: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
 
         <input type="number" required placeholder="Amount (₹)" value={form.amount}
           onChange={(e) => setForm({ ...form, amount: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
 
         <input type="date" required value={form.dateSent} onChange={(e) => setForm({ ...form, dateSent: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
 
         <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
           <option value="cash">Cash</option>
           <option value="upi">UPI</option>
           <option value="bank">Bank Transfer</option>
@@ -103,14 +103,14 @@ export default function ManualEntryForTenant() {
 
         {form.mode === 'cash' && (
           <select value={form.cashReceivedBy} onChange={(e) => setForm({ ...form, cashReceivedBy: e.target.value })}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
             {CASH_RECEIVERS.map((r) => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
           </select>
         )}
 
         {(form.mode === 'upi' || form.mode === 'bank') && (
           <div>
-            <label className="text-xs text-slate-500">Proof screenshot (optional)</label>
+            <label className="text-xs text-ink-soft">Proof screenshot (optional)</label>
             <input type="file" accept="image/*" onChange={(e) => setProofFile(e.target.files[0])} className="w-full text-sm mt-1" />
           </div>
         )}
