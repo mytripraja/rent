@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { uploadResidentDocument, listDocumentsForHouse } from '../../services/documentService'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../shared/ui/Toast'
 
 const CONSENT_TEXT = `I confirm the document I'm uploading belongs to a resident of this house and is accurate. I understand this is used only by the property owner for identity verification purposes, will not be shared with anyone else, and I can request its removal at any time by contacting the owner.`
 
 export default function DocumentUpload() {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [docs, setDocs] = useState([])
   const [form, setForm] = useState({ docType: 'aadhaar', residentName: '', signatureName: '', consentAccepted: false })
   const [file, setFile] = useState(null)
@@ -16,7 +18,12 @@ export default function DocumentUpload() {
   }, [user])
 
   async function refresh() {
-    setDocs(await listDocumentsForHouse(user.houseId))
+    try {
+      setDocs(await listDocumentsForHouse(user.houseId))
+    } catch (err) {
+      console.error(err)
+      showToast({ message: "Failed to load documents", type: "error" })
+    }
   }
 
   async function submit(e) {
@@ -32,9 +39,13 @@ export default function DocumentUpload() {
         file,
         signatureName: form.signatureName,
       })
+      showToast({ message: "Document uploaded successfully", type: "success" })
       setForm({ docType: 'aadhaar', residentName: '', signatureName: '', consentAccepted: false })
       setFile(null)
       refresh()
+    } catch (err) {
+      console.error(err)
+      showToast({ message: err.message || "Failed to upload document", type: "error" })
     } finally {
       setSaving(false)
     }

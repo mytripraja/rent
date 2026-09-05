@@ -7,6 +7,7 @@ import {
   addDoc,
   updateDoc,
   setDoc,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -21,10 +22,14 @@ const housesRef = collection(db, 'houses')
 async function syncDirectoryEntry(houseId, house) {
   await setDoc(doc(db, 'directory', houseId), {
     internalDoorNumber: house.internalDoorNumber,
+    govtDoorNumber: house.govtDoorNumber || null,
+    floor: house.floor || null,
     status: house.status,
     tenantName: house.status === 'occupied' ? house.tenantName : null,
     tenantPhone: house.status === 'occupied' && house.phoneVisibleToNeighbors ? house.tenantPhone : null,
     phoneVisibleToNeighbors: !!house.phoneVisibleToNeighbors,
+    photos: house.photos || [],
+    rentAmount: house.status === 'vacant' ? (house.rentAmount || 0) : null,
   })
 }
 
@@ -39,12 +44,13 @@ export async function getHouse(houseId) {
 }
 
 // Create a brand new physical house record (done once per unit, not per tenant)
-export async function createHouse({ govtDoorNumber, internalDoorNumber, floor, ebNumber }) {
+export async function createHouse({ govtDoorNumber, internalDoorNumber, floor, ebNumber, photos = [] }) {
   const ref = await addDoc(housesRef, {
     govtDoorNumber,
     internalDoorNumber,
     floor,
     ebNumber,
+    photos,
     status: 'vacant',
     currentTenantId: null,
     rentAmount: 0,
@@ -54,9 +60,30 @@ export async function createHouse({ govtDoorNumber, internalDoorNumber, floor, e
     hasOwnEbMeter: false, // if true, this house is excluded from the shared EB split entirely
     createdAt: Date.now(),
   })
-  await syncDirectoryEntry(ref.id, { internalDoorNumber, status: 'vacant' })
+  const house = await getDoc(ref)
+  await syncDirectoryEntry(ref.id, house.data())
   return ref
 }
+
+export async function updateHouse(houseId, { govtDoorNumber, internalDoorNumber, floor, ebNumber, photos = [] }) {
+  await updateDoc(doc(db, 'houses', houseId), {
+    govtDoorNumber,
+    internalDoorNumber,
+    floor,
+    ebNumber,
+    photos,
+  })
+  const house = await getHouse(houseId)
+  if (house) {
+    await syncDirectoryEntry(houseId, house)
+  }
+}
+
+export async function deleteHouse(houseId) {
+  await deleteDoc(doc(db, 'houses', houseId))
+  await deleteDoc(doc(db, 'directory', houseId))
+}
+
 
 // Book a vacant house: attach a new tenant profile without deleting history
 export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmount, advanceAmount, phoneVisibleToNeighbors = true, moveInDate, recordedBy, photoUrl }) {

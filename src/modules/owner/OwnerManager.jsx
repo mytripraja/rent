@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 import { listOwners, createOwnerAccountAdmin, deleteOwnerAccount } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
+import ConfirmDialog from '../shared/ui/ConfirmDialog'
+import { useToast } from '../shared/ui/Toast'
 
 export default function OwnerManager() {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [owners, setOwners] = useState([])
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [deletingOwner, setDeletingOwner] = useState(null)
 
   useEffect(() => {
     refresh()
@@ -20,22 +24,37 @@ export default function OwnerManager() {
   async function submit(e) {
     e.preventDefault()
     setError('')
+    
+    if (form.password.length < 6) {
+      setError('Password must be at least 6 characters long')
+      return
+    }
+
     setSaving(true)
     try {
       await createOwnerAccountAdmin(form)
       setForm({ name: '', email: '', phone: '', password: '' })
+      showToast({ message: 'Owner added successfully', type: 'success' })
       refresh()
     } catch (err) {
       setError(err.message)
+      showToast({ message: 'Failed to add owner: ' + err.message, type: 'error' })
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleDelete(uid, name) {
-    if (!confirm(`Remove ${name}'s owner access? This can't be undone.`)) return
-    await deleteOwnerAccount(uid)
-    refresh()
+  async function performDelete() {
+    if (!deletingOwner) return
+    try {
+      await deleteOwnerAccount(deletingOwner.uid)
+      showToast({ message: 'Owner removed successfully', type: 'success' })
+      refresh()
+    } catch (err) {
+      showToast({ message: 'Failed to remove owner: ' + err.message, type: 'error' })
+    } finally {
+      setDeletingOwner(null)
+    }
   }
 
   return (
@@ -73,13 +92,23 @@ export default function OwnerManager() {
               </div>
             </div>
             {o.role === 'owner' && (
-              <button onClick={() => handleDelete(o.uid, o.name)} className="text-xs text-red-600 hover:underline shrink-0">
+              <button onClick={() => setDeletingOwner(o)} className="text-xs text-red-600 hover:underline shrink-0">
                 Remove
               </button>
             )}
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deletingOwner}
+        title="Remove Owner"
+        message={`Remove ${deletingOwner?.name}'s owner access? This can't be undone.`}
+        onConfirm={performDelete}
+        onCancel={() => setDeletingOwner(null)}
+        confirmText="Remove"
+        danger
+      />
     </div>
   )
 }

@@ -16,6 +16,27 @@ export default function OnboardingTour({ steps, storageKey, forceOpen, onClose }
     }
   }, [forceOpen])
 
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') finish()
+      if (e.key === 'ArrowRight') {
+        if (index === steps.length - 1) finish()
+        else {
+          setDirection(1)
+          setIndex((i) => i + 1)
+        }
+      }
+      if (e.key === 'ArrowLeft' && index > 0) {
+        setDirection(-1)
+        setIndex((i) => Math.max(0, i - 1))
+      }
+    }
+    if (open) {
+      window.addEventListener('keydown', handleKeyDown)
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [open, index, steps.length])
+
   function finish() {
     localStorage.setItem(storageKey, '1')
     setOpen(false)

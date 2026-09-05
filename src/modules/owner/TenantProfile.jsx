@@ -31,7 +31,7 @@ export default function TenantProfile({ houseId, onBack }) {
     }
   }
 
-  if (!house) return <p className="text-sm text-ink-soft py-8 text-center">Loading…</p>
+  if (!house) return <p className="text-sm text-ink-soft py-8 text-center" role="status">Loading…</p>
 
   const isVacant = house.status !== 'occupied'
 

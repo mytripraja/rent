@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { listHouses } from '../../services/houseService'
 import { createNotice, listAllNotices, deleteNotice } from '../../services/noticeService'
 import NoticeBanner from '../shared/NoticeBanner'
+import ConfirmDialog from '../shared/ui/ConfirmDialog'
+import { useToast } from '../shared/ui/Toast'
 
 const TYPES = [
   { id: 'water', label: 'Water stop (blue)' },
@@ -13,6 +15,7 @@ const TYPES = [
 ]
 
 export default function NoticeManager() {
+  const { showToast } = useToast()
   const [houses, setHouses] = useState([])
   const [notices, setNotices] = useState([])
   const [form, setForm] = useState({
@@ -24,6 +27,7 @@ export default function NoticeManager() {
     selectedHouseIds: [],
   })
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
 
   useEffect(() => {
     refresh()
@@ -45,6 +49,10 @@ export default function NoticeManager() {
 
   async function submit(e) {
     e.preventDefault()
+    if (form.audience === 'select' && form.selectedHouseIds.length === 0) {
+      showToast({ message: 'Please select at least one house.', type: 'error' })
+      return
+    }
     setSaving(true)
     try {
       await createNotice({
@@ -55,15 +63,26 @@ export default function NoticeManager() {
         targetHouseIds: form.audience === 'all' ? 'all' : form.selectedHouseIds,
       })
       setForm({ type: 'general', message: '', windowText: '', durationHours: '', audience: 'all', selectedHouseIds: [] })
+      showToast({ message: 'Notice posted successfully', type: 'success' })
       refresh()
+    } catch (err) {
+      showToast({ message: 'Failed to post notice: ' + err.message, type: 'error' })
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleDelete(id) {
-    await deleteNotice(id)
-    refresh()
+  async function performDelete() {
+    if (!deletingId) return
+    try {
+      await deleteNotice(deletingId)
+      showToast({ message: 'Notice deleted successfully', type: 'success' })
+      refresh()
+    } catch (err) {
+      showToast({ message: 'Failed to delete notice: ' + err.message, type: 'error' })
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   const now = Date.now()
@@ -140,7 +159,7 @@ export default function NoticeManager() {
                   <span className="text-xs text-ink-soft">
                     {expired ? 'Expired' : 'Active'} · {n.targetHouseIds === 'all' ? 'All houses' : `${n.targetHouseIds.length} house(s)`}
                   </span>
-                  <button onClick={() => handleDelete(n.id)} className="text-xs text-red-600 hover:underline">Delete</button>
+                  <button onClick={() => setDeletingId(n.id)} className="text-xs text-red-600 hover:underline">Delete</button>
                 </div>
               </div>
             )
@@ -148,6 +167,16 @@ export default function NoticeManager() {
           {notices.length === 0 && <p className="text-sm text-ink-soft">No notices yet.</p>}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deletingId}
+        title="Delete Notice"
+        message="Are you sure you want to delete this notice?"
+        onConfirm={performDelete}
+        onCancel={() => setDeletingId(null)}
+        confirmText="Delete"
+        danger
+      />
     </div>
   )
 }

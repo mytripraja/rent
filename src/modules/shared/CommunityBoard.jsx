@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { postMessage, listRecentMessages, deleteMessage } from '../../services/communityService'
+import { postMessage, subscribeToMessages, deleteMessage } from '../../services/communityService'
 
 export default function CommunityBoard({ user, canModerate = false }) {
   const [messages, setMessages] = useState([])
@@ -8,14 +8,12 @@ export default function CommunityBoard({ user, canModerate = false }) {
   const bottomRef = useRef(null)
 
   useEffect(() => {
-    refresh()
+    const unsub = subscribeToMessages((msgs) => {
+      setMessages(msgs)
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+    })
+    return () => unsub()
   }, [])
-
-  async function refresh() {
-    const msgs = await listRecentMessages()
-    setMessages(msgs)
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
-  }
 
   async function submit(e) {
     e.preventDefault()
@@ -30,7 +28,6 @@ export default function CommunityBoard({ user, canModerate = false }) {
         text: text.trim(),
       })
       setText('')
-      refresh()
     } finally {
       setSending(false)
     }
@@ -38,7 +35,6 @@ export default function CommunityBoard({ user, canModerate = false }) {
 
   async function handleDelete(id) {
     await deleteMessage(id)
-    refresh()
   }
 
   return (

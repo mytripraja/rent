@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
 import { listHouses, listPastTenants } from '../../services/houseService'
 import { listRentHistory, countMonthsPending } from '../../services/rentService'
+import { Skeleton } from '../shared/ui/Skeleton'
 
 const FILTERS = [
   { id: 'all', label: 'All Tenants' },
@@ -15,6 +17,7 @@ export default function TenantsList({ onSelectHouse }) {
   const [old, setOld] = useState([])
   const [pending, setPending] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     load()
@@ -22,21 +25,32 @@ export default function TenantsList({ onSelectHouse }) {
 
   async function load() {
     setLoading(true)
-    const houses = await listHouses()
-    const occupied = houses.filter((h) => h.status === 'occupied')
-    setCurrent(occupied)
+    setError(null)
+    try {
+      const houses = await listHouses()
+      const occupied = houses.filter((h) => h.status === 'occupied')
+      setCurrent(occupied)
 
-    const pastTenants = await listPastTenants()
-    setOld(pastTenants)
+      const pastTenants = await listPastTenants()
+      setOld(pastTenants)
 
-    const pendingList = []
-    for (const h of occupied) {
-      const payments = await listRentHistory(h.id)
-      const monthsPending = countMonthsPending(payments)
-      if (monthsPending > 0) pendingList.push({ ...h, monthsPending })
+      const pendingList = []
+      const paymentsList = await Promise.all(
+        occupied.map((h) => listRentHistory(h.id))
+      )
+      
+      occupied.forEach((h, index) => {
+        const payments = paymentsList[index]
+        const monthsPending = countMonthsPending(payments)
+        if (monthsPending > 0) pendingList.push({ ...h, monthsPending })
+      })
+      setPending(pendingList)
+    } catch (err) {
+      console.error(err)
+      setError(err)
+    } finally {
+      setLoading(false)
     }
-    setPending(pendingList)
-    setLoading(false)
   }
 
   const listToShow =
@@ -66,11 +80,37 @@ export default function TenantsList({ onSelectHouse }) {
         ))}
       </div>
 
-      {loading && <p className="text-sm text-ink-soft py-6 text-center">Loading…</p>}
+      {error && (
+        <div className="py-6 text-center">
+          <p className="text-sm text-stamp-red mb-2">Failed to load tenants.</p>
+          <button onClick={load} className="text-xs bg-cover text-paper px-3 py-1.5 rounded-full">Retry</button>
+        </div>
+      )}
 
       <div className="space-y-2">
-        {!loading && listToShow.map((t) => (
-          <button
+        {loading && (
+          Array.from({ length: 4 }).map((_, i) => (
+            <motion.div
+              key={`skeleton-${i}`}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05, duration: 0.3 }}
+              className="w-full bg-paper-raised rounded-xl border border-brass/20 shadow-sm p-3 flex items-center gap-3"
+            >
+              <Skeleton variant="circle" className="w-10 h-10 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-1/3" />
+                <Skeleton className="h-3 w-1/4" />
+              </div>
+            </motion.div>
+          ))
+        )}
+
+        {!loading && !error && listToShow.map((t, i) => (
+          <motion.button
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05, duration: 0.3 }}
             key={t.houseId ? `${t.houseId}-${t.id}` : t.id}
             onClick={() => onSelectHouse(t.houseId || t.id)}
             className="w-full bg-paper-raised rounded-xl border border-brass/20 shadow-sm p-3 flex items-center gap-3 text-left hover:shadow-md transition"
@@ -92,9 +132,9 @@ export default function TenantsList({ onSelectHouse }) {
                 {t.monthsPending} mo pending
               </span>
             )}
-          </button>
+          </motion.button>
         ))}
-        {!loading && listToShow.length === 0 && (
+        {!loading && !error && listToShow.length === 0 && (
           <p className="text-sm text-ink-soft py-8 text-center">Nobody here.</p>
         )}
       </div>

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { listHouses, setEbOverride } from '../../services/houseService'
 import { calculateEbSplit, createEbBillCycle, listEbBillCycles } from '../../services/ebBillService'
+import { useToast } from '../shared/ui/Toast'
 
 export default function EBBillCreator() {
+  const { showToast } = useToast()
   const [houses, setHouses] = useState([])
   const [cycles, setCycles] = useState([])
   const [totalAmount, setTotalAmount] = useState('')
@@ -16,8 +18,13 @@ export default function EBBillCreator() {
   }, [])
 
   async function refresh() {
-    setHouses(await listHouses())
-    setCycles(await listEbBillCycles())
+    try {
+      setHouses(await listHouses())
+      setCycles(await listEbBillCycles())
+    } catch (err) {
+      console.error(err)
+      showToast({ message: "Failed to load EB bill data", type: "error" })
+    }
   }
 
   const occupiedHouses = houses.filter((h) => h.status === 'occupied')
@@ -27,19 +34,31 @@ export default function EBBillCreator() {
       : []
 
   async function toggleOwnMeter(house) {
-    await setEbOverride(house.id, {
-      hasOwnEbMeter: !house.hasOwnEbMeter,
-      ebShareOverrideMonths: house.ebShareOverrideMonths,
-    })
-    refresh()
+    try {
+      await setEbOverride(house.id, {
+        hasOwnEbMeter: !house.hasOwnEbMeter,
+        ebShareOverrideMonths: house.ebShareOverrideMonths,
+      })
+      showToast({ message: "EB override updated", type: "success" })
+      refresh()
+    } catch (err) {
+      console.error(err)
+      showToast({ message: "Failed to update EB override", type: "error" })
+    }
   }
 
   async function setPartialMonths(house, months) {
-    await setEbOverride(house.id, {
-      hasOwnEbMeter: house.hasOwnEbMeter,
-      ebShareOverrideMonths: months === '' ? null : Number(months),
-    })
-    refresh()
+    try {
+      await setEbOverride(house.id, {
+        hasOwnEbMeter: house.hasOwnEbMeter,
+        ebShareOverrideMonths: months === '' ? null : Number(months),
+      })
+      showToast({ message: "Months occupied updated", type: "success" })
+      refresh()
+    } catch (err) {
+      console.error(err)
+      showToast({ message: "Failed to update months occupied", type: "error" })
+    }
   }
 
   async function submit(e) {
@@ -55,7 +74,11 @@ export default function EBBillCreator() {
       setTotalAmount('')
       setCycleLabel('')
       setDueDate('')
+      showToast({ message: "Bill cycle created and sent", type: "success" })
       refresh()
+    } catch (err) {
+      console.error(err)
+      showToast({ message: err.message || "Failed to create EB bill cycle", type: "error" })
     } finally {
       setSaving(false)
     }

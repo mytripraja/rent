@@ -144,6 +144,12 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
+    // ---- appConfig ----
+    match /appConfig/{configId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner();
+    }
+
     // ---- customers (bank-style unique Customer ID per real person) ----
     // Full profile: owner can read/write anyone; a customer can read their own
     // record (matched via linkedUids, since one customer can hold several house logins).

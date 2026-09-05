@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, query, where, orderBy } from 'firebase/firestore'
+import { collection, addDoc, getDocs, query, where, orderBy, doc, updateDoc } from 'firebase/firestore'
 import { db } from './firebase'
 import { uploadPrivate, getPrivateViewUrl } from './cloudinaryService'
 
@@ -38,4 +38,22 @@ export async function listAllDocuments() {
 // reusing a stored link, so access can't be replayed indefinitely.
 export async function getDocumentViewUrl(documentEntry) {
   return getPrivateViewUrl(documentEntry.publicId, documentEntry.resourceType)
+}
+
+export async function verifyDocument(docId) {
+  await updateDoc(doc(db, 'documents', docId), {
+    verified: true,
+    verifiedAt: Date.now(),
+    reuploadRequested: false,
+    reuploadReason: null
+  })
+}
+
+export async function requestReupload(docId, reason) {
+  await updateDoc(doc(db, 'documents', docId), {
+    reuploadRequested: true,
+    reuploadReason: reason,
+    reuploadRequestedAt: Date.now(),
+    verified: false
+  })
 }

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { listHouses, announceRentRevision, applyRentRevision, cancelRentRevision } from '../../services/houseService'
+import { useToast } from '../shared/ui/Toast'
 
 export default function RentRevision() {
+  const { showToast } = useToast()
   const [houses, setHouses] = useState([])
   const [effectiveMonth, setEffectiveMonth] = useState('')
   const [selections, setSelections] = useState({}) // { houseId: newAmount }
@@ -12,7 +14,12 @@ export default function RentRevision() {
   }, [])
 
   async function refresh() {
-    setHouses(await listHouses())
+    try {
+      setHouses(await listHouses())
+    } catch (err) {
+      console.error(err)
+      showToast({ message: "Failed to load houses", type: "error" })
+    }
   }
 
   const occupied = houses.filter((h) => h.status === 'occupied')
@@ -47,20 +54,36 @@ export default function RentRevision() {
       )
       setSelections({})
       setEffectiveMonth('')
+      showToast({ message: "Rent revision announced successfully", type: "success" })
       refresh()
+    } catch (err) {
+      console.error(err)
+      showToast({ message: err.message || "Failed to announce revision", type: "error" })
     } finally {
       setSaving(false)
     }
   }
 
   async function handleApply(houseId) {
-    await applyRentRevision(houseId)
-    refresh()
+    try {
+      await applyRentRevision(houseId)
+      showToast({ message: "Rent revision applied", type: "success" })
+      refresh()
+    } catch (err) {
+      console.error(err)
+      showToast({ message: err.message || "Failed to apply revision", type: "error" })
+    }
   }
 
   async function handleCancel(houseId) {
-    await cancelRentRevision(houseId)
-    refresh()
+    try {
+      await cancelRentRevision(houseId)
+      showToast({ message: "Rent revision cancelled", type: "success" })
+      refresh()
+    } catch (err) {
+      console.error(err)
+      showToast({ message: err.message || "Failed to cancel revision", type: "error" })
+    }
   }
 
   return (

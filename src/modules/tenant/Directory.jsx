@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { listDirectory, setPhoneVisibility } from '../../services/houseService'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../shared/ui/Toast'
 
 export default function Directory() {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [entries, setEntries] = useState([])
   const [visible, setVisible] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -13,10 +15,15 @@ export default function Directory() {
   }, [user])
 
   async function refresh() {
-    const all = await listDirectory()
-    setEntries(all)
-    const mine = all.find((e) => e.id === user?.houseId)
-    if (mine) setVisible(mine.phoneVisibleToNeighbors)
+    try {
+      const all = await listDirectory()
+      setEntries(all)
+      const mine = all.find((e) => e.id === user?.houseId)
+      if (mine) setVisible(mine.phoneVisibleToNeighbors)
+    } catch (err) {
+      console.error(err)
+      showToast({ message: "Failed to load directory", type: "error" })
+    }
   }
 
   async function toggleVisibility() {
@@ -24,7 +31,11 @@ export default function Directory() {
     try {
       await setPhoneVisibility(user.houseId, !visible)
       setVisible(!visible)
+      showToast({ message: "Visibility updated successfully", type: "success" })
       refresh()
+    } catch (err) {
+      console.error(err)
+      showToast({ message: err.message || "Failed to update visibility", type: "error" })
     } finally {
       setSaving(false)
     }
@@ -59,12 +70,37 @@ export default function Directory() {
       </div>
 
       <div>
-        <h4 className="text-xs font-semibold text-ink-soft uppercase tracking-wide mb-2">Vacant Houses</h4>
-        <div className="flex flex-wrap gap-2">
+        <h4 className="text-xs font-semibold text-ink-soft uppercase tracking-wide mb-3">Vacant Houses</h4>
+        <div className="space-y-4">
           {vacant.map((e) => (
-            <span key={e.id} className="text-xs bg-paper text-ink-soft px-3 py-1.5 rounded-full">
-              {e.internalDoorNumber}
-            </span>
+            <div key={e.id} className="bg-paper border border-brass/20 rounded-xl p-4 shadow-sm">
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <h5 className="font-semibold text-ink text-sm">House {e.internalDoorNumber}</h5>
+                  <p className="text-xs text-ink-soft">
+                    {e.govtDoorNumber && `Govt: ${e.govtDoorNumber} · `}Floor {e.floor || 'N/A'}
+                  </p>
+                </div>
+                {e.rentAmount != null && e.rentAmount > 0 && (
+                  <div className="bg-stamp-green/10 px-2 py-1 rounded text-xs font-medium text-stamp-green">
+                    ₹{e.rentAmount.toLocaleString()}/mo
+                  </div>
+                )}
+              </div>
+              
+              {e.photos && e.photos.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto mt-3 pb-1 snap-x">
+                  {e.photos.map((url, i) => (
+                    <img 
+                      key={i} 
+                      src={url} 
+                      alt={`House ${e.internalDoorNumber} view ${i + 1}`} 
+                      className="w-32 h-24 object-cover rounded-lg border border-brass/20 shrink-0 snap-center"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
           {vacant.length === 0 && <p className="text-xs text-ink-soft">None right now.</p>}
         </div>

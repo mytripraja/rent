@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { listActiveNotices, noticeAppliesTo } from '../../services/noticeService'
+import { subscribeToActiveNotices, noticeAppliesTo } from '../../services/noticeService'
 import NoticeBanner from '../shared/NoticeBanner'
 import { useAuth } from '../../context/AuthContext'
 
@@ -8,9 +8,10 @@ export default function NoticeFeed() {
   const [notices, setNotices] = useState([])
 
   useEffect(() => {
-    listActiveNotices().then((all) =>
+    const unsub = subscribeToActiveNotices((all) => {
       setNotices(all.filter((n) => noticeAppliesTo(n, user?.houseId)))
-    )
+    })
+    return () => unsub()
   }, [user])
 
   if (notices.length === 0) return null

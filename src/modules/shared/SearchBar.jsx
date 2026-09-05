@@ -38,20 +38,28 @@ export default function SearchBar({ onSelectHouse }) {
 
   return (
     <div ref={wrapRef} className="relative w-full max-w-xs">
+      <label htmlFor="global-search" className="sr-only">Search tenants, houses, or phone numbers</label>
       <input
+        id="global-search"
         value={term}
         onChange={(e) => { setTerm(e.target.value); setOpen(true) }}
         onFocus={() => setOpen(true)}
         placeholder="Search tenant, house, phone…"
-        className="w-full border border-brass/30 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+        role="combobox"
+        aria-expanded={open && results.length > 0}
+        aria-controls="global-search-results"
+        aria-autocomplete="list"
+        className="w-full border border-brass/30 rounded-lg pl-8 pr-3 py-1.5 text-sm bg-paper-raised text-ink focus:outline-none focus:ring-2 focus:ring-brand"
       />
-      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-soft text-sm">⌕</span>
+      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-soft text-sm" aria-hidden="true">⌕</span>
 
       {open && results.length > 0 && (
-        <div className="absolute mt-1 w-full bg-paper-raised border border-brass/25 rounded-lg shadow-lg z-50 overflow-hidden">
+        <div id="global-search-results" role="listbox" className="absolute mt-1 w-full bg-paper-raised border border-brass/25 rounded-lg shadow-lg z-50 overflow-hidden">
           {results.map((h) => (
             <button
               key={h.id}
+              role="option"
+              aria-selected="false"
               onClick={() => select(h)}
               className="w-full text-left px-3 py-2 text-sm hover:bg-paper flex items-center justify-between"
             >

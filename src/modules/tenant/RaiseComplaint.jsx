@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { submitTenantComplaint, listComplaintsForHouse } from '../../services/complaintService'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../shared/ui/Toast'
 
 export default function RaiseComplaint() {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [complaints, setComplaints] = useState([])
@@ -13,7 +15,12 @@ export default function RaiseComplaint() {
   }, [user])
 
   async function refresh() {
-    setComplaints(await listComplaintsForHouse(user.houseId))
+    try {
+      setComplaints(await listComplaintsForHouse(user.houseId))
+    } catch (err) {
+      console.error(err)
+      showToast({ message: "Failed to load complaints", type: "error" })
+    }
   }
 
   async function submit(e) {
@@ -22,7 +29,11 @@ export default function RaiseComplaint() {
     try {
       await submitTenantComplaint({ fromHouseId: user.houseId, tenantId: user.uid, message })
       setMessage('')
+      showToast({ message: "Complaint sent successfully", type: "success" })
       refresh()
+    } catch (err) {
+      console.error(err)
+      showToast({ message: err.message || "Failed to send complaint", type: "error" })
     } finally {
       setSubmitting(false)
     }

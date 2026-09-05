@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
 import { addServiceContact, listServiceContacts, deleteServiceContact } from '../../services/serviceContactService'
 import ServiceContactsList, { CATEGORY_LABELS, CATEGORY_ORDER } from '../shared/ServiceContactsList'
+import ConfirmDialog from '../shared/ui/ConfirmDialog'
+import { useToast } from '../shared/ui/Toast'
 
 export default function ServiceContactsManager() {
+  const { showToast } = useToast()
   const [contacts, setContacts] = useState([])
   const [form, setForm] = useState({ category: 'eb_staff', label: '', phone: '', mapsUrl: '' })
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
 
   useEffect(() => {
     refresh()
@@ -21,15 +25,26 @@ export default function ServiceContactsManager() {
     try {
       await addServiceContact(form)
       setForm({ category: form.category, label: '', phone: '', mapsUrl: '' })
+      showToast({ message: 'Contact added successfully', type: 'success' })
       refresh()
+    } catch (err) {
+      showToast({ message: 'Failed to add contact: ' + err.message, type: 'error' })
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleDelete(id) {
-    await deleteServiceContact(id)
-    refresh()
+  async function performDelete() {
+    if (!deletingId) return
+    try {
+      await deleteServiceContact(deletingId)
+      showToast({ message: 'Contact deleted successfully', type: 'success' })
+      refresh()
+    } catch (err) {
+      showToast({ message: 'Failed to delete contact: ' + err.message, type: 'error' })
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
@@ -62,12 +77,22 @@ export default function ServiceContactsManager() {
         <ServiceContactsList
           contacts={contacts}
           renderAction={(c) => (
-            <button onClick={() => handleDelete(c.id)} className="text-xs text-red-600 hover:underline shrink-0 ml-2">
+            <button type="button" onClick={() => setDeletingId(c.id)} className="text-xs text-red-600 hover:underline shrink-0 ml-2">
               Delete
             </button>
           )}
         />
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deletingId}
+        title="Delete Contact"
+        message="Are you sure you want to delete this service contact?"
+        onConfirm={performDelete}
+        onCancel={() => setDeletingId(null)}
+        confirmText="Delete"
+        danger
+      />
     </div>
   )
 }

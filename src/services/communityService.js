@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, query, orderBy, limit as fsLimit, deleteDoc, doc } from 'firebase/firestore'
+import { collection, addDoc, getDocs, query, orderBy, limit as fsLimit, deleteDoc, doc, onSnapshot } from 'firebase/firestore'
 import { db } from './firebase'
 
 const messagesRef = collection(db, 'communityMessages')
@@ -21,4 +21,12 @@ export async function listRecentMessages(count = 100) {
 
 export async function deleteMessage(id) {
   await deleteDoc(doc(db, 'communityMessages', id))
+}
+
+export function subscribeToMessages(callback, count = 100) {
+  const q = query(messagesRef, orderBy('createdAt', 'desc'), fsLimit(count))
+  return onSnapshot(q, (snap) => {
+    const msgs = snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse()
+    callback(msgs)
+  })
 }

@@ -6,10 +6,12 @@ import { listRentHistory, countMonthsPending, currentMonthStr, resolveMonthStatu
 import { listActiveNotices } from '../../services/noticeService'
 import { listAllComplaints } from '../../services/complaintService'
 import { useAuth } from '../../context/AuthContext'
+import { Skeleton } from '../shared/ui/Skeleton'
 
 export default function OwnerHome({ onNavigate }) {
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [stats, setStats] = useState(null)
   const [notices, setNotices] = useState([])
   const [openComplaints, setOpenComplaints] = useState(0)
@@ -20,32 +22,85 @@ export default function OwnerHome({ onNavigate }) {
 
   async function load() {
     setLoading(true)
-    const houses = await listHouses()
-    const occupied = houses.filter((h) => h.status === 'occupied')
-    const vacant = houses.length - occupied.length
-    const month = currentMonthStr()
+    setError(null)
+    try {
+      const houses = await listHouses()
+      const occupied = houses.filter((h) => h.status === 'occupied')
+      const vacant = houses.length - occupied.length
+      const month = currentMonthStr()
 
-    let collected = 0
-    let pendingHouses = 0
-    for (const h of occupied) {
-      const payments = await listRentHistory(h.id)
-      const status = resolveMonthStatus(payments, month)
-      if (status === 'paid') collected += h.rentAmount
-      if (countMonthsPending(payments) > 0) pendingHouses++
+      let collected = 0
+      let pendingHouses = 0
+      
+      const paymentsList = await Promise.all(
+        occupied.map((h) => listRentHistory(h.id))
+      )
+      
+      occupied.forEach((h, index) => {
+        const payments = paymentsList[index]
+        const status = resolveMonthStatus(payments, month)
+        if (status === 'paid') collected += h.rentAmount
+        if (countMonthsPending(payments) > 0) pendingHouses++
+      })
+
+      setStats({ occupied: occupied.length, vacant, collected, pendingHouses, total: houses.length })
+      setNotices(await listActiveNotices())
+
+      const complaints = await listAllComplaints()
+      setOpenComplaints(complaints.filter((c) => c.status === 'open').length)
+    } catch (err) {
+      console.error(err)
+      setError(err)
+    } finally {
+      setLoading(false)
     }
-
-    setStats({ occupied: occupied.length, vacant, collected, pendingHouses, total: houses.length })
-    setNotices(await listActiveNotices())
-
-    const complaints = await listAllComplaints()
-    setOpenComplaints(complaints.filter((c) => c.status === 'open').length)
-
-    setLoading(false)
   }
 
-  if (loading || !stats) {
-    return <p className="text-sm text-ink-soft py-8 text-center">Loading your ledger…</p>
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <Skeleton className="h-4 w-32 mb-2" />
+          <Skeleton className="h-8 w-64" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 w-full rounded-2xl" />
+          ))}
+        </div>
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Skeleton variant="circle" className="w-4 h-4" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <div className="space-y-2 mb-8">
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+          </div>
+          <div className="flex items-center gap-2 mb-3">
+            <Skeleton variant="circle" className="w-4 h-4" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-9 w-32 rounded-full" />
+            ))}
+          </div>
+        </div>
+      </div>
+    )
   }
+
+  if (error) {
+    return (
+      <div className="py-8 text-center">
+        <p className="text-sm text-stamp-red mb-2">Failed to load ledger.</p>
+        <button onClick={load} className="text-xs bg-cover text-paper px-3 py-1.5 rounded-full">Retry</button>
+      </div>
+    )
+  }
+
+  if (!stats) return null
 
   const cards = [
     { id: 'houses', label: 'Occupied', value: `${stats.occupied}/${stats.total}`, icon: Home, tab: 'houses' },

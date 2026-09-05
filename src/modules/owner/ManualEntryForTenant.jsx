@@ -1,23 +1,39 @@
 import { useEffect, useState } from 'react'
 import { listHouses } from '../../services/houseService'
 import { submitRentPayment, approvePayment, listPendingApprovals } from '../../services/rentService'
+import { getCashReceivers } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
-
-const CASH_RECEIVERS = ['deepu', 'rajavel', 'siva', 'hemalathe', 'others']
+import { useToast } from '../shared/ui/Toast'
 
 export default function ManualEntryForTenant() {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [houses, setHouses] = useState([])
+  const currentMonth = new Date().toISOString().slice(0, 7)
   const [form, setForm] = useState({
-    houseId: '', month: '', amount: '', dateSent: '', mode: 'cash', cashReceivedBy: 'deepu',
+    houseId: '', month: currentMonth, amount: '', dateSent: '', mode: 'cash', cashReceivedBy: '',
   })
   const [proofFile, setProofFile] = useState(null)
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(null)
+  const [cashReceivers, setCashReceivers] = useState([])
 
   useEffect(() => {
-    listHouses().then((all) => setHouses(all.filter((h) => h.status === 'occupied')))
-  }, [])
+    listHouses().then((all) => setHouses(all.filter((h) => h.status === 'occupied'))).catch((err) => {
+      console.error(err)
+      showToast({ message: "Failed to load houses", type: "error" })
+    })
+
+    getCashReceivers().then((receivers) => {
+      setCashReceivers(receivers)
+      if (receivers.length > 0) {
+        setForm((prev) => ({ ...prev, cashReceivedBy: receivers[0] }))
+      }
+    }).catch((err) => {
+      console.error(err)
+      showToast({ message: "Failed to load cash receivers", type: "error" })
+    })
+  }, [showToast])
 
   const selectedHouse = houses.find((h) => h.id === form.houseId)
 
@@ -38,19 +54,40 @@ export default function ManualEntryForTenant() {
         recordedBy: { uid: user.uid, name: user.name },
       })
       setDone(applicationNumber)
+      showToast({ message: "Entry submitted successfully", type: "success" })
+    } catch (err) {
+      console.error(err)
+      showToast({ message: err.message || "Failed to submit entry", type: "error" })
     } finally {
       setSaving(false)
     }
   }
 
   async function approveNow(applicationNumber) {
-    // Owner just entered this themself on the tenant's behalf, so approving
-    // immediately (rather than going through the approval queue) is expected.
-    const pending = await listPendingApprovals()
-    const match = pending.find((p) => p.applicationNumber === applicationNumber)
-    if (match) await approvePayment(match.id, { actionedBy: { uid: user.uid, name: user.name } })
-    setDone(null)
-    setForm({ houseId: '', month: '', amount: '', dateSent: '', mode: 'cash', cashReceivedBy: 'deepu' })
+    try {
+      // Owner just entered this themself on the tenant's behalf, so approving
+      // immediately (rather than going through the approval queue) is expected.
+      let match = null
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const pending = await listPendingApprovals()
+        match = pending.find((p) => p.applicationNumber === applicationNumber)
+        if (match) break
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+      
+      if (match) {
+        await approvePayment(match.id, { actionedBy: { uid: user.uid, name: user.name } })
+        showToast({ message: "Approved successfully", type: "success" })
+      } else {
+        showToast({ message: "Payment found but took too long to appear in pending list. Please approve from the dashboard later.", type: "warning" })
+      }
+      setDone(null)
+      const defaultReceiver = cashReceivers.length > 0 ? cashReceivers[0] : ''
+      setForm({ houseId: '', month: currentMonth, amount: '', dateSent: '', mode: 'cash', cashReceivedBy: defaultReceiver })
+    } catch (err) {
+      console.error(err)
+      showToast({ message: "Failed to approve payment", type: "error" })
+    }
   }
 
   if (done) {
@@ -104,7 +141,8 @@ export default function ManualEntryForTenant() {
         {form.mode === 'cash' && (
           <select value={form.cashReceivedBy} onChange={(e) => setForm({ ...form, cashReceivedBy: e.target.value })}
             className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
-            {CASH_RECEIVERS.map((r) => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+            {cashReceivers.map((r) => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+            <option value="others">Others</option>
           </select>
         )}
 

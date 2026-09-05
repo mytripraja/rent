@@ -2,15 +2,16 @@ import { useState } from 'react'
 import { updateOwnProfile } from '../../services/authService'
 import { uploadUnsigned } from '../../services/cloudinaryService'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../shared/ui/Toast'
 
 export default function OwnerProfile() {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [name, setName] = useState(user?.name || '')
   const [phone, setPhone] = useState(user?.phone || '')
   const [photoUrl, setPhotoUrl] = useState(user?.profilePhotoUrl || '')
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
 
   async function handlePhotoChange(e) {
     const file = e.target.files[0]
@@ -19,6 +20,10 @@ export default function OwnerProfile() {
     try {
       const { url } = await uploadUnsigned(file, 'profile-photos')
       setPhotoUrl(url)
+      showToast({ message: "Photo uploaded successfully", type: "success" })
+    } catch (err) {
+      console.error(err)
+      showToast({ message: "Failed to upload photo", type: "error" })
     } finally {
       setUploading(false)
     }
@@ -29,8 +34,10 @@ export default function OwnerProfile() {
     setSaving(true)
     try {
       await updateOwnProfile({ uid: user.uid, name, phone, profilePhotoUrl: photoUrl })
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
+      showToast({ message: "Profile saved successfully", type: "success" })
+    } catch (err) {
+      console.error(err)
+      showToast({ message: "Failed to save profile", type: "error" })
     } finally {
       setSaving(false)
     }
@@ -73,7 +80,7 @@ export default function OwnerProfile() {
         </div>
 
         <button disabled={saving} className="w-full bg-brand text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-60">
-          {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save Changes'}
+          {saving ? 'Saving…' : 'Save Changes'}
         </button>
       </form>
     </div>

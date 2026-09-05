@@ -1,22 +1,38 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { submitRentPayment } from '../../services/rentService'
+import { getCashReceivers } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
-
-const CASH_RECEIVERS = ['deepu', 'rajavel', 'siva', 'hemalathe', 'others']
+import { useToast } from '../shared/ui/Toast'
 
 export default function RentSubmission({ onSubmitted }) {
   const { user } = useAuth()
+  const { showToast } = useToast()
+  
+  const currentMonth = new Date().toISOString().slice(0, 7)
   const [form, setForm] = useState({
-    month: '',
+    month: currentMonth,
     amount: '',
     dateSent: '',
     mode: 'upi',
-    cashReceivedBy: 'deepu',
+    cashReceivedBy: '',
     neighborHouseId: '',
   })
   const [proofFile, setProofFile] = useState(null)
   const [applicationNumber, setApplicationNumber] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [cashReceivers, setCashReceivers] = useState([])
+
+  useEffect(() => {
+    getCashReceivers().then((receivers) => {
+      setCashReceivers(receivers)
+      if (receivers.length > 0) {
+        setForm((prev) => ({ ...prev, cashReceivedBy: receivers[0] }))
+      }
+    }).catch((err) => {
+      console.error("Error fetching cash receivers", err)
+      showToast({ message: "Failed to load cash receivers", type: "error" })
+    })
+  }, [showToast])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -35,7 +51,11 @@ export default function RentSubmission({ onSubmitted }) {
         recordedBy: { uid: user.uid, name: user.name },
       })
       setApplicationNumber(appNo)
+      showToast({ message: "Payment submitted successfully!", type: "success" })
       onSubmitted && onSubmitted()
+    } catch (err) {
+      console.error("Error submitting rent payment", err)
+      showToast({ message: err.message || "Failed to submit payment", type: "error" })
     } finally {
       setSubmitting(false)
     }
@@ -78,9 +98,10 @@ export default function RentSubmission({ onSubmitted }) {
       {form.mode === 'cash' && (
         <select value={form.cashReceivedBy} onChange={(e) => setForm({ ...form, cashReceivedBy: e.target.value })}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
-          {CASH_RECEIVERS.map((r) => (
+          {cashReceivers.map((r) => (
             <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
           ))}
+          <option value="others">Others</option>
         </select>
       )}
 

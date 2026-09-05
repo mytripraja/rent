@@ -1,23 +1,34 @@
 import { useEffect, useState } from 'react'
 import { listEbBillCycles, houseShareFromBill, submitEbPayment, listEbPaymentsForHouse } from '../../services/ebBillService'
+import { getCashReceivers } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
 import ApprovalStatusBadge from '../shared/ApprovalStatusBadge'
-
-const CASH_RECEIVERS = ['deepu', 'rajavel', 'siva', 'hemalathe', 'others']
+import { useToast } from '../shared/ui/Toast'
 
 export default function EBBillShare() {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [cycles, setCycles] = useState([])
   const [payments, setPayments] = useState([])
   const [payingBill, setPayingBill] = useState(null)
+  const [cashReceivers, setCashReceivers] = useState([])
 
   useEffect(() => {
     if (user?.houseId) refresh()
-  }, [user])
+    getCashReceivers().then(setCashReceivers).catch((err) => {
+      console.error(err)
+      showToast({ message: "Failed to load cash receivers", type: "error" })
+    })
+  }, [user, showToast])
 
   async function refresh() {
-    setCycles(await listEbBillCycles())
-    setPayments(await listEbPaymentsForHouse(user.houseId))
+    try {
+      setCycles(await listEbBillCycles())
+      setPayments(await listEbPaymentsForHouse(user.houseId))
+    } catch (err) {
+      console.error(err)
+      showToast({ message: "Failed to load EB bills", type: "error" })
+    }
   }
 
   function statusFor(billId) {
@@ -63,6 +74,7 @@ export default function EBBillShare() {
           bill={payingBill.bill}
           share={payingBill.share}
           user={user}
+          cashReceivers={cashReceivers}
           onClose={() => setPayingBill(null)}
           onDone={() => {
             setPayingBill(null)
@@ -74,8 +86,10 @@ export default function EBBillShare() {
   )
 }
 
-function PayEbShareModal({ bill, share, user, onClose, onDone }) {
-  const [form, setForm] = useState({ dateSent: '', mode: 'upi', cashReceivedBy: 'deepu', neighborHouseId: '' })
+function PayEbShareModal({ bill, share, user, cashReceivers, onClose, onDone }) {
+  const { showToast } = useToast()
+  const defaultReceiver = cashReceivers.length > 0 ? cashReceivers[0] : ''
+  const [form, setForm] = useState({ dateSent: '', mode: 'upi', cashReceivedBy: defaultReceiver, neighborHouseId: '' })
   const [proofFile, setProofFile] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -95,7 +109,11 @@ function PayEbShareModal({ bill, share, user, onClose, onDone }) {
         proofFile,
         recordedBy: { uid: user.uid, name: user.name },
       })
+      showToast({ message: "EB payment submitted successfully!", type: "success" })
       onDone()
+    } catch (err) {
+      console.error(err)
+      showToast({ message: err.message || "Failed to submit EB payment", type: "error" })
     } finally {
       setSubmitting(false)
     }
@@ -120,7 +138,8 @@ function PayEbShareModal({ bill, share, user, onClose, onDone }) {
         {form.mode === 'cash' && (
           <select value={form.cashReceivedBy} onChange={(e) => setForm({ ...form, cashReceivedBy: e.target.value })}
             className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
-            {CASH_RECEIVERS.map((r) => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+            {cashReceivers.map((r) => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+            <option value="others">Others</option>
           </select>
         )}
 

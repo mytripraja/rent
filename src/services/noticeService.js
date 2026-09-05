@@ -6,6 +6,7 @@ import {
   orderBy,
   deleteDoc,
   doc,
+  onSnapshot
 } from 'firebase/firestore'
 import { db } from './firebase'
 
@@ -46,4 +47,15 @@ export async function deleteNotice(noticeId) {
 export function noticeAppliesTo(notice, houseId) {
   if (notice.targetHouseIds === 'all') return true
   return Array.isArray(notice.targetHouseIds) && notice.targetHouseIds.includes(houseId)
+}
+
+export function subscribeToActiveNotices(callback) {
+  const q = query(noticesRef, orderBy('createdAt', 'desc'))
+  return onSnapshot(q, (snap) => {
+    const now = Date.now()
+    const active = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((n) => !n.expiresAt || n.expiresAt > now)
+    callback(active)
+  })
 }

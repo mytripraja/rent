@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { login, loginWithGoogle, loginWithCustomerId } from '../../services/authService'
+import TextField from './ui/TextField'
+import Button from './ui/Button'
 
 const METHODS = [
   { id: 'email', label: 'Email' },
@@ -7,13 +9,27 @@ const METHODS = [
   { id: 'google', label: 'Google' },
 ]
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const CUSTOMER_ID_RE = /^RM\d+$/i
+
 export default function LoginPage() {
   const [method, setMethod] = useState('email')
   const [email, setEmail] = useState('')
   const [customerId, setCustomerId] = useState('')
   const [password, setPassword] = useState('')
+  const [touched, setTouched] = useState({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Instant, inline validation — checked as the person types/blurs, not just on submit.
+  const emailError = touched.email && email && !EMAIL_RE.test(email) ? 'Enter a valid email address.' : ''
+  const customerIdError = touched.customerId && customerId && !CUSTOMER_ID_RE.test(customerId.trim())
+    ? 'Customer ID looks like RM1001 — letters "RM" followed by numbers.' : ''
+  const passwordError = touched.password && password && password.length < 6 ? 'Password should be at least 6 characters.' : ''
+
+  function markTouched(field) {
+    setTouched((t) => ({ ...t, [field]: true }))
+  }
 
   async function handleEmailSubmit(e) {
     e.preventDefault()
@@ -62,12 +78,14 @@ export default function LoginPage() {
         </div>
 
         {/* Method switcher - horizontally scrollable so it never breaks on small screens */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1" role="tablist" aria-label="Sign-in method">
           {METHODS.map((m) => (
             <button
               key={m.id}
               type="button"
-              onClick={() => { setMethod(m.id); setError('') }}
+              role="tab"
+              aria-selected={method === m.id}
+              onClick={() => { setMethod(m.id); setError(''); setTouched({}) }}
               className={`shrink-0 text-xs sm:text-sm px-3 py-2 rounded-lg font-medium whitespace-nowrap ${
                 method === m.id ? 'bg-brand text-white' : 'bg-paper text-ink-soft border border-brass/20'
               }`}
@@ -78,57 +96,37 @@ export default function LoginPage() {
         </div>
 
         {method === 'email' && (
-          <form onSubmit={handleEmailSubmit} className="space-y-4">
-            <Field label="Email">
-              <input
-                type="email"
-                required
-                inputMode="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={inputClass}
-              />
-            </Field>
-            <Field label="Password">
-              <input
-                type="password"
-                required
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={inputClass}
-              />
-            </Field>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <SubmitButton loading={loading}>Sign In</SubmitButton>
+          <form onSubmit={handleEmailSubmit} className="space-y-4" noValidate>
+            <TextField
+              label="Email" type="email" required inputMode="email" autoComplete="email"
+              value={email} onChange={(e) => setEmail(e.target.value)} onBlur={() => markTouched('email')}
+              error={emailError}
+            />
+            <TextField
+              label="Password" type="password" required autoComplete="current-password"
+              value={password} onChange={(e) => setPassword(e.target.value)} onBlur={() => markTouched('password')}
+              error={passwordError}
+            />
+            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+            <Button type="submit" fullWidth loading={loading} loadingText="Signing in…">Sign In</Button>
           </form>
         )}
 
         {method === 'customerId' && (
-          <form onSubmit={handleCustomerIdSubmit} className="space-y-4">
-            <Field label="Customer ID" hint="e.g. RM1001 — given to you when your account was created">
-              <input
-                required
-                autoCapitalize="characters"
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
-                className={inputClass}
-                placeholder="RM1001"
-              />
-            </Field>
-            <Field label="Password">
-              <input
-                type="password"
-                required
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={inputClass}
-              />
-            </Field>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <SubmitButton loading={loading}>Sign In</SubmitButton>
+          <form onSubmit={handleCustomerIdSubmit} className="space-y-4" noValidate>
+            <TextField
+              label="Customer ID" required autoCapitalize="characters" placeholder="RM1001"
+              hint={!customerIdError ? 'e.g. RM1001 — given to you when your account was created' : undefined}
+              value={customerId} onChange={(e) => setCustomerId(e.target.value)} onBlur={() => markTouched('customerId')}
+              error={customerIdError}
+            />
+            <TextField
+              label="Password" type="password" required autoComplete="current-password"
+              value={password} onChange={(e) => setPassword(e.target.value)} onBlur={() => markTouched('password')}
+              error={passwordError}
+            />
+            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+            <Button type="submit" fullWidth loading={loading} loadingText="Signing in…">Sign In</Button>
           </form>
         )}
 
@@ -137,7 +135,7 @@ export default function LoginPage() {
             <p className="text-xs text-ink-soft">
               Only works if your Google email matches the one on file with the owner.
             </p>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
             <button
               type="button"
               onClick={handleGoogleClick}
@@ -155,31 +153,6 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
-  )
-}
-
-const inputClass =
-  'mt-1 w-full rounded-lg border border-brass/30 bg-paper px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand'
-
-function Field({ label, hint, children }) {
-  return (
-    <div>
-      <label className="text-sm text-ink-soft">{label}</label>
-      {children}
-      {hint && <p className="text-xs text-ink-soft/70 mt-1">{hint}</p>}
-    </div>
-  )
-}
-
-function SubmitButton({ loading, children }) {
-  return (
-    <button
-      type="submit"
-      disabled={loading}
-      className="w-full bg-brand hover:bg-brand-dark text-white font-medium py-2.5 rounded-lg transition disabled:opacity-60"
-    >
-      {loading ? 'Signing in…' : children}
-    </button>
   )
 }
 

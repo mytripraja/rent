@@ -12,6 +12,7 @@ import DocumentUpload from './DocumentUpload'
 import TenantRentHero from './TenantRentHero'
 import CommunityBoard from '../shared/CommunityBoard'
 import OnboardingTour from '../shared/OnboardingTour'
+import IconButton from '../shared/ui/IconButton'
 import { TENANT_TOUR_STEPS } from './tenantTourSteps'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
@@ -19,13 +20,16 @@ import { useAuth } from '../../context/AuthContext'
 export default function TenantDashboard() {
   const { user } = useAuth()
   const [replayTour, setReplayTour] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
   const payRef = useRef(null)
 
   return (
     <div className="min-h-screen bg-paper">
+      <a href="#main-content" className="skip-link">Skip to main content</a>
+
       <header className="bg-cover text-paper px-4 sm:px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-brass/30 border border-brass overflow-hidden flex items-center justify-center text-sm font-semibold shrink-0">
+          <div className="w-9 h-9 rounded-full bg-brass/30 border border-brass overflow-hidden flex items-center justify-center text-sm font-semibold shrink-0" aria-hidden="true">
             {user?.name?.[0]}
           </div>
           <div>
@@ -34,40 +38,40 @@ export default function TenantDashboard() {
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <button onClick={() => setReplayTour(true)} className="text-brass-light hover:text-paper" title="Help">
-            <HelpCircle size={18} />
-          </button>
-          <button onClick={logout} className="text-brass-light hover:text-paper" title="Log out">
-            <LogOut size={18} />
-          </button>
+          <IconButton icon={HelpCircle} label="Replay onboarding tour" onClick={() => setReplayTour(true)} />
+          <IconButton icon={LogOut} label="Log out" onClick={logout} />
         </div>
       </header>
 
       <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
-        <TenantRentHero onPayNow={() => payRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />
+        <TenantRentHero key={`hero-${refreshKey}`} onPayNow={() => payRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />
         <RentRevisionBanner />
         <NoticeFeed />
       </div>
 
-      <main className="px-4 sm:px-6 pb-6 max-w-4xl mx-auto space-y-6">
+      <main id="main-content" tabIndex={-1} className="px-4 sm:px-6 pb-6 max-w-4xl mx-auto space-y-6">
         <div ref={payRef} className="grid md:grid-cols-2 gap-4">
-          <RentSubmission onSubmitted={() => {}} />
-          <RentHistory />
+          <RentSubmission onSubmitted={() => setRefreshKey(k => k + 1)} />
+          <RentHistory key={`history-${refreshKey}`} />
         </div>
 
-        <EBBillShare />
+        <EBBillShare key={`eb-${refreshKey}`} />
 
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-2">More</p>
+        <section aria-labelledby="more-heading">
+          <h2 id="more-heading" className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-2">More</h2>
           <div className="grid md:grid-cols-2 gap-4">
             <RaiseComplaint />
             <Directory />
             <ServiceContacts />
             <DocumentUpload />
           </div>
-        </div>
+        </section>
 
         <CommunityBoard user={user} />
+
+        <footer className="text-center text-xs text-ink-soft py-4 border-t border-brass/15">
+          Need help? Check <span className="font-medium text-ink">Service Contacts</span> above, or raise a complaint and the owner will reach out.
+        </footer>
       </main>
 
       <OnboardingTour

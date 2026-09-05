@@ -154,7 +154,31 @@ Everything in `/api` deploys automatically with the rest of the app whenever you
 - **Onboarding Tour:**
   - Shared `OnboardingTour.jsx` (uses `framer-motion` for the transitions) — animated welcome walkthrough, separate content for owner (`ownerTourSteps.js`) and tenant (`tenantTourSteps.js`). Shows automatically the first time each person logs in (tracked in `localStorage`, per `uid`), and there's a **Help** button in both headers to replay it anytime.
 
-**Not yet built:** nothing — every module from your original spec is done.
+## UX/UI hardening pass
+
+A deliberate pass against a real checklist — here's what was actually implemented, and what's still a flagship-only pattern rather than applied everywhere:
+
+**Accessibility (verified, not just styled):**
+- Every color pairing in the palette checked against real WCAG contrast math (not eyeballed) — all pass AA (4.5:1+) for text.
+- A visible focus ring (`:focus-visible`) on every interactive element site-wide — previously only inputs had one, which is a common a11y gap.
+- Skip-to-content link on both dashboards for keyboard users.
+- Tab navigation uses proper ARIA (`role="tablist"/"tab"/"tabpanel"`, `aria-selected`) instead of plain unlabeled buttons.
+- Icon-only buttons (Help, Logout, search) now require an `aria-label` via the new `IconButton` component — no silent icons.
+- The global search input had a placeholder but no real label (placeholders aren't a substitute for a label per WCAG) — fixed with a proper `sr-only` `<label>` and combobox ARIA roles.
+- Loading states use `role="status"`/`aria-live` so screen readers announce them.
+- Login page's label/input association was actually broken (a sibling `<label>` with no `htmlFor`/`id` — no programmatic link at all) — fixed via the new `TextField` component, which enforces this pattern by construction.
+
+**Consistent UI components (new, not applied everywhere yet):** `src/modules/shared/ui/` — `Button`, `TextField`, `SelectField`, `IconButton`. These bake in the label association, error/hint wiring, and focus styles so every new field is accessible by default. Applied fully to the **login page** and the **house booking/vacate modals** (the highest-stakes forms) as flagship examples — the rest of the app's forms still use the older inline-styled inputs, which look visually consistent (same palette) but don't yet have the same instant-validation/ARIA treatment.
+
+**Error prevention:** Login and the booking modal now validate inline as you type/blur — email format, password length, phone digit count — plus one real business-rule catch: advance paid at booking can't exceed the agreed advance target, with an inline error instead of silently accepting bad data.
+
+**Navigation & hierarchy:** mobile bottom nav (Home/Houses/Tenants/Approvals/More) added for the owner dashboard alongside the existing scrollable top tabs — thumb-reachable primary actions instead of only a top strip. Home dashboard remains the entry point for daily-glance hierarchy.
+
+**Creative loading state:** replaced the plain "Loading…" text with `LoadingScreen` — a small animated rubber-stamp coming down, on-brand rather than a generic spinner, used for the two app-level loading gates (initial auth resolve).
+
+**Credibility/contact signals:** added a support footer on the tenant dashboard pointing to Service Contacts and the complaint flow — the app's actual trust mechanism (a private family-run building, not a public storefront), rather than fabricating testimonials or badges that wouldn't be honest for this context.
+
+**Not yet done, flagged rather than skipped silently:** the validation/ARIA pattern from Login and the booking modal hasn't been extended to the other ~20 forms (Manual Entry, Notices, EB Bill, Complaint send, Tenant contact edit, etc.) — they're visually consistent but not yet instantly-validated. Say the word and I'll extend the same `TextField`/`Button` pattern across the rest.
 
 **Note on existing houses:** the `directory` mirror only gets created/updated going forward (on create/book/vacate/visibility-toggle). If you add houses before this update reaches production, run a one-time backfill — happy to write a small script for that when you're ready to deploy.
 

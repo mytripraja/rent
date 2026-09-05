@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { listHouses } from '../../services/houseService'
 import { listAllComplaints, submitOwnerComplaint, resolveComplaint } from '../../services/complaintService'
+import { useToast } from '../shared/ui/Toast'
 
 export default function ComplaintInbox() {
+  const { showToast } = useToast()
   const [houses, setHouses] = useState([])
   const [complaints, setComplaints] = useState([])
   const [showSend, setShowSend] = useState(false)
@@ -13,13 +15,22 @@ export default function ComplaintInbox() {
   }, [])
 
   async function refresh() {
-    setHouses(await listHouses())
-    setComplaints(await listAllComplaints())
+    try {
+      setHouses(await listHouses())
+      setComplaints(await listAllComplaints())
+    } catch (err) {
+      showToast({ message: 'Failed to load complaints: ' + err.message, type: 'error' })
+    }
   }
 
   async function handleResolve(id) {
-    await resolveComplaint(id)
-    refresh()
+    try {
+      await resolveComplaint(id)
+      showToast({ message: 'Complaint resolved', type: 'success' })
+      refresh()
+    } catch (err) {
+      showToast({ message: 'Failed to resolve complaint: ' + err.message, type: 'error' })
+    }
   }
 
   const filtered = complaints.filter((c) => filter === 'all' || c.status === filter)
@@ -84,13 +95,13 @@ export default function ComplaintInbox() {
       </div>
 
       {showSend && (
-        <SendComplaintModal houses={houses} onClose={() => setShowSend(false)} onSent={refresh} />
+        <SendComplaintModal houses={houses} onClose={() => setShowSend(false)} onSent={refresh} showToast={showToast} />
       )}
     </div>
   )
 }
 
-function SendComplaintModal({ houses, onClose, onSent }) {
+function SendComplaintModal({ houses, onClose, onSent, showToast }) {
   const [message, setMessage] = useState('')
   const [audience, setAudience] = useState('all')
   const [selectedHouseIds, setSelectedHouseIds] = useState([])
@@ -110,8 +121,11 @@ function SendComplaintModal({ houses, onClose, onSent }) {
         targetHouseIds: audience === 'all' ? 'all' : selectedHouseIds,
         message,
       })
+      showToast({ message: 'Complaint sent successfully', type: 'success' })
       onSent()
       onClose()
+    } catch (err) {
+      showToast({ message: 'Failed to send complaint: ' + err.message, type: 'error' })
     } finally {
       setSending(false)
     }
