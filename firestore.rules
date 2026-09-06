@@ -11,12 +11,7 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function isAdmin() {git init
-git add .
-git commit -m "first commit: separated tourism planner apps"
-git branch -M main
-git remote add origin https://github.com/mytripraja/rent.git
-git push -u origin main
+    function isAdmin() {
       return isSignedIn() && userDoc().data.role == 'admin';
     }
 

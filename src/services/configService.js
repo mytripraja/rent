@@ -85,3 +85,31 @@ export async function getTemplates() {
 export async function updateTemplates(templates) {
   await updateAppConfig({ messageTemplates: templates })
 }
+
+export async function getProperties() {
+  const config = await getAppConfig()
+  return config.properties || [{ id: 'default', name: config.apartmentName || 'My Apartment', address: config.apartmentAddress || '' }]
+}
+
+export async function addProperty(property) {
+  const props = await getProperties()
+  props.push(property)
+  await updateAppConfig({ properties: props })
+}
+
+export async function updateProperty(id, fields) {
+  const props = await getProperties()
+  const idx = props.findIndex(p => p.id === id)
+  if (idx !== -1) {
+    props[idx] = { ...props[idx], ...fields }
+    await updateAppConfig({ properties: props })
+  }
+}
+
+export function getActivePropertyId() {
+  return localStorage.getItem('activePropertyId')
+}
+
+export function setActivePropertyId(id) {
+  localStorage.setItem('activePropertyId', id)
+}

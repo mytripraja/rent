@@ -3,6 +3,7 @@ import { login, loginWithGoogle, loginWithCustomerId, resetPassword } from '../.
 import { useLanguage } from '../../context/LanguageContext'
 import TextField from './ui/TextField'
 import Button from './ui/Button'
+import { requestNotificationPermission } from '../../services/pushService'
 
 const METHODS = [
   { id: 'email', label: 'Email' },
@@ -60,6 +61,7 @@ export default function LoginPage() {
     setLoading(true)
     try {
       await login(email, password)
+      requestNotificationPermission()
     } catch {
       setError('Login failed. Check your email and password.')
     } finally {
@@ -73,6 +75,7 @@ export default function LoginPage() {
     setLoading(true)
     try {
       await loginWithCustomerId(customerId, password)
+      requestNotificationPermission()
     } catch (err) {
       setError(err.message || 'Login failed. Check your Customer ID and password.')
     } finally {
@@ -85,6 +88,7 @@ export default function LoginPage() {
     setLoading(true)
     try {
       await loginWithGoogle()
+      requestNotificationPermission()
     } catch (err) {
       setError(err.message || 'Google sign-in failed.')
     } finally {

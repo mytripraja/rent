@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Printer } from 'lucide-react'
 import { listHouses } from '../../services/houseService'
 import { listRentHistory, resolveMonthStatus } from '../../services/rentService'
-import { listEBCycles, getHouseShareFromCycle } from '../../services/ebBillService'
+import { listEbBillCycles, houseShareFromBill } from '../../services/ebBillService'
 import { listExpenses } from '../../services/expenseService'
 import { useToast } from '../shared/ui/Toast'
 

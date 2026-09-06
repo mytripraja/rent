@@ -13,6 +13,9 @@ import { getCashReceivers } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../shared/ui/Toast'
 import { SkeletonCard } from '../shared/ui/Skeleton'
+import BulkActions from './BulkActions'
+import { useNavigate } from 'react-router-dom'
+import { createNotification } from '../../services/notificationService'
 
 export default function HouseManager() {
   const { user } = useAuth()
@@ -20,6 +23,9 @@ export default function HouseManager() {
   const [loading, setLoading] = useState(true)
   const [bookingHouse, setBookingHouse] = useState(null)
   const [vacatingHouse, setVacatingHouse] = useState(null)
+  const [bulkMode, setBulkMode] = useState(false)
+  const [selectedHouseIds, setSelectedHouseIds] = useState(new Set())
+  const toast = useToast()
 
   useEffect(() => {
     refresh()
@@ -29,6 +35,51 @@ export default function HouseManager() {
     setLoading(true)
     setHouses(await listHouses())
     setLoading(false)
+  }
+
+  const navigate = useNavigate()
+
+  function toggleSelection(houseId) {
+    const next = new Set(selectedHouseIds)
+    if (next.has(houseId)) next.delete(houseId)
+    else next.add(houseId)
+    setSelectedHouseIds(next)
+  }
+
+  function toggleSelectAll() {
+    if (selectedHouseIds.size === houses.length) {
+      setSelectedHouseIds(new Set())
+    } else {
+      setSelectedHouseIds(new Set(houses.map(h => h.id)))
+    }
+  }
+
+  async function handleBulkAction(action) {
+    const selected = houses.filter(h => selectedHouseIds.has(h.id))
+    if (action === 'notice') {
+      navigate('/owner/notices', { state: { preselectHouses: selected.map(h => h.id) } })
+    } else if (action === 'reminder') {
+      try {
+        let count = 0
+        for (const h of selected) {
+          if (h.status === 'occupied' && h.currentTenantId) {
+            await createNotification({
+              recipientId: h.currentTenantId,
+              recipientType: 'tenant',
+              type: 'payment_reminder',
+              title: 'Payment Reminder',
+              message: 'This is a friendly reminder for your pending payments.'
+            })
+            count++
+          }
+        }
+        toast.success(`Sent reminders to ${count} tenants`)
+        setSelectedHouseIds(new Set())
+        setBulkMode(false)
+      } catch (err) {
+        toast.error('Failed to send reminders')
+      }
+    }
   }
 
   const occupiedCount = houses.filter((h) => h.status === 'occupied').length
@@ -41,6 +92,19 @@ export default function HouseManager() {
           <p className="font-mono-tab text-xs text-ink-soft mt-0.5">
             {occupiedCount} occupied · {houses.length - occupiedCount} vacant · {houses.length} total
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {bulkMode && (
+            <button onClick={toggleSelectAll} className="text-sm font-medium text-ink bg-paper border border-brass/30 px-3 py-1.5 rounded-lg hover:bg-black/5">
+              {selectedHouseIds.size === houses.length ? 'Deselect All' : 'Select All'}
+            </button>
+          )}
+          <button 
+            onClick={() => { setBulkMode(!bulkMode); setSelectedHouseIds(new Set()) }}
+            className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${bulkMode ? 'bg-cover text-white' : 'bg-paper border border-brass/30 text-ink hover:bg-black/5'}`}
+          >
+            {bulkMode ? 'Cancel Bulk' : 'Bulk Select'}
+          </button>
         </div>
       </div>
 
@@ -63,11 +127,20 @@ export default function HouseManager() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05, duration: 0.3 }}
-              className="bg-paper-raised rounded-2xl shadow-sm border border-brass/20 overflow-hidden"
+              className={`bg-paper-raised rounded-2xl shadow-sm border overflow-hidden transition-colors ${selectedHouseIds.has(h.id) ? 'border-cover' : 'border-brass/20'}`}
+              onClick={() => bulkMode && toggleSelection(h.id)}
             >
               {/* Door plate header */}
               <div className="bg-cover text-paper px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
+                  {bulkMode && (
+                    <input 
+                      type="checkbox" 
+                      checked={selectedHouseIds.has(h.id)}
+                      onChange={() => {}}
+                      className="w-4 h-4 rounded text-cover border-paper bg-white cursor-pointer mr-2 accent-brass"
+                    />
+                  )}
                   <DoorOpen size={16} className="text-brass-light" />
                   <span className="font-display text-lg tracking-wide">{h.internalDoorNumber}</span>
                 </div>
@@ -83,20 +156,24 @@ export default function HouseManager() {
                     <p className="text-sm font-medium text-ink">{h.tenantName}</p>
                     <p className="text-xs text-ink-soft flex items-center gap-1 mt-0.5"><Phone size={11} />{h.tenantPhone}</p>
                     <p className="font-mono-tab text-sm text-brass mt-2">₹{h.rentAmount}<span className="text-ink-soft">/mo</span></p>
-                    <button
-                      onClick={() => setVacatingHouse(h)}
-                      className="mt-3 text-xs text-stamp-red font-medium hover:underline"
-                    >
-                      Mark Vacate
-                    </button>
+                    {!bulkMode && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setVacatingHouse(h) }}
+                        className="mt-3 text-xs text-stamp-red font-medium hover:underline"
+                      >
+                        Mark Vacate
+                      </button>
+                    )}
                   </>
                 ) : (
-                  <button
-                    onClick={() => setBookingHouse(h)}
-                    className="mt-1 text-xs bg-cover text-paper px-3 py-1.5 rounded-full font-medium hover:bg-cover-dark transition"
-                  >
-                    Book this house
-                  </button>
+                  !bulkMode && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setBookingHouse(h) }}
+                      className="mt-1 text-xs bg-cover text-paper px-3 py-1.5 rounded-full font-medium hover:bg-cover-dark transition"
+                    >
+                      Book this house
+                    </button>
+                  )
                 )}
               </div>
             </motion.div>
@@ -115,6 +192,12 @@ export default function HouseManager() {
       {vacatingHouse && (
         <VacateHouseModal house={vacatingHouse} user={user} onClose={() => setVacatingHouse(null)} onDone={refresh} />
       )}
+      
+      <BulkActions 
+        selectedHouses={houses.filter(h => selectedHouseIds.has(h.id))}
+        onAction={handleBulkAction}
+        onClear={() => setSelectedHouseIds(new Set())}
+      />
     </div>
   )
 }

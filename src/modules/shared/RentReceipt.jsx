@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { X, Printer } from 'lucide-react'
+import { X, Printer, MessageCircle } from 'lucide-react'
 import { getAppConfig } from '../../services/configService'
+import { sendWhatsAppMessage, generateRentReceiptMessage } from '../../services/whatsappService'
 
 export default function RentReceipt({ payment, house, onClose }) {
   const [config, setConfig] = useState(null)
@@ -23,6 +24,22 @@ export default function RentReceipt({ payment, house, onClose }) {
         <div className="flex items-center justify-between p-4 border-b border-brass/20 print:hidden bg-paper">
           <h3 className="font-semibold text-ink">Rent Receipt</h3>
           <div className="flex gap-2">
+            <button 
+              onClick={() => {
+                const msg = generateRentReceiptMessage(
+                  payment.recordedBy?.name || 'Tenant',
+                  house?.internalDoorNumber || payment.houseId,
+                  payment.month,
+                  payment.amount,
+                  payment.applicationNumber || payment.id.slice(-6)
+                )
+                sendWhatsAppMessage(house?.tenantPhone || '', msg)
+              }}
+              className="p-2 text-green-600 hover:bg-brass/10 rounded-full"
+              title="Share via WhatsApp"
+            >
+              <MessageCircle size={18} />
+            </button>
             <button onClick={handlePrint} className="p-2 text-ink-soft hover:bg-brass/10 rounded-full">
               <Printer size={18} />
             </button>

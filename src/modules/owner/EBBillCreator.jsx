@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { listHouses, setEbOverride } from '../../services/houseService'
 import { calculateEbSplit, createEbBillCycle, listEbBillCycles } from '../../services/ebBillService'
 import { useToast } from '../shared/ui/Toast'
+import { createGoogleCalendarLink } from '../../utils/calendarLinks'
+import { CalendarPlus } from 'lucide-react'
 
 export default function EBBillCreator() {
   const { showToast } = useToast()
@@ -12,6 +14,7 @@ export default function EBBillCreator() {
   const [cycleLabel, setCycleLabel] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [saving, setSaving] = useState(false)
+  const [createdCycle, setCreatedCycle] = useState(null)
 
   useEffect(() => {
     refresh()
@@ -71,6 +74,7 @@ export default function EBBillCreator() {
         cycleMonths: Number(cycleMonths),
         dueDate,
       })
+      setCreatedCycle({ label: cycleLabel, dueDate })
       setTotalAmount('')
       setCycleLabel('')
       setDueDate('')
@@ -156,6 +160,22 @@ export default function EBBillCreator() {
           {saving ? 'Creating…' : 'Create & Send Bill'}
         </button>
       </form>
+
+      {createdCycle && (
+        <div className="bg-paper-raised border border-stamp-green p-3 rounded-lg flex items-center justify-between shadow-sm">
+          <span className="text-sm font-medium text-ink flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-stamp-green"></span>
+            Cycle {createdCycle.label} created!
+          </span>
+          <a
+            href={createGoogleCalendarLink({ title: `EB Bill Due: ${createdCycle.label}`, description: 'Collect EB Bills from tenants', date: createdCycle.dueDate, allDay: true })}
+            target="_blank" rel="noopener noreferrer"
+            className="text-xs bg-paper border border-brass/30 px-3 py-1.5 rounded-md text-brand hover:bg-brass/5 flex items-center gap-1.5"
+          >
+            <CalendarPlus size={14} /> Add due date to Calendar
+          </a>
+        </div>
+      )}
 
       {/* Past cycles */}
       <div>

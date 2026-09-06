@@ -3,6 +3,7 @@ import { updateOwnProfile } from '../../services/authService'
 import { uploadUnsigned } from '../../services/cloudinaryService'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../shared/ui/Toast'
+import PhotoCropper from '../shared/ui/PhotoCropper'
 
 export default function OwnerProfile() {
   const { user } = useAuth()
@@ -12,13 +13,13 @@ export default function OwnerProfile() {
   const [photoUrl, setPhotoUrl] = useState(user?.profilePhotoUrl || '')
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [cropFile, setCropFile] = useState(null)
 
-  async function handlePhotoChange(e) {
-    const file = e.target.files[0]
-    if (!file) return
+  async function handleCropDone(blob) {
+    setCropFile(null)
     setUploading(true)
     try {
-      const { url } = await uploadUnsigned(file, 'profile-photos')
+      const { url } = await uploadUnsigned(blob, 'profile-photos')
       setPhotoUrl(url)
       showToast({ message: "Photo uploaded successfully", type: "success" })
     } catch (err) {
@@ -55,11 +56,21 @@ export default function OwnerProfile() {
           <div>
             <label className="text-xs text-brand font-medium cursor-pointer">
               {uploading ? 'Uploading…' : 'Change photo'}
-              <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} disabled={uploading} />
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                if (e.target.files[0]) setCropFile(e.target.files[0])
+              }} disabled={uploading} />
             </label>
             <p className="text-xs text-ink-soft mt-1">{user?.role === 'admin' ? 'Super Admin' : 'Owner'}</p>
           </div>
         </div>
+
+        {cropFile && (
+          <PhotoCropper 
+            file={cropFile} 
+            onCancel={() => setCropFile(null)} 
+            onCrop={handleCropDone} 
+          />
+        )}
 
         <div>
           <label className="text-sm text-ink-soft">Name</label>
@@ -77,6 +88,25 @@ export default function OwnerProfile() {
           <label className="text-sm text-ink-soft">Email</label>
           <input value={user?.email || ''} disabled
             className="mt-1 w-full border border-brass/25 bg-paper rounded-lg px-3 py-2 text-sm text-ink-soft" />
+        </div>
+
+        <div className="pt-2 border-t border-brass/20">
+          <label className="flex items-center justify-between text-sm font-medium text-ink cursor-pointer">
+            <span className="flex items-center gap-2">
+              Two-Factor Authentication
+              {user?.twoFactorEnabled && <span className="px-2 py-0.5 bg-stamp-green/10 text-stamp-green rounded-full text-xs">Enabled</span>}
+            </span>
+            <input 
+              type="checkbox" 
+              className="toggle-checkbox"
+              checked={user?.twoFactorEnabled || false}
+              onChange={(e) => {
+                showToast({ message: "2FA configuration flow requires custom OTP UI (Scaffold active)", type: "info" })
+                // updateOwnProfile({ uid: user.uid, twoFactorEnabled: e.target.checked, twoFactorPhone: phone })
+              }}
+            />
+          </label>
+          <p className="text-xs text-ink-soft mt-1">When enabled, you'll receive an OTP on your phone during login.</p>
         </div>
 
         <button disabled={saving} className="w-full bg-brand text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-60">

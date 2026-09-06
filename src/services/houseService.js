@@ -236,12 +236,6 @@ export async function cancelRentRevision(houseId) {
   })
 }
 
-export async function setEbOverride(houseId, { hasOwnEbMeter, ebShareOverrideMonths }) {
-  await updateDoc(doc(db, 'houses', houseId), {
-    hasOwnEbMeter: !!hasOwnEbMeter,
-    ebShareOverrideMonths: ebShareOverrideMonths ?? null,
-  })
-}
 
 // Tenant-controlled: hide their phone number from the neighbor directory.
 // It's always still visible to the owner via the full house doc.

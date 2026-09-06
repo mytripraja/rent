@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Bell, BellRing, Check } from 'lucide-react'
+import { Bell, BellRing, Check, MessageCircle } from 'lucide-react'
+import { sendWhatsAppMessage, generateRentReminderMessage } from '../../services/whatsappService'
 import { checkAndCreateReminders, getReminderStatus, sendReminder } from '../../services/reminderService'
-import { getHouseTenants } from '../../services/houseService'
+import { listHouses } from '../../services/houseService'
 import { useToast } from '../shared/ui/Toast'
 
 export default function PaymentReminders() {
@@ -25,14 +26,6 @@ export default function PaymentReminders() {
       for (const house of houses) {
         const sent = await getReminderStatus(house.id, month)
         statusMap[house.id] = sent
-        
-        // Also fetch tenant ID so we can send notification
-        if (!house.tenantUid) {
-           const tenants = await getHouseTenants(house.id)
-           if (tenants.length > 0) {
-             house.tenantUid = tenants[0].id // just take first
-           }
-        }
       }
       
       setUnpaidHouses(houses)
@@ -130,13 +123,24 @@ export default function PaymentReminders() {
                   <Check size={14} /> Sent
                 </span>
               ) : (
-                <button 
-                  onClick={() => handleSend(house)}
-                  disabled={sending || !house.tenantUid}
-                  className="text-xs text-brand hover:underline flex items-center gap-1 disabled:opacity-50 disabled:no-underline"
-                >
-                  <BellRing size={14} /> Send Reminder
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => handleSend(house)}
+                    disabled={sending || !house.tenantUid}
+                    className="text-xs text-brand hover:underline flex items-center gap-1 disabled:opacity-50 disabled:no-underline"
+                  >
+                    <BellRing size={14} /> Remind in App
+                  </button>
+                  <button
+                    onClick={() => {
+                      const msg = generateRentReminderMessage(house.tenantName || 'Tenant', house.internalDoorNumber || house.id, month, house.rentAmount || 0)
+                      sendWhatsAppMessage(house.tenantPhone || '', msg)
+                    }}
+                    className="text-xs text-green-600 hover:underline flex items-center gap-1"
+                  >
+                    <MessageCircle size={14} /> WhatsApp
+                  </button>
+                </div>
               )}
             </div>
           )

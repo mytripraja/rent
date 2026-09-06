@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { listEventsForMonth, createEvent } from '../../services/eventService'
 import { useAuth } from '../../context/AuthContext'
-import { Calendar, Plus } from 'lucide-react'
+import { Calendar, Plus, CalendarPlus } from 'lucide-react'
+import { createGoogleCalendarLink } from '../../utils/calendarLinks'
 
 export default function EventCalendar() {
   const { user } = useAuth()
@@ -74,10 +75,17 @@ export default function EventCalendar() {
 
       <div className="space-y-4">
         {events.map(ev => (
-          <div key={ev.id} className="bg-paper-raised p-4 rounded-lg shadow-sm border-l-4 border-cover">
-            <h3 className="font-medium text-lg">{ev.title}</h3>
+          <div key={ev.id} className="bg-paper-raised p-4 rounded-lg shadow-sm border-l-4 border-cover relative">
+            <h3 className="font-medium text-lg pr-10">{ev.title}</h3>
             <p className="text-sm text-ink-soft mb-2">{ev.date} at {ev.time} • {ev.type}</p>
-            {ev.description && <p className="text-sm">{ev.description}</p>}
+            {ev.description && <p className="text-sm mb-3">{ev.description}</p>}
+            <a 
+              href={createGoogleCalendarLink({ title: ev.title, description: ev.description, date: ev.date, time: ev.time, allDay: false })}
+              target="_blank" rel="noopener noreferrer"
+              className="text-xs text-brand hover:underline flex items-center gap-1 w-max"
+            >
+              <CalendarPlus size={14} /> Add to Google Calendar
+            </a>
           </div>
         ))}
         {events.length === 0 && <p className="text-ink-soft text-center py-8">No events this month.</p>}

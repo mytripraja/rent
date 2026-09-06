@@ -122,38 +122,55 @@ export default function RentApprovalQueue() {
             : 0
 
           return (
-            <motion.div
-              layout
-              exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
-              key={p.id}
-              className="bg-paper-raised rounded-xl border border-brass/20 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
-            >
-              <div>
-                <p className="text-sm font-medium text-ink">
-                  House {house?.internalDoorNumber || p.houseId} · {p.month} · ₹{p.amount}
-                  {p.uploadedByOwner && <span className="ml-2 text-xs text-blue-600">(Uploaded by Owner)</span>}
-                </p>
-                <p className="text-xs text-ink-soft">
-                  Mode: {p.mode}{p.mode === 'cash' && ` · Received by ${p.cashReceivedBy}`}{p.mode === 'neighbor' && ` · Via neighbor house ${houseMap[p.neighborHouseId]?.internalDoorNumber || p.neighborHouseId}`}
-                </p>
-                <p className="text-xs text-ink-soft">Sent: {p.dateSent} · App# {p.applicationNumber}</p>
-                {p.recordedBy && <p className="text-xs text-ink-soft">Entered by {p.recordedBy.name}</p>}
-                {lateFee > 0 && <p className="text-xs text-stamp-red font-medium mt-1">Late fee: ₹{lateFee}</p>}
-                {p.proofUrl && (
-                  <a href={p.proofUrl} target="_blank" rel="noreferrer" className="text-xs text-brand hover:underline mt-1 inline-block">
-                    View proof screenshot
-                  </a>
-                )}
+            <div key={p.id} className="relative mb-3 overflow-hidden rounded-xl bg-paper-raised border border-brass/20 shadow-sm">
+              <div className="absolute inset-0 flex justify-between items-center px-6" aria-hidden="true">
+                <div className="text-red-600 font-medium flex items-center gap-2">✕ Reject</div>
+                <div className="text-stamp-green font-medium flex items-center gap-2">Approve ✓</div>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => handleApprove(p)} className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg font-medium">
-                  Approve
-                </button>
-                <button onClick={() => setRejectingId(p.id)} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-lg font-medium">
-                  Reject
-                </button>
+              <motion.div
+                layout
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.7}
+                onDragEnd={(e, info) => {
+                  if (info.offset.x > 100) {
+                    handleApprove(p)
+                  } else if (info.offset.x < -100) {
+                    setRejectingId(p.id)
+                  }
+                }}
+                className="bg-paper-raised relative z-10 p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between shadow-sm"
+              >
+                <div>
+                  <p className="text-sm font-medium text-ink">
+                    House {house?.internalDoorNumber || p.houseId} · {p.month} · ₹{p.amount}
+                    {p.uploadedByOwner && <span className="ml-2 text-xs text-blue-600">(Uploaded by Owner)</span>}
+                  </p>
+                  <p className="text-xs text-ink-soft">
+                    Mode: {p.mode}{p.mode === 'cash' && ` · Received by ${p.cashReceivedBy}`}{p.mode === 'neighbor' && ` · Via neighbor house ${houseMap[p.neighborHouseId]?.internalDoorNumber || p.neighborHouseId}`}
+                  </p>
+                  <p className="text-xs text-ink-soft">Sent: {p.dateSent} · App# {p.applicationNumber}</p>
+                  {p.recordedBy && <p className="text-xs text-ink-soft">Entered by {p.recordedBy.name}</p>}
+                  {lateFee > 0 && <p className="text-xs text-stamp-red font-medium mt-1">Late fee: ₹{lateFee}</p>}
+                  {p.proofUrl && (
+                    <a href={p.proofUrl} target="_blank" rel="noreferrer" className="text-xs text-brand hover:underline mt-1 inline-block">
+                      View proof screenshot
+                    </a>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleApprove(p)} className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg font-medium">
+                    Approve
+                  </button>
+                  <button onClick={() => setRejectingId(p.id)} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-lg font-medium">
+                    Reject
+                  </button>
+                </div>
+              </motion.div>
+              <div className="text-center text-xs text-ink-soft py-1 absolute bottom-0 w-full z-20 pointer-events-none opacity-60 bg-paper-raised/80">
+                ← Reject | Approve →
               </div>
-            </motion.div>
+            </div>
           )
         })}
       </AnimatePresence>

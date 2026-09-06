@@ -1,6 +1,6 @@
 import { collection, doc, setDoc, getDocs, deleteDoc, query, orderBy, where } from 'firebase/firestore'
 import { db } from './firebase'
-import { uploadImage } from './cloudinaryService'
+import { uploadUnsigned } from './cloudinaryService'
 
 const COLLECTION = 'expenses'
 
@@ -9,7 +9,7 @@ export async function addExpense({ category, description, amount, date, paidBy, 
   let receiptUrl = null
   
   if (receiptFile) {
-    receiptUrl = await uploadImage(receiptFile, 'expenses')
+    receiptUrl = await uploadUnsigned(receiptFile, 'expenses')
   }
 
   const data = {

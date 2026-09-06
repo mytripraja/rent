@@ -7,6 +7,10 @@ import PropertySetup from './PropertySetup'
 import OwnerManager from './OwnerManager'
 import ActivityLog from './ActivityLog'
 import YearEndSummary from './YearEndSummary'
+import EmailReport from './EmailReport'
+import DataBackup from './DataBackup'
+import GoogleSheetsExport from './GoogleSheetsExport'
+import TallyExport from './TallyExport'
 import { useAuth } from '../../context/AuthContext'
 
 const ITEMS = [
@@ -16,6 +20,10 @@ const ITEMS = [
   { id: 'settings', label: 'App Settings', icon: <Settings size={24} /> },
   { id: 'activity', label: 'Activity Log', icon: '📜' },
   { id: 'yearEnd', label: 'Year-End Summary', icon: '📊' },
+  { id: 'emailReport', label: 'Email Report', icon: '✉️' },
+  { id: 'dataBackup', label: 'Data Backup', icon: '💾' },
+  { id: 'googleSheets', label: 'Google Sheets Export', icon: '📝' },
+  { id: 'tally', label: 'Tally Export', icon: '💼' },
 ]
 
 export default function MoreMenu() {
@@ -44,6 +52,10 @@ export default function MoreMenu() {
             {view === 'settings' && <AppSettings />}
             {view === 'activity' && <ActivityLog />}
             {view === 'yearEnd' && <YearEndSummary />}
+            {view === 'emailReport' && <EmailReport />}
+            {view === 'dataBackup' && <DataBackup />}
+            {view === 'googleSheets' && <GoogleSheetsExport />}
+            {view === 'tally' && <TallyExport />}
             {view === 'owners' && isAdmin && <OwnerManager />}
           </motion.div>
         ) : (

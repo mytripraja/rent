@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Bell, CheckCheck, Info, FileText, CheckCircle, AlertTriangle, AlertCircle, RefreshCw, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { subscribeToNotifications, markAsRead, markAllAsRead } from '../../../services/notificationService';
+import { showBrowserNotification } from '../../../services/pushService';
 
 export default function NotificationBell({ userId }) {
   const [notifications, setNotifications] = useState([]);
@@ -11,7 +12,12 @@ export default function NotificationBell({ userId }) {
   useEffect(() => {
     if (!userId) return;
     const unsubscribe = subscribeToNotifications(userId, (notifs) => {
-      setNotifications(notifs);
+      setNotifications(prev => {
+        if (prev.length > 0 && notifs.length > 0 && notifs[0].id !== prev[0].id && !notifs[0].read) {
+          showBrowserNotification(notifs[0].title, notifs[0].message)
+        }
+        return notifs
+      })
     });
     return () => unsubscribe();
   }, [userId]);

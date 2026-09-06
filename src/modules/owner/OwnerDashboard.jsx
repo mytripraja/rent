@@ -25,6 +25,7 @@ const DocumentVerification = React.lazy(() => import('./DocumentVerification'))
 const ExpenseTracker = React.lazy(() => import('./ExpenseTracker'))
 const CommunityBoard = React.lazy(() => import('../shared/CommunityBoard'))
 const AnalyticsDashboard = React.lazy(() => import('./AnalyticsDashboard'))
+const PaymentCalendar = React.lazy(() => import('./PaymentCalendar'))
 const MoreMenu = React.lazy(() => import('./MoreMenu'))
 import LoadingScreen from '../shared/LoadingScreen'
 import SearchBar from '../shared/SearchBar'
@@ -33,6 +34,7 @@ import IconButton from '../shared/ui/IconButton'
 import ThemeToggle from '../shared/ui/ThemeToggle'
 import NotificationBell from '../shared/ui/NotificationBell'
 import LanguageSwitcher from '../shared/ui/LanguageSwitcher'
+import PropertySwitcher from './PropertySwitcher'
 import { OWNER_TOUR_STEPS } from './ownerTourSteps'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
@@ -41,6 +43,7 @@ const TABS = [
   { id: 'home', route: 'home', label: 'Home', icon: Home },
   { id: 'houses', route: 'houses', label: 'Houses', icon: DoorOpen },
   { id: 'tenants', route: 'tenants', label: 'Tenants', icon: Users },
+  { id: 'calendar', route: 'calendar', label: 'Calendar', icon: BarChart },
   { id: 'approvals', route: 'approvals', label: 'Rent Approvals', icon: CheckCircle2 },
   { id: 'manualEntry', route: 'manual-entry', label: 'Manual Entry', icon: PenSquare },
   { id: 'eb', route: 'eb-bill', label: 'EB Bill', icon: Zap },
@@ -91,7 +94,10 @@ export default function OwnerDashboard() {
             {user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} alt="" className="w-full h-full object-cover" /> : user?.name?.[0]}
           </div>
           <div>
-            <h1 className="font-display text-lg leading-tight">Rental Manager</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-display text-lg leading-tight">Rental Manager</h1>
+              <PropertySwitcher />
+            </div>
             <p className="text-xs text-brass-light">{user?.name}{user?.role === 'admin' ? ' · Super Admin' : ''}</p>
           </div>
         </div>
@@ -142,6 +148,7 @@ export default function OwnerDashboard() {
                 <Route path="home" element={<OwnerHome onNavigate={(t) => navigate(`/owner/${TABS.find(x => x.id === t)?.route || 'home'}`)} />} />
                 <Route path="houses" element={<HouseManager />} />
                 <Route path="tenants" element={<TenantsSection openHouseId={searchHouseId} onOpenHouseHandled={() => setSearchHouseId(null)} />} />
+                <Route path="calendar" element={<PaymentCalendar />} />
                 <Route path="approvals" element={<RentApprovalQueue />} />
                 <Route path="eb-bill" element={<EBBillCreator />} />
                 <Route path="eb-approvals" element={<EBApprovalQueue />} />

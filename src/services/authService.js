@@ -9,6 +9,7 @@ import {
   getRedirectResult,
   linkWithCredential,
   sendPasswordResetEmail,
+  PhoneAuthProvider,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { auth, db, authedFetch } from './firebase'
@@ -174,4 +175,15 @@ export async function updateTenantContact({ tenantUid, houseId, newEmail, newPho
 
 export async function resetPassword(email) {
   await sendPasswordResetEmail(auth, email)
+}
+
+export async function verifyPhoneNumber(phoneNumber, recaptchaVerifier) {
+  const provider = new PhoneAuthProvider(auth)
+  const verificationId = await provider.verifyPhoneNumber(phoneNumber, recaptchaVerifier)
+  return verificationId
+}
+
+export async function confirmOTP(verificationId, otp) {
+  const credential = PhoneAuthProvider.credential(verificationId, otp)
+  await linkWithCredential(auth.currentUser, credential)
 }

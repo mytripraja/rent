@@ -1,7 +1,21 @@
 import { useEffect, useState } from 'react'
 import { listActivities } from '../../services/activityLogService'
 import { FileText, Home, DollarSign, Bell, MessageSquareWarning, Settings, Zap } from 'lucide-react'
-import { formatDistanceToNow } from 'date-fns'
+
+function timeAgo(timestamp) {
+  if (!timestamp) return ''
+  const seconds = Math.floor((Date.now() - (timestamp?.toDate ? timestamp.toDate().getTime() : timestamp)) / 1000)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} hr ago`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days} day${days > 1 ? 's' : ''} ago`
+  const months = Math.floor(days / 30)
+  return `${months} month${months > 1 ? 's' : ''} ago`
+}
+
 
 const ICON_MAP = {
   rent: DollarSign,
@@ -76,7 +90,7 @@ export default function ActivityLog() {
                     </p>
                     <p className="text-xs text-ink-soft mt-0.5">{act.details}</p>
                     <p className="text-[10px] text-brass mt-1">
-                      {act.timestamp ? formatDistanceToNow(act.timestamp, { addSuffix: true }) : ''}
+                      {timeAgo(act.timestamp)}
                     </p>
                   </div>
                 </div>

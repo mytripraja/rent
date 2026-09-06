@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { listHouses } from '../../services/houseService'
 import { createNotice, listAllNotices, deleteNotice } from '../../services/noticeService'
 import { getTemplates } from '../../services/configService'
+import { sendWhatsAppMessage, generateNoticeMessage } from '../../services/whatsappService'
 import NoticeBanner from '../shared/NoticeBanner'
 import ConfirmDialog from '../shared/ui/ConfirmDialog'
 import { useToast } from '../shared/ui/Toast'
@@ -215,7 +216,19 @@ export default function NoticeManager() {
                   <span className="text-xs text-ink-soft">
                     {expired ? 'Expired' : (isScheduled ? `Scheduled for ${new Date(n.scheduledAt).toLocaleString()}` : 'Active')} · {n.targetHouseIds === 'all' ? 'All houses' : `${n.targetHouseIds.length} house(s)`}
                   </span>
-                  <button onClick={() => setDeletingId(n.id)} className="text-xs text-red-600 hover:underline">Delete</button>
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={() => {
+                        const typeLabel = TYPES.find(t => t.id === n.type)?.label || 'Notice'
+                        const msg = generateNoticeMessage(typeLabel, n.message)
+                        sendWhatsAppMessage('', msg) // No specific number, user selects contacts in WhatsApp
+                      }}
+                      className="text-xs text-green-600 hover:underline"
+                    >
+                      Share via WhatsApp
+                    </button>
+                    <button onClick={() => setDeletingId(n.id)} className="text-xs text-red-600 hover:underline">Delete</button>
+                  </div>
                 </div>
               </div>
             )
