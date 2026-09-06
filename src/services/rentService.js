@@ -4,12 +4,14 @@ import {
   updateDoc,
   doc,
   getDocs,
+  getDoc,
   query,
   where,
   orderBy,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { uploadUnsigned } from './cloudinaryService'
+import { createNotification } from './notificationService'
 
 const paymentsRef = collection(db, 'rentPayments')
 
@@ -79,19 +81,69 @@ export async function listRentHistory(houseId) {
 }
 
 export async function approvePayment(paymentId, { neighborCollectedBy, actionedBy } = {}) {
-  await updateDoc(doc(db, 'rentPayments', paymentId), {
+  const paymentRef = doc(db, 'rentPayments', paymentId)
+  const snap = await getDoc(paymentRef)
+  const paymentData = snap.data()
+
+  await updateDoc(paymentRef, {
     status: 'approved',
     approvedAt: Date.now(),
     actionedBy: actionedBy || null,
     ...(neighborCollectedBy ? { neighborCollectedBy } : {}),
   })
+
+  if (paymentData?.tenantId) {
+    await createNotification({
+      recipientId: paymentData.tenantId,
+      recipientType: 'tenant',
+      type: 'rent_approved',
+      title: 'Rent Approved',
+      message: `Your rent payment for ${paymentData.month} has been approved.`
+    })
+  }
+
+  // Task 2: Log activity
+  const { logActivity } = await import('./activityLogService')
+  await logActivity({
+    action: 'approved',
+    entityType: 'rent',
+    entityId: paymentId,
+    performedBy: actionedBy?.uid || null,
+    performedByName: actionedBy?.name || 'Owner',
+    details: `Approved rent payment for ${paymentData?.month}`
+  })
 }
 
 export async function rejectPayment(paymentId, reason, actionedBy) {
-  await updateDoc(doc(db, 'rentPayments', paymentId), {
+  const paymentRef = doc(db, 'rentPayments', paymentId)
+  const snap = await getDoc(paymentRef)
+  const paymentData = snap.data()
+
+  await updateDoc(paymentRef, {
     status: 'rejected',
     rejectionReason: reason,
     actionedBy: actionedBy || null,
+  })
+
+  if (paymentData?.tenantId) {
+    await createNotification({
+      recipientId: paymentData.tenantId,
+      recipientType: 'tenant',
+      type: 'rent_rejected',
+      title: 'Rent Rejected',
+      message: `Your rent payment for ${paymentData.month} was rejected. Reason: ${reason}`
+    })
+  }
+
+  // Task 2: Log activity
+  const { logActivity } = await import('./activityLogService')
+  await logActivity({
+    action: 'rejected',
+    entityType: 'rent',
+    entityId: paymentId,
+    performedBy: actionedBy?.uid || null,
+    performedByName: actionedBy?.name || 'Owner',
+    details: `Rejected rent payment for ${paymentData?.month}. Reason: ${reason}`
   })
 }
 
@@ -129,4 +181,40 @@ export function countMonthsPending(payments) {
     month = shiftMonth(month, -1)
   }
   return count
+}
+
+export async function getMonthlyPaymentTotal(houseId, month) {
+  const snap = await getDocs(
+    query(
+      paymentsRef, 
+      where('houseId', '==', houseId), 
+      where('month', '==', month),
+      where('status', '==', 'approved')
+    )
+  )
+  return snap.docs.reduce((total, doc) => total + (Number(doc.data().amount) || 0), 0)
+}
+
+export function calculateLateFee(rentAmount, dueDate, paymentDate, config) {
+  const { lateFeeType, lateFeeAmount, lateFeeGraceDays } = config
+  const due = new Date(dueDate)
+  const paid = new Date(paymentDate)
+  
+  // Calculate difference in days
+  const diffTime = Math.max(0, paid.getTime() - due.getTime())
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  
+  if (diffDays <= lateFeeGraceDays) {
+    return 0
+  }
+  
+  if (lateFeeType === 'flat') {
+    return lateFeeAmount
+  } else if (lateFeeType === 'per_day') {
+    // Subtract grace days? Usually grace days just mean no fee if within grace, otherwise fee from day 1 or day after grace?
+    // Let's charge for all late days if they missed the grace period.
+    return diffDays * lateFeeAmount
+  }
+  
+  return 0
 }

@@ -111,12 +111,147 @@ export default function TenantProfile({ houseId, onBack }) {
         </div>
       )}
 
+      {/* Task 3 & 7: Notes and Comm Log */}
+      <HouseNotes houseId={house.id} />
+      {!isVacant && <CommLog houseId={house.id} tenantName={house.tenantName} />}
+
       {editingContact && (
         <EditContactModal house={house} onClose={() => setEditingContact(false)} onSaved={load} />
       )}
       {addingAdvance && (
         <AddAdvanceModal house={house} user={user} onClose={() => setAddingAdvance(false)} onSaved={load} />
       )}
+    </div>
+  )
+}
+
+function HouseNotes({ houseId }) {
+  const { user } = useAuth()
+  const [notes, setNotes] = useState([])
+  const [text, setText] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { load() }, [houseId])
+
+  async function load() {
+    const { listNotes } = await import('../../services/notesService')
+    setNotes(await listNotes(houseId))
+  }
+
+  async function handleAdd(e) {
+    e.preventDefault()
+    if (!text.trim()) return
+    setSaving(true)
+    const { addNote } = await import('../../services/notesService')
+    await addNote(houseId, { text, createdBy: user?.uid, createdByName: user?.name })
+    setText('')
+    setSaving(false)
+    load()
+  }
+
+  async function handleDelete(noteId) {
+    if (!window.confirm('Delete note?')) return
+    const { deleteNote } = await import('../../services/notesService')
+    await deleteNote(houseId, noteId)
+    load()
+  }
+
+  return (
+    <div className="bg-[#fffdf2] rounded-2xl border border-amber-200 shadow-sm p-5 space-y-4">
+      <h3 className="font-semibold text-ink text-sm flex items-center gap-2">
+        <span className="text-amber-500">🔒</span> Private Notes
+      </h3>
+      <form onSubmit={handleAdd} className="flex gap-2">
+        <textarea 
+          rows={2} 
+          placeholder="Add a private note (owners only)..." 
+          value={text} 
+          onChange={e => setText(e.target.value)}
+          className="flex-1 border border-brass/30 rounded-lg px-3 py-2 text-sm bg-white" 
+        />
+        <button disabled={saving || !text.trim()} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium h-fit">Add</button>
+      </form>
+      <div className="space-y-3">
+        {notes.map(n => (
+          <div key={n.id} className="bg-white p-3 rounded-lg border border-amber-100 text-sm">
+            <p className="text-ink whitespace-pre-wrap">{n.text}</p>
+            <div className="flex justify-between mt-2 text-[11px] text-ink-soft">
+              <span>By {n.createdByName} · {new Date(n.createdAt).toLocaleDateString()}</span>
+              <button onClick={() => handleDelete(n.id)} className="text-red-500 hover:underline">Delete</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function CommLog({ houseId, tenantName }) {
+  const { user } = useAuth()
+  const [logs, setLogs] = useState([])
+  const [form, setForm] = useState({ type: 'call', date: new Date().toISOString().split('T')[0], summary: '' })
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { load() }, [houseId])
+
+  async function load() {
+    const { listCommLogs } = await import('../../services/commLogService')
+    setLogs(await listCommLogs(houseId))
+  }
+
+  async function handleAdd(e) {
+    e.preventDefault()
+    if (!form.summary.trim()) return
+    setSaving(true)
+    const { addCommLog } = await import('../../services/commLogService')
+    await addCommLog({
+      houseId,
+      tenantName,
+      ...form,
+      loggedBy: user?.uid,
+      loggedByName: user?.name
+    })
+    setForm(f => ({ ...f, summary: '' }))
+    setSaving(false)
+    load()
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm('Delete log?')) return
+    const { deleteCommLog } = await import('../../services/commLogService')
+    await deleteCommLog(id)
+    load()
+  }
+
+  return (
+    <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-4">
+      <h3 className="font-semibold text-ink text-sm">Communication Log</h3>
+      <form onSubmit={handleAdd} className="space-y-3 bg-paper p-3 rounded-xl border border-brass/10">
+        <div className="flex gap-2">
+          <select value={form.type} onChange={e => setForm({...form, type: e.target.value})} className="border border-brass/30 rounded-lg px-2 py-1 text-sm bg-white">
+            <option value="call">Call</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="sms">SMS</option>
+            <option value="in_person">In Person</option>
+          </select>
+          <input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} className="border border-brass/30 rounded-lg px-2 py-1 text-sm bg-white" />
+        </div>
+        <textarea rows={2} placeholder="Summary of conversation..." value={form.summary} onChange={e => setForm({...form, summary: e.target.value})} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm bg-white" />
+        <button disabled={saving || !form.summary.trim()} className="bg-brand text-white px-4 py-1.5 rounded-lg text-sm font-medium">Log Entry</button>
+      </form>
+      
+      <div className="space-y-3">
+        {logs.map(l => (
+          <div key={l.id} className="text-sm border-l-2 border-brass/40 pl-3 py-1">
+            <div className="flex justify-between items-start">
+              <span className="font-medium text-ink capitalize">{l.type.replace('_', ' ')} · {l.date}</span>
+              <button onClick={() => handleDelete(l.id)} className="text-[10px] text-red-500 hover:underline">Delete</button>
+            </div>
+            <p className="text-ink-soft mt-1">{l.summary}</p>
+            <p className="text-[10px] text-brass mt-1">Logged by {l.loggedByName}</p>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

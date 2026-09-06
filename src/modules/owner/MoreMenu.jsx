@@ -5,7 +5,8 @@ import OwnerProfile from './OwnerProfile'
 import RentRevision from './RentRevision'
 import PropertySetup from './PropertySetup'
 import OwnerManager from './OwnerManager'
-import AppSettings from './AppSettings'
+import ActivityLog from './ActivityLog'
+import YearEndSummary from './YearEndSummary'
 import { useAuth } from '../../context/AuthContext'
 
 const ITEMS = [
@@ -13,6 +14,8 @@ const ITEMS = [
   { id: 'rentRevision', label: 'Rent Revision', icon: '📈' },
   { id: 'setup', label: 'Property Setup', icon: '🏗️' },
   { id: 'settings', label: 'App Settings', icon: <Settings size={24} /> },
+  { id: 'activity', label: 'Activity Log', icon: '📜' },
+  { id: 'yearEnd', label: 'Year-End Summary', icon: '📊' },
 ]
 
 export default function MoreMenu() {
@@ -39,6 +42,8 @@ export default function MoreMenu() {
             {view === 'rentRevision' && <RentRevision />}
             {view === 'setup' && <PropertySetup />}
             {view === 'settings' && <AppSettings />}
+            {view === 'activity' && <ActivityLog />}
+            {view === 'yearEnd' && <YearEndSummary />}
             {view === 'owners' && isAdmin && <OwnerManager />}
           </motion.div>
         ) : (

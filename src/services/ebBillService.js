@@ -2,6 +2,7 @@ import { collection, addDoc, getDocs, query, orderBy, where, updateDoc, doc } fr
 import { db } from './firebase'
 import { uploadUnsigned } from './cloudinaryService'
 import { listHouses } from './houseService'
+import { createBulkNotifications } from './notificationService'
 
 const billsRef = collection(db, 'ebBills')
 
@@ -73,6 +74,27 @@ export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, 
     shares,
     createdAt: Date.now(),
   })
+
+  // Notify tenants
+  const notifications = shares
+    .map(share => {
+      const house = houses.find(h => h.id === share.houseId)
+      if (house && house.tenantId) {
+        return {
+          recipientId: house.tenantId,
+          recipientType: 'tenant',
+          type: 'eb_bill_created',
+          title: 'New EB Bill',
+          message: `Your share for ${cycleLabel} is ₹${share.shareAmount}`
+        }
+      }
+      return null
+    })
+    .filter(Boolean)
+
+  if (notifications.length > 0) {
+    await createBulkNotifications(notifications)
+  }
 
   return { id: docRef.id, shares }
 }

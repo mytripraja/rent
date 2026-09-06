@@ -3,6 +3,8 @@ import { submitTenantComplaint, listComplaintsForHouse } from '../../services/co
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../shared/ui/Toast'
 
+import { canPerformAction } from '../../utils/rateLimit'
+
 export default function RaiseComplaint() {
   const { user } = useAuth()
   const { showToast } = useToast()
@@ -25,6 +27,10 @@ export default function RaiseComplaint() {
 
   async function submit(e) {
     e.preventDefault()
+    if (!canPerformAction('raise_complaint', 5000)) {
+      showToast({ message: "Please wait before submitting again.", type: "warning" })
+      return
+    }
     setSubmitting(true)
     try {
       await submitTenantComplaint({ fromHouseId: user.houseId, tenantId: user.uid, message })

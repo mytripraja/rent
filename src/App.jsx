@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { LanguageProvider } from './context/LanguageContext'
 import { ToastProvider } from './modules/shared/ui/Toast'
 import LoginPage from './modules/shared/LoginPage'
 import ProtectedRoute from './modules/shared/ProtectedRoute'
@@ -17,30 +18,32 @@ function RootRedirect() {
 export default function App() {
   return (
     <AuthProvider>
-      <ToastProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route
-              path="/owner/*"
-              element={
-                <ProtectedRoute role="owner">
-                  <OwnerDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/tenant/*"
-              element={
-                <ProtectedRoute role="tenant">
-                  <TenantDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/" element={<RootRedirect />} />
-          </Routes>
-        </BrowserRouter>
-      </ToastProvider>
+      <LanguageProvider>
+        <ToastProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route
+                path="/owner/*"
+                element={
+                  <ProtectedRoute role="owner">
+                    <OwnerDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/tenant/*"
+                element={
+                  <ProtectedRoute role="tenant">
+                    <TenantDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/" element={<RootRedirect />} />
+            </Routes>
+          </BrowserRouter>
+        </ToastProvider>
+      </LanguageProvider>
     </AuthProvider>
   )
 }

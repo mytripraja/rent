@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { postMessage, subscribeToMessages, deleteMessage } from '../../services/communityService'
+import { canPerformAction } from '../../utils/rateLimit'
+import { useToast } from './ui/Toast'
 
 export default function CommunityBoard({ user, canModerate = false }) {
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const bottomRef = useRef(null)
+  const { showToast } = useToast()
 
   useEffect(() => {
     const unsub = subscribeToMessages((msgs) => {
@@ -18,6 +21,10 @@ export default function CommunityBoard({ user, canModerate = false }) {
   async function submit(e) {
     e.preventDefault()
     if (!text.trim()) return
+    if (!canPerformAction('community_post', 3000)) {
+      showToast({ message: "Please wait before posting again.", type: "warning" })
+      return
+    }
     setSending(true)
     try {
       await postMessage({

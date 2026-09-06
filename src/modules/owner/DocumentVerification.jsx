@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
-import { listAllDocuments, getDocumentViewUrl, verifyDocument, requestReupload } from '../../services/documentService'
+import { listAllDocuments, getDocumentViewUrl, verifyDocument, requestReupload, getExpiringDocuments } from '../../services/documentService'
 import { listHouses } from '../../services/houseService'
 import { useToast } from '../shared/ui/Toast'
 
 export default function DocumentVerification() {
   const [docs, setDocs] = useState([])
+  const [expiringDocs, setExpiringDocs] = useState([])
   const [houses, setHouses] = useState([])
   const [loadingId, setLoadingId] = useState(null)
   const [actingId, setActingId] = useState(null)
+  const [expiryDates, setExpiryDates] = useState({})
   const { showToast } = useToast()
 
   useEffect(() => {
@@ -23,14 +25,13 @@ export default function DocumentVerification() {
       console.error(err)
       showToast({ message: "Failed to load houses", type: "error" })
     })
+    getExpiringDocuments().then(setExpiringDocs).catch(console.error)
   }
 
   function houseLabel(houseId) {
     return houses.find((h) => h.id === houseId)?.internalDoorNumber || houseId
   }
 
-  // Signed URLs are minted fresh on click rather than stored, since the whole
-  // point of 'authenticated' delivery is that there's no permanent public link.
   async function handleView(d) {
     setLoadingId(d.id)
     const win = window.open('', '_blank')
@@ -48,7 +49,7 @@ export default function DocumentVerification() {
   async function handleVerify(d) {
     setActingId(d.id)
     try {
-      await verifyDocument(d.id)
+      await verifyDocument(d.id, expiryDates[d.id])
       showToast({ message: 'Document verified successfully', type: 'success' })
       refresh()
     } catch (error) {
@@ -86,6 +87,19 @@ export default function DocumentVerification() {
         <p className="text-sm text-ink-soft">Aadhaar / ration card uploads — visible to you only.</p>
       </div>
 
+      {expiringDocs.length > 0 && (
+        <div className="bg-stamp-amber/10 border border-stamp-amber/30 rounded-lg p-3">
+          <h3 className="text-sm font-semibold text-stamp-amber mb-2">Documents Expiring Soon</h3>
+          <ul className="text-xs space-y-1">
+            {expiringDocs.map(d => (
+              <li key={d.id} className="text-ink-soft">
+                House {houseLabel(d.houseId)}: {d.residentName} - {new Date(d.expiryDate).toLocaleDateString()}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {Object.keys(grouped).length === 0 && (
         <p className="text-sm text-ink-soft">No documents uploaded yet.</p>
       )}
@@ -119,25 +133,41 @@ export default function DocumentVerification() {
                     {d.reuploadRequested && d.reuploadReason && (
                       <p className="text-xs text-stamp-red mt-1">Reason: {d.reuploadReason}</p>
                     )}
+                    {d.expiryDate && (
+                      <p className="text-xs text-stamp-amber mt-1">Expires: {new Date(d.expiryDate).toLocaleDateString()}</p>
+                    )}
                     <p className="text-xs text-brand mt-1.5">
                       {loadingId === d.id ? 'Generating secure link…' : 'View document →'}
                     </p>
                   </button>
-                  <div className="border-t border-brass/10 flex divide-x divide-brass/10">
-                    <button 
-                      onClick={() => handleVerify(d)}
-                      disabled={actingId === d.id || d.verified}
-                      className="flex-1 py-2 text-xs font-medium text-stamp-green hover:bg-stamp-green/5 disabled:opacity-50"
-                    >
-                      Verify ✓
-                    </button>
-                    <button 
-                      onClick={() => handleRequestReupload(d)}
-                      disabled={actingId === d.id}
-                      className="flex-1 py-2 text-xs font-medium text-stamp-red hover:bg-stamp-red/5 disabled:opacity-50"
-                    >
-                      Request Re-upload
-                    </button>
+                  <div className="p-2 border-t border-brass/10 bg-paper">
+                    {!d.verified && (
+                      <div className="flex gap-2 items-center mb-2">
+                        <span className="text-xs text-ink-soft">Expiry (optional):</span>
+                        <input 
+                          type="date" 
+                          className="flex-1 text-xs border border-brass/30 rounded px-2 py-1"
+                          value={expiryDates[d.id] || ''}
+                          onChange={(e) => setExpiryDates(prev => ({...prev, [d.id]: e.target.value}))}
+                        />
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => handleVerify(d)}
+                        disabled={actingId === d.id || d.verified}
+                        className="flex-1 py-1.5 rounded text-xs font-medium bg-stamp-green/10 text-stamp-green hover:bg-stamp-green/20 disabled:opacity-50"
+                      >
+                        Verify ✓
+                      </button>
+                      <button 
+                        onClick={() => handleRequestReupload(d)}
+                        disabled={actingId === d.id}
+                        className="flex-1 py-1.5 rounded text-xs font-medium bg-stamp-red/10 text-stamp-red hover:bg-stamp-red/20 disabled:opacity-50"
+                      >
+                        Request Re-upload
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

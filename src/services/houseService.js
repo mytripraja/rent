@@ -79,6 +79,14 @@ export async function updateHouse(houseId, { govtDoorNumber, internalDoorNumber,
   }
 }
 
+export async function setEbOverride(houseId, data) {
+  await updateDoc(doc(db, 'houses', houseId), data)
+}
+
+export async function setWaterOverride(houseId, data) {
+  await updateDoc(doc(db, 'houses', houseId), data)
+}
+
 export async function deleteHouse(houseId) {
   await deleteDoc(doc(db, 'houses', houseId))
   await deleteDoc(doc(db, 'directory', houseId))
@@ -118,6 +126,17 @@ export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmo
     movedOutAt: null,
     recordedBy: recordedBy || null,
   })
+
+  // Task 2: Log activity
+  const { logActivity } = await import('./activityLogService')
+  await logActivity({
+    action: 'booked',
+    entityType: 'house',
+    entityId: houseId,
+    performedBy: recordedBy?.uid || null,
+    performedByName: recordedBy?.name || 'Owner',
+    details: `Booked house ${house?.internalDoorNumber || houseId} for ${name}`
+  })
 }
 
 // Past tenants across every house — used by the "Old Tenants" tab. Reads the
@@ -136,6 +155,7 @@ export async function listPastTenants() {
 // (runs every 15 min) which disables the tenant's Firebase Auth account 1hr after this call.
 export async function vacateHouse(houseId, { advanceDeducted, deductionReason, balanceReturned, returnDate, returnMode, returnedBy, recordedBy }) {
   const house = await getHouse(houseId)
+  const tenantName = house?.tenantName
 
   await updateDoc(doc(db, 'houses', houseId), {
     status: 'vacant',
@@ -164,6 +184,17 @@ export async function vacateHouse(houseId, { advanceDeducted, deductionReason, b
       vacatedBy: recordedBy || null,
     })
   }
+
+  // Task 2: Log activity
+  const { logActivity } = await import('./activityLogService')
+  await logActivity({
+    action: 'vacated',
+    entityType: 'house',
+    entityId: houseId,
+    performedBy: recordedBy?.uid || null,
+    performedByName: recordedBy?.name || 'Owner',
+    details: `Vacated house ${house?.internalDoorNumber || houseId} (was ${tenantName})`
+  })
 
   return house
 }

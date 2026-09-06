@@ -11,7 +11,12 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function isAdmin() {
+    function isAdmin() {git init
+git add .
+git commit -m "first commit: separated tourism planner apps"
+git branch -M main
+git remote add origin https://github.com/mytripraja/rent.git
+git push -u origin main
       return isSignedIn() && userDoc().data.role == 'admin';
     }
 
@@ -117,6 +122,14 @@ service cloud.firestore {
       allow update, delete: if isOwner();
     }
 
+    // ---- notifications ----
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && resource.data.recipientId == request.auth.uid;
+      allow create: if isOwner() || (isTenant() && request.resource.data.recipientType == 'owner');
+      allow update: if isSignedIn() && resource.data.recipientId == request.auth.uid;
+      allow delete: if isOwner();
+    }
+
     // ---- community board ----
     match /communityMessages/{msgId} {
       allow read: if isSignedIn();
@@ -179,5 +192,62 @@ service cloud.firestore {
       allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
       allow create, update, delete: if isOwner();
     }
+
+    // ---- expenses ----
+    match /expenses/{expenseId} {
+      allow read, write: if isOwner();
+    }
+
+    // ---- waterBills / waterBillPayments ----
+    match /waterBills/{billId} {
+      allow read: if isOwner() || isTenant();
+      allow write: if isOwner();
+    }
+    match /waterBillPayments/{paymentId} {
+      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow update: if isOwner();
+    }
+
+    // ---- maintenanceRequests ----
+    match /maintenanceRequests/{requestId} {
+      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow update, delete: if isOwner();
+    }
+
+    // ---- visitors ----
+    match /visitors/{visitorId} {
+      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow update: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
+      allow delete: if isOwner();
+    }
+
+    // ---- rentAgreements ----
+    match /rentAgreements/{agreementId} {
+      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
+      allow write: if isOwner();
+    }
+
+    // ---- events ----
+    match /events/{eventId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner();
+    }
+
+    // ---- parkingSlots ----
+    match /parkingSlots/{slotId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner();
+    }
+
+    // ---- areaBookings ----
+    match /areaBookings/{bookingId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isOwner();
+    }
   }
 }
+

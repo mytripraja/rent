@@ -40,13 +40,17 @@ export async function getDocumentViewUrl(documentEntry) {
   return getPrivateViewUrl(documentEntry.publicId, documentEntry.resourceType)
 }
 
-export async function verifyDocument(docId) {
-  await updateDoc(doc(db, 'documents', docId), {
+export async function verifyDocument(docId, expiryDate = null) {
+  const updateData = {
     verified: true,
     verifiedAt: Date.now(),
     reuploadRequested: false,
     reuploadReason: null
-  })
+  }
+  if (expiryDate) {
+    updateData.expiryDate = new Date(expiryDate).getTime()
+  }
+  await updateDoc(doc(db, 'documents', docId), updateData)
 }
 
 export async function requestReupload(docId, reason) {
@@ -56,4 +60,14 @@ export async function requestReupload(docId, reason) {
     reuploadRequestedAt: Date.now(),
     verified: false
   })
+}
+
+export async function getExpiringDocuments(daysAhead = 30) {
+  const snap = await getDocs(query(documentsRef, orderBy('expiryDate')))
+  const now = Date.now()
+  const cutoff = now + daysAhead * 24 * 60 * 60 * 1000
+  
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(d => d.expiryDate && d.expiryDate > now && d.expiryDate <= cutoff)
 }

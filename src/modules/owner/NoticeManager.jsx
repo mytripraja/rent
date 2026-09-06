@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { listHouses } from '../../services/houseService'
 import { createNotice, listAllNotices, deleteNotice } from '../../services/noticeService'
+import { getTemplates } from '../../services/configService'
 import NoticeBanner from '../shared/NoticeBanner'
 import ConfirmDialog from '../shared/ui/ConfirmDialog'
 import { useToast } from '../shared/ui/Toast'
+import { useAuth } from '../../context/AuthContext'
 
 const TYPES = [
   { id: 'water', label: 'Water stop (blue)' },
@@ -15,9 +17,11 @@ const TYPES = [
 ]
 
 export default function NoticeManager() {
+  const { user } = useAuth()
   const { showToast } = useToast()
   const [houses, setHouses] = useState([])
   const [notices, setNotices] = useState([])
+  const [templates, setTemplates] = useState([])
   const [form, setForm] = useState({
     type: 'general',
     message: '',
@@ -25,6 +29,9 @@ export default function NoticeManager() {
     durationHours: '',
     audience: 'all', // 'all' | 'select'
     selectedHouseIds: [],
+    isScheduled: false,
+    scheduledDate: '',
+    scheduledTime: '',
   })
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
@@ -36,6 +43,7 @@ export default function NoticeManager() {
   async function refresh() {
     setHouses(await listHouses())
     setNotices(await listAllNotices())
+    setTemplates(await getTemplates())
   }
 
   function toggleHouse(houseId) {
@@ -47,12 +55,37 @@ export default function NoticeManager() {
     }))
   }
 
+  function handleTemplateSelect(e) {
+    const tId = e.target.value
+    if (!tId) return
+    const template = templates.find(t => t.id === tId)
+    if (template) {
+      // Try to guess type based on text
+      let type = 'general'
+      if (template.body.toLowerCase().includes('water')) type = 'water'
+      else if (template.body.toLowerCase().includes('eb') || template.body.toLowerCase().includes('power')) type = 'eb'
+      else if (template.body.toLowerCase().includes('rent')) type = 'urgent'
+      
+      setForm(f => ({ ...f, message: template.body, type }))
+    }
+  }
+
   async function submit(e) {
     e.preventDefault()
     if (form.audience === 'select' && form.selectedHouseIds.length === 0) {
       showToast({ message: 'Please select at least one house.', type: 'error' })
       return
     }
+    
+    let scheduledAt = null
+    if (form.isScheduled && form.scheduledDate && form.scheduledTime) {
+      scheduledAt = new Date(`${form.scheduledDate}T${form.scheduledTime}`).getTime()
+      if (scheduledAt <= Date.now()) {
+        showToast({ message: 'Scheduled time must be in the future.', type: 'error' })
+        return
+      }
+    }
+
     setSaving(true)
     try {
       await createNotice({
@@ -61,9 +94,11 @@ export default function NoticeManager() {
         windowText: form.windowText,
         durationHours: form.durationHours ? Number(form.durationHours) : null,
         targetHouseIds: form.audience === 'all' ? 'all' : form.selectedHouseIds,
+        createdBy: { uid: user?.uid, name: user?.name },
+        scheduledAt
       })
-      setForm({ type: 'general', message: '', windowText: '', durationHours: '', audience: 'all', selectedHouseIds: [] })
-      showToast({ message: 'Notice posted successfully', type: 'success' })
+      setForm({ type: 'general', message: '', windowText: '', durationHours: '', audience: 'all', selectedHouseIds: [], isScheduled: false, scheduledDate: '', scheduledTime: '' })
+      showToast({ message: scheduledAt ? 'Notice scheduled successfully' : 'Notice posted successfully', type: 'success' })
       refresh()
     } catch (err) {
       showToast({ message: 'Failed to post notice: ' + err.message, type: 'error' })
@@ -95,6 +130,13 @@ export default function NoticeManager() {
       </div>
 
       <form onSubmit={submit} className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 space-y-3 max-w-lg">
+        {templates.length > 0 && (
+          <select onChange={handleTemplateSelect} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm bg-paper mb-2">
+            <option value="">-- Use a Template --</option>
+            {templates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+          </select>
+        )}
+
         <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
           {TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
@@ -111,6 +153,19 @@ export default function NoticeManager() {
         <input type="number" min="1" placeholder="Auto-expire after (hours) — leave blank to stay pinned"
           value={form.durationHours} onChange={(e) => setForm({ ...form, durationHours: e.target.value })}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+          
+        <div className="border border-brass/20 p-3 rounded-lg bg-paper">
+          <label className="flex items-center gap-2 text-sm font-medium text-ink mb-2">
+            <input type="checkbox" checked={form.isScheduled} onChange={(e) => setForm({ ...form, isScheduled: e.target.checked })} />
+            Schedule for later
+          </label>
+          {form.isScheduled && (
+            <div className="flex gap-2">
+              <input type="date" required={form.isScheduled} value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} className="flex-1 border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+              <input type="time" required={form.isScheduled} value={form.scheduledTime} onChange={(e) => setForm({ ...form, scheduledTime: e.target.value })} className="flex-1 border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+            </div>
+          )}
+        </div>
 
         <div className="flex gap-4 text-sm">
           <label className="flex items-center gap-1.5">
@@ -143,7 +198,7 @@ export default function NoticeManager() {
         )}
 
         <button disabled={saving} className="w-full bg-brand text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
-          {saving ? 'Posting…' : 'Post Notice'}
+          {saving ? 'Posting…' : (form.isScheduled ? 'Schedule Notice' : 'Post Notice')}
         </button>
       </form>
 
@@ -152,12 +207,13 @@ export default function NoticeManager() {
         <div className="space-y-2 max-w-lg">
           {notices.map((n) => {
             const expired = n.expiresAt && n.expiresAt <= now
+            const isScheduled = n.scheduledAt && n.scheduledAt > now
             return (
-              <div key={n.id} className={expired ? 'opacity-40' : ''}>
+              <div key={n.id} className={expired ? 'opacity-40' : (isScheduled ? 'opacity-75 border-l-2 border-l-brass' : '')}>
                 <NoticeBanner notice={n} />
                 <div className="flex items-center justify-between -mt-2 mb-3 px-1">
                   <span className="text-xs text-ink-soft">
-                    {expired ? 'Expired' : 'Active'} · {n.targetHouseIds === 'all' ? 'All houses' : `${n.targetHouseIds.length} house(s)`}
+                    {expired ? 'Expired' : (isScheduled ? `Scheduled for ${new Date(n.scheduledAt).toLocaleString()}` : 'Active')} · {n.targetHouseIds === 'all' ? 'All houses' : `${n.targetHouseIds.length} house(s)`}
                   </span>
                   <button onClick={() => setDeletingId(n.id)} className="text-xs text-red-600 hover:underline">Delete</button>
                 </div>

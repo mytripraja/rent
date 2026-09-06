@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { submitRentPayment } from '../../services/rentService'
-import { getCashReceivers } from '../../services/configService'
+import { getCashReceivers, getAppConfig } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../shared/ui/Toast'
+import { generateUpiLink } from '../../utils/upiDeepLink'
+import { canPerformAction } from '../../utils/rateLimit'
 
 export default function RentSubmission({ onSubmitted }) {
   const { user } = useAuth()
@@ -21,6 +23,7 @@ export default function RentSubmission({ onSubmitted }) {
   const [applicationNumber, setApplicationNumber] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [cashReceivers, setCashReceivers] = useState([])
+  const [upiConfig, setUpiConfig] = useState(null)
 
   useEffect(() => {
     getCashReceivers().then((receivers) => {
@@ -32,10 +35,20 @@ export default function RentSubmission({ onSubmitted }) {
       console.error("Error fetching cash receivers", err)
       showToast({ message: "Failed to load cash receivers", type: "error" })
     })
+
+    getAppConfig().then(config => {
+      if (config.upiId && config.ownerName) {
+        setUpiConfig({ upiId: config.upiId, ownerName: config.ownerName })
+      }
+    })
   }, [showToast])
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!canPerformAction('rent_submit', 5000)) {
+      showToast({ message: "Please wait before submitting again.", type: "warning" })
+      return
+    }
     setSubmitting(true)
     try {
       const appNo = await submitRentPayment({
@@ -73,9 +86,36 @@ export default function RentSubmission({ onSubmitted }) {
     )
   }
 
+  const handlePayViaUPI = () => {
+    if (!upiConfig) return
+    const note = `Rent for House ${user.houseId} - ${form.month}`
+    const link = generateUpiLink({
+      payeeName: upiConfig.ownerName,
+      payeeUpi: upiConfig.upiId,
+      amount: Number(form.amount) || 0,
+      transactionNote: note
+    })
+    window.location.href = link
+  }
+
   return (
     <form onSubmit={handleSubmit} className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-3 max-w-md">
       <h3 className="font-semibold text-ink">Submit Rent Payment</h3>
+
+      {upiConfig && (
+        <div className="mb-4 bg-stamp-green/10 border border-stamp-green/30 rounded-xl p-4 text-center">
+          <p className="text-sm text-stamp-green mb-3 font-medium">Quick Pay</p>
+          <button
+            type="button"
+            onClick={handlePayViaUPI}
+            disabled={!form.amount || Number(form.amount) <= 0}
+            className="w-full bg-stamp-green text-white py-2.5 rounded-lg text-sm font-medium hover:bg-stamp-green/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+          >
+            Pay via UPI
+          </button>
+          <p className="text-[10px] text-stamp-green/70 mt-2">Enter amount below first, then click here to open GPay/PhonePe</p>
+        </div>
+      )}
 
       <input type="month" required value={form.month} onChange={(e) => setForm({ ...form, month: e.target.value })}
         className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />

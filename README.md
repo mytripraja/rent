@@ -202,6 +202,14 @@ Same approach as MyTripRaja. `@capacitor/core`, `@capacitor/cli`, and `@capacito
 
 **App icon and splash screen:** still the Capacitor defaults. `npx @capacitor/assets generate` can generate a full icon/splash set from a single source image once you have one ready.
 
+### iOS Setup
+
+If you want to build for iOS in the future:
+1. Building for iOS **requires a Mac** with Xcode installed.
+2. We have added the `npm run cap:ios` script to package.json.
+3. First run `npx cap add ios` to generate the iOS project structure (this step requires macOS/Xcode).
+4. After that, `npm run cap:ios` will build and sync your app, then open Xcode for testing/deployment.
+
 ## File structure
 
 Each feature lives in its own file under `/src/modules/owner`, `/src/modules/tenant`, or `/src/modules/shared`, backed by one service file per domain in `/src/services`. Updating "just rent" or "just houses" means touching one file.

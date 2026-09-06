@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { login, loginWithGoogle, loginWithCustomerId } from '../../services/authService'
+import { login, loginWithGoogle, loginWithCustomerId, resetPassword } from '../../services/authService'
+import { useLanguage } from '../../context/LanguageContext'
 import TextField from './ui/TextField'
 import Button from './ui/Button'
 
@@ -13,6 +14,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const CUSTOMER_ID_RE = /^RM\d+$/i
 
 export default function LoginPage() {
+  const { t } = useLanguage()
   const [method, setMethod] = useState('email')
   const [email, setEmail] = useState('')
   const [customerId, setCustomerId] = useState('')
@@ -20,6 +22,27 @@ export default function LoginPage() {
   const [touched, setTouched] = useState({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetMessage, setResetMessage] = useState('')
+  const [resetError, setResetError] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
+
+  async function handleResetPassword(e) {
+    e.preventDefault()
+    setResetMessage('')
+    setResetError('')
+    setResetLoading(true)
+    try {
+      await resetPassword(resetEmail)
+      setResetMessage('Password reset email sent! Check your inbox.')
+    } catch (err) {
+      setResetError(err.message || 'Failed to send reset email.')
+    } finally {
+      setResetLoading(false)
+    }
+  }
 
   // Instant, inline validation — checked as the person types/blurs, not just on submit.
   const emailError = touched.email && email && !EMAIL_RE.test(email) ? 'Enter a valid email address.' : ''
@@ -73,7 +96,7 @@ export default function LoginPage() {
     <div className="min-h-[100dvh] flex items-center justify-center bg-paper px-4 py-8">
       <div className="w-full max-w-sm bg-paper-raised rounded-2xl shadow-md border border-brass/20 p-6 sm:p-8 space-y-5">
         <div>
-          <h1 className="font-display text-2xl text-ink">Rental Manager</h1>
+          <h1 className="font-display text-2xl text-ink">{t('appName')}</h1>
           <p className="text-sm text-ink-soft mt-1">Sign in to continue</p>
         </div>
 
@@ -95,7 +118,7 @@ export default function LoginPage() {
           ))}
         </div>
 
-        {method === 'email' && (
+        {method === 'email' && !showForgotPassword && (
           <form onSubmit={handleEmailSubmit} className="space-y-4" noValidate>
             <TextField
               label="Email" type="email" required inputMode="email" autoComplete="email"
@@ -109,6 +132,25 @@ export default function LoginPage() {
             />
             {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
             <Button type="submit" fullWidth loading={loading} loadingText="Signing in…">Sign In</Button>
+            <button type="button" onClick={() => { setShowForgotPassword(true); setResetEmail(email); setResetMessage(''); setResetError(''); }} className="w-full text-sm text-brand hover:underline mt-2">
+              Forgot password?
+            </button>
+          </form>
+        )}
+
+        {method === 'email' && showForgotPassword && (
+          <form onSubmit={handleResetPassword} className="space-y-4" noValidate>
+            <p className="text-sm text-ink-soft">Enter your email to receive a password reset link.</p>
+            <TextField
+              label="Email" type="email" required inputMode="email"
+              value={resetEmail} onChange={(e) => setResetEmail(e.target.value)}
+            />
+            {resetMessage && <p className="text-sm text-stamp-green" role="alert">{resetMessage}</p>}
+            {resetError && <p className="text-sm text-red-600" role="alert">{resetError}</p>}
+            <Button type="submit" fullWidth loading={resetLoading} loadingText="Sending…">Send Reset Link</Button>
+            <button type="button" onClick={() => setShowForgotPassword(false)} className="w-full text-sm text-ink-soft hover:underline mt-2">
+              Back to login
+            </button>
           </form>
         )}
 

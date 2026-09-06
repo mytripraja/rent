@@ -36,6 +36,26 @@
   --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --color-paper: #1a1814;
+    --color-paper-raised: #252219;
+    --color-ink: #e8e0d0;
+    --color-ink-soft: #a89e8e;
+    --color-cover: #7a3a3a;
+    --color-brass: #c9974d;
+  }
+}
+
+.dark {
+  --color-paper: #1a1814;
+  --color-paper-raised: #252219;
+  --color-ink: #e8e0d0;
+  --color-ink-soft: #a89e8e;
+  --color-cover: #7a3a3a;
+  --color-brass: #c9974d;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--color-paper);

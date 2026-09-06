@@ -1,26 +1,38 @@
-import { useState } from 'react'
+import React, { useState, Suspense } from 'react'
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Home, DoorOpen, Users, CheckCircle2, PenSquare, Zap, ZapOff,
   Bell, MessageSquareWarning, Phone, FileText, MessagesSquare, MoreHorizontal, LogOut, HelpCircle,
+  IndianRupee, BarChart, Droplets,
 } from 'lucide-react'
-import OwnerHome from './OwnerHome'
-import HouseManager from './HouseManager'
-import TenantsSection from './TenantsSection'
-import RentApprovalQueue from './RentApprovalQueue'
-import EBBillCreator from './EBBillCreator'
-import EBApprovalQueue from './EBApprovalQueue'
-import NoticeManager from './NoticeManager'
-import ComplaintInbox from './ComplaintInbox'
-import ServiceContactsManager from './ServiceContactsManager'
-import ManualEntryForTenant from './ManualEntryForTenant'
-import DocumentVerification from './DocumentVerification'
-import CommunityBoard from '../shared/CommunityBoard'
-import MoreMenu from './MoreMenu'
+
+const OwnerHome = React.lazy(() => import('./OwnerHome'))
+const HouseManager = React.lazy(() => import('./HouseManager'))
+const TenantsSection = React.lazy(() => import('./TenantsSection'))
+const RentApprovalQueue = React.lazy(() => import('./RentApprovalQueue'))
+const EBBillCreator = React.lazy(() => import('./EBBillCreator'))
+const EBApprovalQueue = React.lazy(() => import('./EBApprovalQueue'))
+const WaterBillCreator = React.lazy(() => import('./WaterBillCreator'))
+const WaterApprovalQueue = React.lazy(() => import('./WaterApprovalQueue'))
+const NoticeManager = React.lazy(() => import('./NoticeManager'))
+const ComplaintInbox = React.lazy(() => import('./ComplaintInbox'))
+const ServiceContactsManager = React.lazy(() => import('./ServiceContactsManager'))
+const ManualEntryForTenant = React.lazy(() => import('./ManualEntryForTenant'))
+const PaymentReminders = React.lazy(() => import('./PaymentReminders'))
+const MonthlyReport = React.lazy(() => import('./MonthlyReport'))
+const DocumentVerification = React.lazy(() => import('./DocumentVerification'))
+const ExpenseTracker = React.lazy(() => import('./ExpenseTracker'))
+const CommunityBoard = React.lazy(() => import('../shared/CommunityBoard'))
+const AnalyticsDashboard = React.lazy(() => import('./AnalyticsDashboard'))
+const MoreMenu = React.lazy(() => import('./MoreMenu'))
+import LoadingScreen from '../shared/LoadingScreen'
 import SearchBar from '../shared/SearchBar'
 import OnboardingTour from '../shared/OnboardingTour'
 import IconButton from '../shared/ui/IconButton'
+import ThemeToggle from '../shared/ui/ThemeToggle'
+import NotificationBell from '../shared/ui/NotificationBell'
+import LanguageSwitcher from '../shared/ui/LanguageSwitcher'
 import { OWNER_TOUR_STEPS } from './ownerTourSteps'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
@@ -33,10 +45,16 @@ const TABS = [
   { id: 'manualEntry', route: 'manual-entry', label: 'Manual Entry', icon: PenSquare },
   { id: 'eb', route: 'eb-bill', label: 'EB Bill', icon: Zap },
   { id: 'ebApprovals', route: 'eb-approvals', label: 'EB Approvals', icon: ZapOff },
+  { id: 'water', route: 'water-bill', label: 'Water Bill', icon: Droplets },
+  { id: 'waterApprovals', route: 'water-approvals', label: 'Water Approvals', icon: Droplets },
   { id: 'notices', route: 'notices', label: 'Notices', icon: Bell },
   { id: 'complaints', route: 'complaints', label: 'Complaints', icon: MessageSquareWarning },
   { id: 'contacts', route: 'contacts', label: 'Service Contacts', icon: Phone },
+  { id: 'reminders', route: 'reminders', label: 'Reminders', icon: Bell },
   { id: 'documents', route: 'documents', label: 'Documents', icon: FileText },
+  { id: 'reports', route: 'reports', label: 'Reports', icon: BarChart },
+  { id: 'analytics', route: 'analytics', label: 'Analytics', icon: BarChart },
+  { id: 'expenses', route: 'expenses', label: 'Expenses', icon: IndianRupee },
   { id: 'community', route: 'community', label: 'Community', icon: MessagesSquare },
   { id: 'more', route: 'more', label: 'More', icon: MoreHorizontal },
 ]
@@ -80,6 +98,9 @@ export default function OwnerDashboard() {
 
         <div className="flex items-center gap-3 shrink-0">
           <SearchBar onSelectHouse={handleSearchSelect} />
+          <LanguageSwitcher />
+          <NotificationBell userId={user?.uid} />
+          <ThemeToggle />
           <IconButton icon={HelpCircle} label="Replay onboarding tour" onClick={() => setReplayTour(true)} />
           <IconButton icon={LogOut} label="Log out" onClick={logout} />
         </div>
@@ -116,22 +137,30 @@ export default function OwnerDashboard() {
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.18 }}
           >
-            <Routes>
-              <Route path="home" element={<OwnerHome onNavigate={(t) => navigate(`/owner/${TABS.find(x => x.id === t)?.route || 'home'}`)} />} />
-              <Route path="houses" element={<HouseManager />} />
-              <Route path="tenants" element={<TenantsSection openHouseId={searchHouseId} onOpenHouseHandled={() => setSearchHouseId(null)} />} />
-              <Route path="approvals" element={<RentApprovalQueue />} />
-              <Route path="eb-bill" element={<EBBillCreator />} />
-              <Route path="eb-approvals" element={<EBApprovalQueue />} />
-              <Route path="notices" element={<NoticeManager />} />
-              <Route path="complaints" element={<ComplaintInbox />} />
-              <Route path="contacts" element={<ServiceContactsManager />} />
-              <Route path="manual-entry" element={<ManualEntryForTenant />} />
-              <Route path="documents" element={<DocumentVerification />} />
-              <Route path="community" element={<CommunityBoard user={user} canModerate />} />
-              <Route path="more" element={<MoreMenu />} />
-              <Route path="*" element={<OwnerHome onNavigate={(t) => navigate(`/owner/${TABS.find(x => x.id === t)?.route || 'home'}`)} />} />
-            </Routes>
+            <Suspense fallback={<LoadingScreen />}>
+              <Routes>
+                <Route path="home" element={<OwnerHome onNavigate={(t) => navigate(`/owner/${TABS.find(x => x.id === t)?.route || 'home'}`)} />} />
+                <Route path="houses" element={<HouseManager />} />
+                <Route path="tenants" element={<TenantsSection openHouseId={searchHouseId} onOpenHouseHandled={() => setSearchHouseId(null)} />} />
+                <Route path="approvals" element={<RentApprovalQueue />} />
+                <Route path="eb-bill" element={<EBBillCreator />} />
+                <Route path="eb-approvals" element={<EBApprovalQueue />} />
+                <Route path="water-bill" element={<WaterBillCreator />} />
+                <Route path="water-approvals" element={<WaterApprovalQueue />} />
+                <Route path="notices" element={<NoticeManager />} />
+                <Route path="complaints" element={<ComplaintInbox />} />
+                <Route path="contacts" element={<ServiceContactsManager />} />
+                <Route path="manual-entry" element={<ManualEntryForTenant />} />
+                <Route path="documents" element={<DocumentVerification />} />
+                <Route path="expenses" element={<ExpenseTracker />} />
+                <Route path="reminders" element={<PaymentReminders />} />
+                <Route path="reports" element={<MonthlyReport />} />
+                <Route path="analytics" element={<AnalyticsDashboard />} />
+                <Route path="community" element={<CommunityBoard user={user} canModerate />} />
+                <Route path="more" element={<MoreMenu />} />
+                <Route path="*" element={<OwnerHome onNavigate={(t) => navigate(`/owner/${TABS.find(x => x.id === t)?.route || 'home'}`)} />} />
+              </Routes>
+            </Suspense>
           </motion.div>
         </AnimatePresence>
       </main>

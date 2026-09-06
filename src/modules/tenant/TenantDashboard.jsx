@@ -1,18 +1,25 @@
-import { useRef, useState } from 'react'
+import React, { useRef, useState, Suspense } from 'react'
 import { LogOut, HelpCircle } from 'lucide-react'
-import RentSubmission from './RentSubmission'
-import RentHistory from './RentHistory'
-import EBBillShare from './EBBillShare'
-import NoticeFeed from './NoticeFeed'
-import RaiseComplaint from './RaiseComplaint'
-import Directory from './Directory'
-import ServiceContacts from './ServiceContacts'
-import RentRevisionBanner from './RentRevisionBanner'
-import DocumentUpload from './DocumentUpload'
-import TenantRentHero from './TenantRentHero'
-import CommunityBoard from '../shared/CommunityBoard'
+
+const RentSubmission = React.lazy(() => import('./RentSubmission'))
+const RentHistory = React.lazy(() => import('./RentHistory'))
+const EBBillShare = React.lazy(() => import('./EBBillShare'))
+const WaterBillShare = React.lazy(() => import('./WaterBillShare'))
+const NoticeFeed = React.lazy(() => import('./NoticeFeed'))
+const RaiseComplaint = React.lazy(() => import('./RaiseComplaint'))
+const Directory = React.lazy(() => import('./Directory'))
+const ServiceContacts = React.lazy(() => import('./ServiceContacts'))
+const RentRevisionBanner = React.lazy(() => import('./RentRevisionBanner'))
+const DocumentUpload = React.lazy(() => import('./DocumentUpload'))
+const TenantRentHero = React.lazy(() => import('./TenantRentHero'))
+const CommunityBoard = React.lazy(() => import('../shared/CommunityBoard'))
+import LoadingScreen from '../shared/LoadingScreen'
+import PullToRefresh from '../shared/ui/PullToRefresh'
 import OnboardingTour from '../shared/OnboardingTour'
 import IconButton from '../shared/ui/IconButton'
+import ThemeToggle from '../shared/ui/ThemeToggle'
+import NotificationBell from '../shared/ui/NotificationBell'
+import LanguageSwitcher from '../shared/ui/LanguageSwitcher'
 import { TENANT_TOUR_STEPS } from './tenantTourSteps'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
@@ -22,6 +29,11 @@ export default function TenantDashboard() {
   const [replayTour, setReplayTour] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const payRef = useRef(null)
+
+  async function handleRefresh() {
+    setRefreshKey(k => k + 1)
+    await new Promise(r => setTimeout(r, 600))
+  }
 
   return (
     <div className="min-h-screen bg-paper">
@@ -38,41 +50,49 @@ export default function TenantDashboard() {
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          <LanguageSwitcher />
+          <NotificationBell userId={user?.uid} />
+          <ThemeToggle />
           <IconButton icon={HelpCircle} label="Replay onboarding tour" onClick={() => setReplayTour(true)} />
           <IconButton icon={LogOut} label="Log out" onClick={logout} />
         </div>
       </header>
 
-      <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
-        <TenantRentHero key={`hero-${refreshKey}`} onPayNow={() => payRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />
-        <RentRevisionBanner />
-        <NoticeFeed />
-      </div>
-
-      <main id="main-content" tabIndex={-1} className="px-4 sm:px-6 pb-6 max-w-4xl mx-auto space-y-6">
-        <div ref={payRef} className="grid md:grid-cols-2 gap-4">
-          <RentSubmission onSubmitted={() => setRefreshKey(k => k + 1)} />
-          <RentHistory key={`history-${refreshKey}`} />
-        </div>
-
-        <EBBillShare key={`eb-${refreshKey}`} />
-
-        <section aria-labelledby="more-heading">
-          <h2 id="more-heading" className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-2">More</h2>
-          <div className="grid md:grid-cols-2 gap-4">
-            <RaiseComplaint />
-            <Directory />
-            <ServiceContacts />
-            <DocumentUpload />
+      <PullToRefresh onRefresh={handleRefresh}>
+        <Suspense fallback={<LoadingScreen />}>
+          <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
+            <TenantRentHero key={`hero-${refreshKey}`} onPayNow={() => payRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />
+            <RentRevisionBanner />
+            <NoticeFeed />
           </div>
-        </section>
 
-        <CommunityBoard user={user} />
+          <main id="main-content" tabIndex={-1} className="px-4 sm:px-6 pb-6 max-w-4xl mx-auto space-y-6">
+            <div ref={payRef} className="grid md:grid-cols-2 gap-4">
+              <RentSubmission onSubmitted={() => setRefreshKey(k => k + 1)} />
+              <RentHistory key={`history-${refreshKey}`} />
+            </div>
 
-        <footer className="text-center text-xs text-ink-soft py-4 border-t border-brass/15">
-          Need help? Check <span className="font-medium text-ink">Service Contacts</span> above, or raise a complaint and the owner will reach out.
-        </footer>
-      </main>
+            <EBBillShare key={`eb-${refreshKey}`} />
+            <WaterBillShare key={`water-${refreshKey}`} />
+
+            <section aria-labelledby="more-heading">
+              <h2 id="more-heading" className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-2">More</h2>
+              <div className="grid md:grid-cols-2 gap-4">
+                <RaiseComplaint />
+                <Directory />
+                <ServiceContacts />
+                <DocumentUpload />
+              </div>
+            </section>
+
+            <CommunityBoard user={user} />
+
+            <footer className="text-center text-xs text-ink-soft py-4 border-t border-brass/15">
+              Need help? Check <span className="font-medium text-ink">Service Contacts</span> above, or raise a complaint and the owner will reach out.
+            </footer>
+          </main>
+        </Suspense>
+      </PullToRefresh>
 
       <OnboardingTour
         steps={TENANT_TOUR_STEPS}

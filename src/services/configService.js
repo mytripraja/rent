@@ -7,9 +7,54 @@ const DEFAULT_RECEIVERS = ['Deepu', 'Rajavel', 'Siva', 'Hemalathe']
 export async function getAppConfig() {
   const snap = await getDoc(configDocRef)
   if (snap.exists()) {
-    return snap.data()
+    const data = snap.data()
+    return {
+      cashReceivers: data.cashReceivers || DEFAULT_RECEIVERS,
+      apartmentName: data.apartmentName || 'Rental Manager',
+      apartmentAddress: data.apartmentAddress || '',
+      dueDate: data.dueDate || 5,
+      gracePeriod: data.gracePeriod || 3,
+      penaltyPerDay: data.penaltyPerDay || 100,
+      upiId: data.upiId || '',
+      ownerName: data.ownerName || '',
+      paymentModes: data.paymentModes || ['upi', 'cash', 'bank_transfer'],
+      lateFeeType: data.lateFeeType || 'flat',
+      lateFeeAmount: data.lateFeeAmount || 500,
+      lateFeeGraceDays: data.lateFeeGraceDays || 5,
+      wasteSchedule: data.wasteSchedule || {
+        monday: 'dry',
+        tuesday: 'wet',
+        wednesday: 'mixed',
+        thursday: 'none',
+        friday: 'dry',
+        saturday: 'wet',
+        sunday: 'none'
+      }
+    }
   }
-  return { cashReceivers: DEFAULT_RECEIVERS }
+  return { 
+    cashReceivers: DEFAULT_RECEIVERS, 
+    apartmentName: 'Rental Manager', 
+    apartmentAddress: '',
+    dueDate: 5,
+    gracePeriod: 3,
+    penaltyPerDay: 100,
+    upiId: '',
+    ownerName: '',
+    paymentModes: ['upi', 'cash', 'bank_transfer'],
+    lateFeeType: 'flat',
+    lateFeeAmount: 500,
+    lateFeeGraceDays: 5,
+    wasteSchedule: {
+      monday: 'dry',
+      tuesday: 'wet',
+      wednesday: 'mixed',
+      thursday: 'none',
+      friday: 'dry',
+      saturday: 'wet',
+      sunday: 'none'
+    }
+  }
 }
 
 export async function updateAppConfig(fields) {
@@ -23,4 +68,20 @@ export async function getCashReceivers() {
 
 export async function updateCashReceivers(receivers) {
   await updateAppConfig({ cashReceivers: receivers })
+}
+
+const DEFAULT_TEMPLATES = [
+  { id: 't1', title: 'Water will be stopped', body: 'Water supply will be stopped today from 10 AM to 2 PM for motor maintenance.' },
+  { id: 't2', title: 'EB maintenance scheduled', body: 'EB power cut scheduled tomorrow from 9 AM to 5 PM.' },
+  { id: 't3', title: 'Rent reminder', body: 'Friendly reminder that rent is due by the 5th of this month. Please pay to avoid late fees.' },
+  { id: 't4', title: 'Common area cleaning', body: 'Common area cleaning will take place tomorrow. Please keep the corridors clear.' }
+]
+
+export async function getTemplates() {
+  const config = await getAppConfig()
+  return config.messageTemplates || DEFAULT_TEMPLATES
+}
+
+export async function updateTemplates(templates) {
+  await updateAppConfig({ messageTemplates: templates })
 }

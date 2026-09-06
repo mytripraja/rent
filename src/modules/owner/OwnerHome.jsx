@@ -6,10 +6,12 @@ import { listRentHistory, countMonthsPending, currentMonthStr, resolveMonthStatu
 import { listActiveNotices } from '../../services/noticeService'
 import { listAllComplaints } from '../../services/complaintService'
 import { useAuth } from '../../context/AuthContext'
+import { useLanguage } from '../../context/LanguageContext'
 import { Skeleton } from '../shared/ui/Skeleton'
 
 export default function OwnerHome({ onNavigate }) {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [stats, setStats] = useState(null)
@@ -103,10 +105,10 @@ export default function OwnerHome({ onNavigate }) {
   if (!stats) return null
 
   const cards = [
-    { id: 'houses', label: 'Occupied', value: `${stats.occupied}/${stats.total}`, icon: Home, tab: 'houses' },
-    { id: 'rent', label: `Collected — ${monthLabel()}`, value: `₹${stats.collected.toLocaleString('en-IN')}`, icon: Zap, tab: 'approvals' },
-    { id: 'pending', label: 'Rent Pending', value: stats.pendingHouses, icon: AlertCircle, tab: 'tenants', urgent: stats.pendingHouses > 0 },
-    { id: 'complaints', label: 'Open Complaints', value: openComplaints, icon: Users, tab: 'complaints', urgent: openComplaints > 0 },
+    { id: 'houses', label: t('occupied'), value: `${stats.occupied}/${stats.total}`, icon: Home, tab: 'houses' },
+    { id: 'rent', label: `${t('rentCollected')} — ${monthLabel()}`, value: `₹${stats.collected.toLocaleString('en-IN')}`, icon: Zap, tab: 'approvals' },
+    { id: 'pending', label: t('rentPending'), value: stats.pendingHouses, icon: AlertCircle, tab: 'tenants', urgent: stats.pendingHouses > 0 },
+    { id: 'complaints', label: t('openComplaints'), value: openComplaints, icon: Users, tab: 'complaints', urgent: openComplaints > 0 },
   ]
 
   return (
@@ -114,7 +116,7 @@ export default function OwnerHome({ onNavigate }) {
       <div>
         <p className="font-mono-tab text-xs text-ink-soft uppercase tracking-wide">{todayLabel()}</p>
         <h2 className="font-display text-2xl text-ink mt-1">
-          {greeting()}, {user?.name?.split(' ')[0]}
+          {t('welcome')}, {user?.name?.split(' ')[0]}
         </h2>
       </div>
 
@@ -152,6 +154,7 @@ export default function OwnerHome({ onNavigate }) {
       <div>
         <SectionHeader icon={PenSquare} label="Quick Actions" />
         <div className="flex flex-wrap gap-2 mt-2">
+          <QuickAction label="Reminders" onClick={() => onNavigate('reminders')} />
           <QuickAction label="Manual Entry" onClick={() => onNavigate('manualEntry')} />
           <QuickAction label="Post Notice" onClick={() => onNavigate('notices')} />
           <QuickAction label="Create EB Bill" onClick={() => onNavigate('eb')} />

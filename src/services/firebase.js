@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { getFirestore, enableMultiTabIndexedDbPersistence } from 'firebase/firestore'
 
 // Paste your Firebase project config here (from Firebase console > Project settings).
 // On Vercel, prefix each value with VITE_ and read via import.meta.env, e.g.
@@ -23,6 +23,10 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
+
+enableMultiTabIndexedDbPersistence(db).catch((err) => {
+  console.warn('Offline persistence failed:', err)
+})
 
 // Used by any client call into /api/* — attaches the current user's Firebase
 // ID token so the serverless function can verify who's calling.

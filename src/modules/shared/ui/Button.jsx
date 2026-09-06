@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { hapticLight } from '../../../utils/haptics'
 
 const VARIANTS = {
   primary: 'bg-cover text-paper hover:bg-cover-dark',
@@ -22,6 +23,9 @@ export default function Button({
   return (
     <motion.button
       whileTap={{ scale: disabled || loading ? 1 : 0.97 }}
+      onTap={() => {
+        if (!disabled && !loading) hapticLight()
+      }}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={`rounded-full font-medium transition disabled:opacity-60 disabled:cursor-not-allowed ${VARIANTS[variant]} ${sizeClass} ${fullWidth ? 'w-full' : ''} ${className}`}

@@ -8,6 +8,7 @@ import {
   signInWithRedirect,
   getRedirectResult,
   linkWithCredential,
+  sendPasswordResetEmail,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { auth, db, authedFetch } from './firebase'
@@ -169,4 +170,8 @@ export async function updateOwnProfile({ uid, name, phone, profilePhotoUrl }) {
 // writing Firestore directly.
 export async function updateTenantContact({ tenantUid, houseId, newEmail, newPhone }) {
   return authedFetch('/api/update-tenant-contact', { tenantUid, houseId, newEmail, newPhone })
+}
+
+export async function resetPassword(email) {
+  await sendPasswordResetEmail(auth, email)
 }

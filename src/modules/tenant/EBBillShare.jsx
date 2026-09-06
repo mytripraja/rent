@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { listEbBillCycles, houseShareFromBill, submitEbPayment, listEbPaymentsForHouse } from '../../services/ebBillService'
-import { getCashReceivers } from '../../services/configService'
+import { getCashReceivers, getAppConfig } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
 import ApprovalStatusBadge from '../shared/ApprovalStatusBadge'
 import { useToast } from '../shared/ui/Toast'
@@ -12,12 +12,18 @@ export default function EBBillShare() {
   const [payments, setPayments] = useState([])
   const [payingBill, setPayingBill] = useState(null)
   const [cashReceivers, setCashReceivers] = useState([])
+  const [upiConfig, setUpiConfig] = useState(null)
 
   useEffect(() => {
     if (user?.houseId) refresh()
     getCashReceivers().then(setCashReceivers).catch((err) => {
       console.error(err)
       showToast({ message: "Failed to load cash receivers", type: "error" })
+    })
+    getAppConfig().then(config => {
+      if (config.upiId && config.ownerName) {
+        setUpiConfig({ upiId: config.upiId, ownerName: config.ownerName })
+      }
     })
   }, [user, showToast])
 
@@ -75,6 +81,7 @@ export default function EBBillShare() {
           share={payingBill.share}
           user={user}
           cashReceivers={cashReceivers}
+          upiConfig={upiConfig}
           onClose={() => setPayingBill(null)}
           onDone={() => {
             setPayingBill(null)
@@ -86,7 +93,9 @@ export default function EBBillShare() {
   )
 }
 
-function PayEbShareModal({ bill, share, user, cashReceivers, onClose, onDone }) {
+import { generateUpiLink } from '../../utils/upiDeepLink'
+
+function PayEbShareModal({ bill, share, user, cashReceivers, upiConfig, onClose, onDone }) {
   const { showToast } = useToast()
   const defaultReceiver = cashReceivers.length > 0 ? cashReceivers[0] : ''
   const [form, setForm] = useState({ dateSent: '', mode: 'upi', cashReceivedBy: defaultReceiver, neighborHouseId: '' })
@@ -119,10 +128,36 @@ function PayEbShareModal({ bill, share, user, cashReceivers, onClose, onDone }) 
     }
   }
 
+  const handlePayViaUPI = () => {
+    if (!upiConfig) return
+    const note = `EB Bill ${bill.cycleLabel} for House ${user.houseId}`
+    const link = generateUpiLink({
+      payeeName: upiConfig.ownerName,
+      payeeUpi: upiConfig.upiId,
+      amount: share.shareAmount,
+      transactionNote: note
+    })
+    window.location.href = link
+  }
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
       <form onSubmit={submit} className="bg-paper-raised rounded-2xl shadow-lg w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto space-y-3">
         <h3 className="font-semibold text-ink">Pay {bill.cycleLabel} — ₹{share.shareAmount}</h3>
+
+        {upiConfig && (
+          <div className="mb-4 bg-stamp-green/10 border border-stamp-green/30 rounded-xl p-4 text-center">
+            <p className="text-sm text-stamp-green mb-3 font-medium">Quick Pay</p>
+            <button
+              type="button"
+              onClick={handlePayViaUPI}
+              className="w-full bg-stamp-green text-white py-2.5 rounded-lg text-sm font-medium hover:bg-stamp-green/90 transition-colors flex items-center justify-center gap-2"
+            >
+              Pay via UPI
+            </button>
+            <p className="text-[10px] text-stamp-green/70 mt-2">Click here to open GPay/PhonePe</p>
+          </div>
+        )}
 
         <input required type="date" value={form.dateSent} onChange={(e) => setForm({ ...form, dateSent: e.target.value })}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
