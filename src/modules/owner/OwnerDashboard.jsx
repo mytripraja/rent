@@ -89,9 +89,9 @@ export default function OwnerDashboard() {
       <a href="#main-content" className="skip-link">Skip to main content</a>
 
       {/* Cover band — the passbook-cover header */}
-      <header className="bg-cover text-paper px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+      <header className="app-topbar bg-cover text-paper px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-brass/30 border border-brass overflow-hidden flex items-center justify-center text-sm font-semibold shrink-0" aria-hidden="true">
+          <div className="brand-avatar w-9 h-9 rounded-full bg-brass/30 border border-brass overflow-hidden flex items-center justify-center text-sm font-semibold shrink-0" aria-hidden="true">
             {user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} alt="" className="w-full h-full object-cover" /> : user?.name?.[0]}
           </div>
           <div>
@@ -143,7 +143,7 @@ export default function OwnerDashboard() {
             <button onClick={() => setSidebarOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-brass/25 bg-paper-raised px-3 py-2 text-sm font-medium"><Menu size={18} /> Menu</button>
             <span className="text-xs text-ink-soft">{activeTabObj.label}</span>
           </div>
-      <main id="main-content" tabIndex={-1} className="p-4 sm:p-6 pb-24 sm:pb-6 max-w-5xl mx-auto">
+      <main id="main-content" tabIndex={-1} className="pb-24 sm:pb-6">
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}
