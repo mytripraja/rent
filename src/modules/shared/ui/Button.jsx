@@ -28,7 +28,7 @@ export default function Button({
       }}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={`rounded-full font-medium transition disabled:opacity-60 disabled:cursor-not-allowed ${VARIANTS[variant]} ${sizeClass} ${fullWidth ? 'w-full' : ''} ${className}`}
+      className={`rounded-xl font-semibold transition shadow-sm hover:shadow disabled:opacity-60 disabled:cursor-not-allowed ${VARIANTS[variant]} ${sizeClass} ${fullWidth ? 'w-full' : ''} ${className}`}
       {...props}
     >
       {loading ? (loadingText || 'Please wait…') : children}

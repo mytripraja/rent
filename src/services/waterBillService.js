@@ -8,25 +8,42 @@ const billsRef = collection(db, 'waterBills')
 
 export function calculateWaterSplit(totalAmount, cycleMonths, houses) {
   const eligible = houses.filter((h) => h.status === 'occupied')
-  if (!eligible.length) return []
-  const totalCents = Math.round(Number(totalAmount) * 100)
-  const weights = eligible.map((h) => ({
-    house: h,
-    monthsOccupied: Math.max(0, Math.min(cycleMonths, Number(h.waterShareOverrideMonths ?? h.ebShareOverrideMonths ?? cycleMonths))),
+  const n = eligible.length
+  if (n === 0) return []
+
+  const baseShare = totalAmount / n
+
+  let shortfall = 0
+  const partial = []
+  const fullShareHouses = []
+
+  eligible.forEach((h) => {
+    const monthsOccupied = h.waterShareOverrideMonths ?? h.ebShareOverrideMonths ?? cycleMonths
+    if (monthsOccupied < cycleMonths) {
+      const proratedShare = baseShare * (monthsOccupied / cycleMonths)
+      shortfall += baseShare - proratedShare
+      partial.push({ houseId: h.id, internalDoorNumber: h.internalDoorNumber, monthsOccupied, shareAmount: round2(proratedShare) })
+    } else {
+      fullShareHouses.push(h)
+    }
+  })
+
+  const redistributionPerHouse = fullShareHouses.length > 0 ? shortfall / fullShareHouses.length : 0
+
+  const fullShares = fullShareHouses.map((h) => ({
+    houseId: h.id,
+    internalDoorNumber: h.internalDoorNumber,
+    monthsOccupied: cycleMonths,
+    shareAmount: round2(baseShare + redistributionPerHouse),
   }))
-  const weightTotal = weights.reduce((sum, x) => sum + (x.monthsOccupied || 0), 0)
-  if (!weightTotal) return []
-  const raw = weights.map((x) => ({ ...x, exact: totalCents * x.monthsOccupied / weightTotal }))
-  const allocated = raw.map((x) => ({ ...x, cents: Math.floor(x.exact), remainder: x.exact - Math.floor(x.exact) }))
-  let remaining = totalCents - allocated.reduce((sum, x) => sum + x.cents, 0)
-  allocated.sort((a,b) => b.remainder - a.remainder)
-  for (let i = 0; i < remaining; i++) allocated[i % allocated.length].cents += 1
-  return allocated.map((x) => ({
-    houseId: x.house.id,
-    internalDoorNumber: x.house.internalDoorNumber,
-    monthsOccupied: x.monthsOccupied,
-    shareAmount: x.cents / 100,
-  })).sort((a,b) => String(a.internalDoorNumber).localeCompare(String(b.internalDoorNumber)))
+
+  return [...fullShares, ...partial].sort((a, b) =>
+    String(a.internalDoorNumber).localeCompare(String(b.internalDoorNumber))
+  )
+}
+
+function round2(n) {
+  return Math.round(n * 100) / 100
 }
 
 export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate }) {
@@ -39,7 +56,6 @@ export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonth
     cycleMonths,
     dueDate,
     shares,
-    houseIds: shares.map((share) => share.houseId),
     createdAt: Date.now(),
   })
 
@@ -66,14 +82,9 @@ export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonth
   return { id: docRef.id, shares }
 }
 
-export async function listWaterBillCycles({ houseId } = {}) {
-  const base = houseId
-    ? query(billsRef, where('houseIds', 'array-contains', houseId))
-    : query(billsRef, orderBy('createdAt', 'desc'))
-  const snap = await getDocs(base)
-  return snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0))
+export async function listWaterBillCycles() {
+  const snap = await getDocs(query(billsRef, orderBy('createdAt', 'desc')))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
 export function houseShareFromWaterBill(bill, houseId) {

@@ -241,14 +241,8 @@ export async function cancelRentRevision(houseId) {
 // It's always still visible to the owner via the full house doc.
 export async function setPhoneVisibility(houseId, visible) {
   await updateDoc(doc(db, 'houses', houseId), { phoneVisibleToNeighbors: visible })
-  // Keep the tenant's directory write narrowly scoped to the one field they control.
-  await updateDoc(doc(db, 'directory', houseId), { phoneVisibleToNeighbors: visible })
   const house = await getHouse(houseId)
-  if (house?.tenantName) {
-    await updateDoc(doc(db, 'directory', houseId), {
-      tenantPhone: visible ? house.tenantPhone : null,
-    })
-  }
+  await syncDirectoryEntry(houseId, house)
 }
 
 // Safe-fields-only list for the tenant-facing neighbor directory / vacant house browser.
