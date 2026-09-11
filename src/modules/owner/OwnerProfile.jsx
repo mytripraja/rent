@@ -91,22 +91,13 @@ export default function OwnerProfile() {
         </div>
 
         <div className="pt-2 border-t border-brass/20">
-          <label className="flex items-center justify-between text-sm font-medium text-ink cursor-pointer">
-            <span className="flex items-center gap-2">
-              Two-Factor Authentication
-              {user?.twoFactorEnabled && <span className="px-2 py-0.5 bg-stamp-green/10 text-stamp-green rounded-full text-xs">Enabled</span>}
-            </span>
-            <input 
-              type="checkbox" 
-              className="toggle-checkbox"
-              checked={user?.twoFactorEnabled || false}
-              onChange={(e) => {
-                showToast({ message: "2FA configuration flow requires custom OTP UI (Scaffold active)", type: "info" })
-                // updateOwnProfile({ uid: user.uid, twoFactorEnabled: e.target.checked, twoFactorPhone: phone })
-              }}
-            />
-          </label>
-          <p className="text-xs text-ink-soft mt-1">When enabled, you'll receive an OTP on your phone during login.</p>
+          <p className="text-sm font-medium text-ink">Two-Factor Authentication</p>
+          <p className="text-xs text-ink-soft mt-1">
+            Not available right now — since September 2024, Firebase requires a paid billing
+            account to send any SMS/OTP at all, which this app deliberately avoids (see the
+            note on the main dashboard about staying on Firebase's free plan). If you'd like
+            this enough to accept a small per-message cost, it can be added — just ask.
+          </p>
         </div>
 
         <button disabled={saving} className="w-full bg-brand text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-60">

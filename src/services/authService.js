@@ -177,6 +177,18 @@ export async function resetPassword(email) {
   await sendPasswordResetEmail(auth, email)
 }
 
+// ---- Phone verification (NOT currently wired to any UI — see below) ----
+// Since September 2024, Firebase phone/SMS authentication requires the paid
+// Blaze plan with a billing account attached — this is not a free-tier quota
+// that runs out, billing is required from the very first SMS sent. That
+// directly conflicts with this project's whole approach of staying on
+// Firebase's free Spark plan (see the Cloudinary/Vercel-functions migration
+// elsewhere in this codebase, which exists specifically to avoid Firebase
+// billing). These two functions are left here in case a future update
+// decides the SMS cost is worth it, but nothing in the UI currently calls
+// them, and nothing should until that's a deliberate, informed decision —
+// wiring them up silently would break the first time someone tries it with
+// a "billing not enabled" error, or worse, quietly enable per-SMS charges.
 export async function verifyPhoneNumber(phoneNumber, recaptchaVerifier) {
   const provider = new PhoneAuthProvider(auth)
   const verificationId = await provider.verifyPhoneNumber(phoneNumber, recaptchaVerifier)

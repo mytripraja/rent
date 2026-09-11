@@ -17,6 +17,7 @@ export default function OwnerHome({ onNavigate }) {
   const [stats, setStats] = useState(null)
   const [notices, setNotices] = useState([])
   const [openComplaints, setOpenComplaints] = useState(0)
+  const [housePulse, setHousePulse] = useState([])
 
   useEffect(() => {
     load()
@@ -28,11 +29,13 @@ export default function OwnerHome({ onNavigate }) {
     try {
       const houses = await listHouses()
       const occupied = houses.filter((h) => h.status === 'occupied')
+      setHousePulse(houses)
       const vacant = houses.length - occupied.length
       const month = currentMonthStr()
 
       let collected = 0
       let pendingHouses = 0
+      let pendingApprovals = 0
       
       const paymentsList = await Promise.all(
         occupied.map((h) => listRentHistory(h.id))
@@ -41,11 +44,15 @@ export default function OwnerHome({ onNavigate }) {
       occupied.forEach((h, index) => {
         const payments = paymentsList[index]
         const status = resolveMonthStatus(payments, month)
-        if (status === 'paid') collected += h.rentAmount
-        if (countMonthsPending(payments) > 0) pendingHouses++
+        const monthPayments = payments.filter((p) => p.month === month)
+        collected += monthPayments
+          .filter((p) => p.status === 'approved')
+          .reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+        if (status === 'waiting_approval') pendingApprovals++
+        if (status !== 'paid' || countMonthsPending(payments) > 0) pendingHouses++
       })
 
-      setStats({ occupied: occupied.length, vacant, collected, pendingHouses, total: houses.length })
+      setStats({ occupied: occupied.length, vacant, collected, pendingHouses, pendingApprovals, total: houses.length })
       setNotices(await listActiveNotices())
 
       const complaints = await listAllComplaints()
@@ -107,7 +114,7 @@ export default function OwnerHome({ onNavigate }) {
   const cards = [
     { id: 'houses', label: t('occupied'), value: `${stats.occupied}/${stats.total}`, icon: Home, tab: 'houses' },
     { id: 'rent', label: `${t('rentCollected')} — ${monthLabel()}`, value: `₹${stats.collected.toLocaleString('en-IN')}`, icon: Zap, tab: 'approvals' },
-    { id: 'pending', label: t('rentPending'), value: stats.pendingHouses, icon: AlertCircle, tab: 'tenants', urgent: stats.pendingHouses > 0 },
+    { id: 'pending', label: 'Needs attention', value: stats.pendingHouses, icon: AlertCircle, tab: 'tenants', urgent: stats.pendingHouses > 0 },
     { id: 'complaints', label: t('openComplaints'), value: openComplaints, icon: Users, tab: 'complaints', urgent: openComplaints > 0 },
   ]
 
@@ -138,6 +145,30 @@ export default function OwnerHome({ onNavigate }) {
         ))}
       </div>
 
+      {housePulse.length > 0 && (
+        <section aria-labelledby="house-pulse">
+          <div className="flex items-end justify-between mb-3">
+            <div><p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Property pulse</p><h3 id="house-pulse" className="font-display text-lg mt-1">All {housePulse.length} houses</h3></div>
+            <button onClick={() => onNavigate('houses')} className="text-xs font-semibold text-cover">Open houses →</button>
+          </div>
+          <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+            {housePulse.map(h => <button key={h.id} onClick={() => onNavigate('houses')} title={`${h.internalDoorNumber} — ${h.status}`} className={`rounded-xl border p-2 text-center transition hover:-translate-y-0.5 ${h.status === 'occupied' ? 'border-stamp-green/30 bg-stamp-green/5' : 'border-stamp-amber/30 bg-stamp-amber/5'}`}>
+              <span className="font-mono-tab text-sm font-semibold">{h.internalDoorNumber}</span><span className={`block text-[9px] mt-1 uppercase tracking-wide ${h.status === 'occupied' ? 'text-stamp-green' : 'text-stamp-amber'}`}>{h.status === 'occupied' ? 'Occupied' : 'Vacant'}</span>
+            </button>)}
+          </div>
+        </section>
+      )}
+
+      {stats.pendingApprovals > 0 && (
+        <button onClick={() => onNavigate('approvals')} className="w-full text-left bg-cover text-paper rounded-2xl p-4 flex items-center justify-between gap-4 shadow-sm hover:bg-cover-dark transition">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-brass/20 flex items-center justify-center"><CheckIcon /></div>
+            <div><p className="font-semibold">{stats.pendingApprovals} rent {stats.pendingApprovals === 1 ? 'payment' : 'payments'} waiting for approval</p><p className="text-xs text-brass-light mt-0.5">Review and issue receipts</p></div>
+          </div>
+          <ArrowRight size={18} aria-hidden="true" />
+        </button>
+      )}
+
       {notices.length > 0 && (
         <div>
           <SectionHeader icon={Bell} label="Active Notices" />
@@ -163,6 +194,10 @@ export default function OwnerHome({ onNavigate }) {
       </div>
     </div>
   )
+}
+
+function CheckIcon() {
+  return <span className="text-brass-light text-lg font-bold" aria-hidden="true">✓</span>
 }
 
 function SectionHeader({ icon: Icon, label }) {

@@ -3,7 +3,11 @@ import { getHouse, getHouseHistory } from '../../services/houseService'
 import { listRentHistory } from '../../services/rentService'
 import { listAdvanceLedger, addAdvancePayment, getAdvanceCollected } from '../../services/advanceLedgerService'
 import { updateTenantContact } from '../../services/authService'
+import { uploadAgreement, getAgreementForHouse, getAgreementViewUrl } from '../../services/agreementService'
 import ApprovalStatusBadge from '../shared/ApprovalStatusBadge'
+import TextField from '../shared/ui/TextField'
+import SelectField from '../shared/ui/SelectField'
+import Button from '../shared/ui/Button'
 import { useAuth } from '../../context/AuthContext'
 
 export default function TenantProfile({ houseId, onBack }) {
@@ -13,8 +17,10 @@ export default function TenantProfile({ houseId, onBack }) {
   const [pastOccupants, setPastOccupants] = useState([])
   const [ledger, setLedger] = useState([])
   const [collected, setCollected] = useState(0)
+  const [agreement, setAgreement] = useState(null)
   const [editingContact, setEditingContact] = useState(false)
   const [addingAdvance, setAddingAdvance] = useState(false)
+  const [uploadingAgreement, setUploadingAgreement] = useState(false)
 
   useEffect(() => {
     load()
@@ -28,6 +34,7 @@ export default function TenantProfile({ houseId, onBack }) {
     if (h?.status === 'occupied') {
       setLedger(await listAdvanceLedger(houseId))
       setCollected(await getAdvanceCollected(houseId))
+      setAgreement(await getAgreementForHouse(houseId))
     }
   }
 
@@ -83,6 +90,10 @@ export default function TenantProfile({ houseId, onBack }) {
             {ledger.length === 0 && <p className="text-xs text-ink-soft">No advance payments recorded yet.</p>}
           </div>
         </div>
+      )}
+
+      {!isVacant && (
+        <RentAgreementCard house={house} agreement={agreement} onChanged={load} uploading={uploadingAgreement} setUploading={setUploadingAgreement} />
       )}
 
       <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
@@ -256,14 +267,121 @@ function CommLog({ houseId, tenantName }) {
   )
 }
 
+function RentAgreementCard({ house, agreement, onChanged, uploading, setUploading }) {
+  const [showForm, setShowForm] = useState(false)
+  const [viewing, setViewing] = useState(false)
+  const [viewError, setViewError] = useState('')
+  const [form, setForm] = useState({
+    startDate: '', endDate: '', monthlyRent: house.rentAmount ? String(house.rentAmount) : '',
+  })
+  const [file, setFile] = useState(null)
+  const [error, setError] = useState('')
+
+  async function submit(e) {
+    e.preventDefault()
+    if (!file) { setError('Choose a file to upload.'); return }
+    setUploading(true)
+    setError('')
+    try {
+      await uploadAgreement({
+        houseId: house.id,
+        tenantId: house.currentTenantId,
+        tenantName: house.tenantName,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        monthlyRent: Number(form.monthlyRent),
+        file,
+      })
+      setShowForm(false)
+      setFile(null)
+      onChanged()
+    } catch (err) {
+      setError(err.message || 'Upload failed — please try again.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleView() {
+    setViewing(true)
+    setViewError('')
+    try {
+      const url = await getAgreementViewUrl(agreement)
+      window.open(url, '_blank', 'noopener')
+    } catch (err) {
+      setViewError(err.message || 'Could not open the agreement.')
+    } finally {
+      setViewing(false)
+    }
+  }
+
+  return (
+    <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-ink text-sm">Rent Agreement</h3>
+        {agreement && !showForm && (
+          <button onClick={() => setShowForm(true)} className="text-xs text-brand hover:underline">Replace</button>
+        )}
+      </div>
+
+      {agreement && !showForm && (
+        <div className="text-sm space-y-1">
+          <p className="text-ink-soft">{agreement.startDate} to {agreement.endDate} · ₹{agreement.monthlyRent}/mo</p>
+          <p className="text-xs text-ink-soft">Uploaded {new Date(agreement.uploadedAt).toLocaleDateString()}</p>
+          <Button size="sm" onClick={handleView} loading={viewing} loadingText="Opening…" className="mt-1">View Agreement</Button>
+          {viewError && <p className="text-xs text-red-600" role="alert">{viewError}</p>}
+        </div>
+      )}
+
+      {!agreement && !showForm && (
+        <div>
+          <p className="text-sm text-ink-soft mb-2">No agreement on file yet.</p>
+          <Button size="sm" onClick={() => setShowForm(true)}>Upload Agreement</Button>
+        </div>
+      )}
+
+      {showForm && (
+        <form onSubmit={submit} className="space-y-3" noValidate>
+          <div className="grid grid-cols-2 gap-3">
+            <TextField label="Start date" type="date" required value={form.startDate}
+              onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+            <TextField label="End date" type="date" required value={form.endDate}
+              onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+          </div>
+          <TextField label="Monthly rent (₹)" type="number" required value={form.monthlyRent}
+            onChange={(e) => setForm({ ...form, monthlyRent: e.target.value })} />
+          <div>
+            <label className="text-sm text-ink-soft" htmlFor="agreement-file">Agreement file (photo or PDF)</label>
+            <input id="agreement-file" type="file" accept="image/*,.pdf" onChange={(e) => setFile(e.target.files[0])} className="w-full text-sm mt-1" />
+          </div>
+          {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+          <div className="flex gap-2">
+            <Button type="submit" loading={uploading} loadingText="Uploading…" className="flex-1">Save</Button>
+            <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setError('') }} className="flex-1">Cancel</Button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
 function EditContactModal({ house, onClose, onSaved }) {
   const [email, setEmail] = useState(house.tenantEmail || '')
   const [phone, setPhone] = useState(house.tenantPhone || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [touched, setTouched] = useState({})
+
+  const emailError = touched.email && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ? 'Enter a valid email address.' : ''
+  const phoneError = touched.phone && phone && phone.replace(/\D/g, '').length < 10
+    ? 'Enter a valid 10-digit phone number.' : ''
 
   async function submit(e) {
     e.preventDefault()
+    setTouched({ email: true, phone: true })
+    if (emailError || phoneError) return
+
     setSaving(true)
     setError('')
     try {
@@ -283,22 +401,24 @@ function EditContactModal({ house, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-      <form onSubmit={submit} className="bg-paper-raised rounded-2xl shadow-lg w-full max-w-sm p-6 space-y-3">
-        <h3 className="font-semibold text-ink">Edit Contact Info</h3>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" placeholder="Email" />
-        <input value={phone} onChange={(e) => setPhone(e.target.value)}
-          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" placeholder="Phone" />
-        {email !== house.tenantEmail && (
-          <p className="text-xs text-amber-600">Changing the email also changes their login.</p>
-        )}
-        {error && <p className="text-xs text-red-600">{error}</p>}
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-labelledby="edit-contact-title">
+      <form onSubmit={submit} className="bg-paper-raised rounded-2xl shadow-lg w-full max-w-sm p-6 space-y-3" noValidate>
+        <h3 id="edit-contact-title" className="font-semibold text-ink font-display text-lg">Edit Contact Info</h3>
+        <TextField
+          label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+          onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+          error={emailError}
+          hint={email !== house.tenantEmail && !emailError ? 'Changing the email also changes their login.' : undefined}
+        />
+        <TextField
+          label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)}
+          onBlur={() => setTouched((t) => ({ ...t, phone: true }))}
+          error={phoneError}
+        />
+        {error && <p className="text-xs text-red-600" role="alert">{error}</p>}
         <div className="flex gap-2">
-          <button disabled={saving} className="flex-1 bg-brand text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-          <button type="button" onClick={onClose} className="flex-1 bg-paper border border-brass/30 text-ink-soft py-2 rounded-lg text-sm font-medium">Cancel</button>
+          <Button type="submit" loading={saving} loadingText="Saving…" className="flex-1">Save</Button>
+          <Button type="button" variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
         </div>
       </form>
     </div>
@@ -308,9 +428,14 @@ function EditContactModal({ house, onClose, onSaved }) {
 function AddAdvanceModal({ house, user, onClose, onSaved }) {
   const [form, setForm] = useState({ amount: '', date: '', mode: 'cash', note: '' })
   const [saving, setSaving] = useState(false)
+  const [touched, setTouched] = useState(false)
+
+  const amountError = touched && form.amount && Number(form.amount) <= 0 ? 'Amount must be greater than ₹0.' : ''
 
   async function submit(e) {
     e.preventDefault()
+    setTouched(true)
+    if (amountError) return
     setSaving(true)
     try {
       await addAdvancePayment({
@@ -330,26 +455,25 @@ function AddAdvanceModal({ house, user, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-      <form onSubmit={submit} className="bg-paper-raised rounded-2xl shadow-lg w-full max-w-sm p-6 space-y-3">
-        <h3 className="font-semibold text-ink">Add Advance Payment</h3>
-        <input required type="number" placeholder="Amount (₹)" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })}
-          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
-        <input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
-          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
-        <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}
-          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-labelledby="add-advance-title">
+      <form onSubmit={submit} className="bg-paper-raised rounded-2xl shadow-lg w-full max-w-sm p-6 space-y-3" noValidate>
+        <h3 id="add-advance-title" className="font-semibold text-ink font-display text-lg">Add Advance Payment</h3>
+        <TextField
+          label="Amount (₹)" type="number" required value={form.amount}
+          onChange={(e) => setForm({ ...form, amount: e.target.value })}
+          onBlur={() => setTouched(true)}
+          error={amountError}
+        />
+        <TextField label="Date" type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+        <SelectField label="Mode" value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
           <option value="cash">Cash</option>
           <option value="upi">UPI</option>
           <option value="bank">Bank Transfer</option>
-        </select>
-        <input placeholder="Note (optional)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })}
-          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        </SelectField>
+        <TextField label="Note" hint="Optional" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
         <div className="flex gap-2">
-          <button disabled={saving} className="flex-1 bg-brand text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
-            {saving ? 'Saving…' : 'Add'}
-          </button>
-          <button type="button" onClick={onClose} className="flex-1 bg-paper border border-brass/30 text-ink-soft py-2 rounded-lg text-sm font-medium">Cancel</button>
+          <Button type="submit" loading={saving} loadingText="Saving…" className="flex-1">Add</Button>
+          <Button type="button" variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
         </div>
       </form>
     </div>

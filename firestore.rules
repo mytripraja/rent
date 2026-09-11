@@ -72,7 +72,10 @@ service cloud.firestore {
     // browse neighbors and vacant units without ever reading each other's house doc.
     match /directory/{houseId} {
       allow read: if isSignedIn();
-      allow write: if isOwner() || (isTenant() && myHouseId() == houseId);
+      allow create, delete: if isOwner();
+      allow update: if isOwner() || (isTenant() && myHouseId() == houseId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phoneVisibleToNeighbors', 'tenantPhone'])
+        && request.resource.data.tenantPhone == (request.resource.data.phoneVisibleToNeighbors ? userDoc().data.phone : null));
     }
 
     // ---- rentPayments ----
@@ -80,19 +83,27 @@ service cloud.firestore {
     // Only the owner can approve/reject (update status).
     match /rentPayments/{paymentId} {
       allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
-      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (isTenant()
+        && request.resource.data.houseId == myHouseId()
+        && request.resource.data.tenantId == request.auth.uid
+        && request.resource.data.status == 'waiting_approval'
+        && request.resource.data.uploadedByOwner == false);
       allow update: if isOwner();
       allow delete: if isOwner();
     }
 
     // ---- ebBills / ebBillPayments ----
     match /ebBills/{billId} {
-      allow read: if isOwner() || isTenant();
+      allow read: if isOwner() || (isTenant() && resource.data.houseIds is list && myHouseId() in resource.data.houseIds);
       allow write: if isOwner();
     }
     match /ebBillPayments/{paymentId} {
       allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
-      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (isTenant()
+        && request.resource.data.houseId == myHouseId()
+        && request.resource.data.tenantId == request.auth.uid
+        && request.resource.data.status == 'waiting_approval'
+        && request.resource.data.uploadedByOwner == false);
       allow update: if isOwner();
     }
 
@@ -139,7 +150,11 @@ service cloud.firestore {
     // This collection just tracks who uploaded what.
     match /documents/{docId} {
       allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
-      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (isTenant()
+        && request.resource.data.houseId == myHouseId()
+        && request.resource.data.tenantId == request.auth.uid
+        && request.resource.data.status == 'waiting_approval'
+        && request.resource.data.uploadedByOwner == false);
       allow update, delete: if isOwner();
     }
     match /vacateRecords/{recordId} {
@@ -195,12 +210,16 @@ service cloud.firestore {
 
     // ---- waterBills / waterBillPayments ----
     match /waterBills/{billId} {
-      allow read: if isOwner() || isTenant();
+      allow read: if isOwner() || (isTenant() && resource.data.houseIds is list && myHouseId() in resource.data.houseIds);
       allow write: if isOwner();
     }
     match /waterBillPayments/{paymentId} {
       allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
-      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (isTenant()
+        && request.resource.data.houseId == myHouseId()
+        && request.resource.data.tenantId == request.auth.uid
+        && request.resource.data.status == 'waiting_approval'
+        && request.resource.data.uploadedByOwner == false);
       allow update: if isOwner();
     }
 
@@ -215,7 +234,8 @@ service cloud.firestore {
     match /visitors/{visitorId} {
       allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
       allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
-      allow update: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
+      allow update: if isOwner() || (isTenant() && resource.data.houseId == myHouseId()
+        && request.resource.data.houseId == resource.data.houseId);
       allow delete: if isOwner();
     }
 

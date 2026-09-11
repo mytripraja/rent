@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   Home, DoorOpen, Users, CheckCircle2, PenSquare, Zap, ZapOff,
   Bell, MessageSquareWarning, Phone, FileText, MessagesSquare, MoreHorizontal, LogOut, HelpCircle,
-  IndianRupee, BarChart, Droplets,
+  IndianRupee, BarChart, Droplets, Menu, X, CalendarDays,
 } from 'lucide-react'
 
 const OwnerHome = React.lazy(() => import('./OwnerHome'))
@@ -40,31 +40,31 @@ import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 
 const TABS = [
-  { id: 'home', route: 'home', label: 'Home', icon: Home },
-  { id: 'houses', route: 'houses', label: 'Houses', icon: DoorOpen },
-  { id: 'tenants', route: 'tenants', label: 'Tenants', icon: Users },
-  { id: 'calendar', route: 'calendar', label: 'Calendar', icon: BarChart },
-  { id: 'approvals', route: 'approvals', label: 'Rent Approvals', icon: CheckCircle2 },
-  { id: 'manualEntry', route: 'manual-entry', label: 'Manual Entry', icon: PenSquare },
-  { id: 'eb', route: 'eb-bill', label: 'EB Bill', icon: Zap },
-  { id: 'ebApprovals', route: 'eb-approvals', label: 'EB Approvals', icon: ZapOff },
-  { id: 'water', route: 'water-bill', label: 'Water Bill', icon: Droplets },
-  { id: 'waterApprovals', route: 'water-approvals', label: 'Water Approvals', icon: Droplets },
-  { id: 'notices', route: 'notices', label: 'Notices', icon: Bell },
-  { id: 'complaints', route: 'complaints', label: 'Complaints', icon: MessageSquareWarning },
-  { id: 'contacts', route: 'contacts', label: 'Service Contacts', icon: Phone },
-  { id: 'reminders', route: 'reminders', label: 'Reminders', icon: Bell },
-  { id: 'documents', route: 'documents', label: 'Documents', icon: FileText },
-  { id: 'reports', route: 'reports', label: 'Reports', icon: BarChart },
-  { id: 'analytics', route: 'analytics', label: 'Analytics', icon: BarChart },
-  { id: 'expenses', route: 'expenses', label: 'Expenses', icon: IndianRupee },
-  { id: 'community', route: 'community', label: 'Community', icon: MessagesSquare },
-  { id: 'more', route: 'more', label: 'More', icon: MoreHorizontal },
+  { id: 'home', route: 'home', label: 'Overview', icon: Home, group: 'Daily' },
+  { id: 'houses', route: 'houses', label: 'Houses', icon: DoorOpen, group: 'Daily' },
+  { id: 'tenants', route: 'tenants', label: 'Tenants', icon: Users, group: 'Daily' },
+  { id: 'approvals', route: 'approvals', label: 'Rent approvals', icon: CheckCircle2, group: 'Money' },
+  { id: 'manualEntry', route: 'manual-entry', label: 'Manual payment', icon: PenSquare, group: 'Money' },
+  { id: 'eb', route: 'eb-bill', label: 'EB bills', icon: Zap, group: 'Money' },
+  { id: 'ebApprovals', route: 'eb-approvals', label: 'EB approvals', icon: ZapOff, group: 'Money' },
+  { id: 'water', route: 'water-bill', label: 'Water bills', icon: Droplets, group: 'Money' },
+  { id: 'waterApprovals', route: 'water-approvals', label: 'Water approvals', icon: Droplets, group: 'Money' },
+  { id: 'expenses', route: 'expenses', label: 'Expenses', icon: IndianRupee, group: 'Money' },
+  { id: 'calendar', route: 'calendar', label: 'Payment calendar', icon: CalendarDays, group: 'Operations' },
+  { id: 'complaints', route: 'complaints', label: 'Complaints', icon: MessageSquareWarning, group: 'Operations' },
+  { id: 'notices', route: 'notices', label: 'Notices', icon: Bell, group: 'Operations' },
+  { id: 'reminders', route: 'reminders', label: 'Reminders', icon: Bell, group: 'Operations' },
+  { id: 'documents', route: 'documents', label: 'Documents', icon: FileText, group: 'Operations' },
+  { id: 'contacts', route: 'contacts', label: 'Service contacts', icon: Phone, group: 'Operations' },
+  { id: 'community', route: 'community', label: 'Community', icon: MessagesSquare, group: 'Community' },
+  { id: 'reports', route: 'reports', label: 'Reports', icon: BarChart, group: 'Insights' },
+  { id: 'analytics', route: 'analytics', label: 'Analytics', icon: BarChart, group: 'Insights' },
+  { id: 'more', route: 'more', label: 'More tools', icon: MoreHorizontal, group: 'Admin' },
 ]
 
-// The 5 things you reach for most often, pinned to a bottom nav on mobile —
-// full context switching still lives in the top scrollable tab strip.
-const MOBILE_PRIMARY = ['home', 'houses', 'tenants', 'approvals', 'more']
+const MOBILE_PRIMARY = ['home', 'houses', 'approvals', 'complaints', 'more']
+const GROUPS = ['Daily', 'Money', 'Operations', 'Community', 'Insights', 'Admin']
+
 
 export default function OwnerDashboard() {
   const { user } = useAuth()
@@ -77,6 +77,7 @@ export default function OwnerDashboard() {
 
   const [replayTour, setReplayTour] = useState(false)
   const [searchHouseId, setSearchHouseId] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   function handleSearchSelect(houseId) {
     setSearchHouseId(houseId)
@@ -112,26 +113,36 @@ export default function OwnerDashboard() {
         </div>
       </header>
 
-      <nav className="bg-paper-raised border-b border-brass/25 px-4 sm:px-6 flex gap-1 overflow-x-auto" role="tablist" aria-label="Dashboard sections">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={tab === t.id}
-            aria-controls="dashboard-panel"
-            onClick={() => navigate(`/owner/${t.route}`)}
-            className={`shrink-0 flex items-center gap-1.5 text-sm px-3.5 py-3 border-b-2 whitespace-nowrap transition ${
-              tab === t.id
-                ? 'border-brass text-cover font-semibold'
-                : 'border-transparent text-ink-soft hover:text-ink'
-            }`}
-          >
-            <t.icon size={15} aria-hidden="true" />
-            {t.label}
-          </button>
-        ))}
-      </nav>
+      <div className="owner-shell">
+        <aside className={`owner-sidebar ${sidebarOpen ? 'owner-sidebar-open' : ''}`} aria-label="Owner navigation">
+          <div className="flex items-center justify-between px-4 py-3 lg:hidden">
+            <span className="font-semibold">Menu</span>
+            <IconButton icon={X} label="Close menu" onClick={() => setSidebarOpen(false)} />
+          </div>
+          <div className="owner-sidebar-inner">
+            {GROUPS.map(group => {
+              const items = TABS.filter(t => t.group === group)
+              return <div key={group} className="owner-nav-group">
+                <p className="owner-nav-label">{group}</p>
+                {items.map(item => {
+                  const Icon = item.icon
+                  const active = tab === item.id
+                  return <button key={item.id} onClick={() => { navigate(`/owner/${item.route}`); setSidebarOpen(false) }} className={`owner-nav-item ${active ? 'owner-nav-item-active' : ''}`} aria-current={active ? 'page' : undefined}>
+                    <Icon size={17} aria-hidden="true" />
+                    <span>{item.label}</span>
+                  </button>
+                })}
+              </div>
+            })}
+          </div>
+        </aside>
+        {sidebarOpen && <button aria-label="Close navigation" className="owner-sidebar-backdrop lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
+        <div className="owner-content">
+          <div className="lg:hidden flex items-center justify-between mb-4">
+            <button onClick={() => setSidebarOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-brass/25 bg-paper-raised px-3 py-2 text-sm font-medium"><Menu size={18} /> Menu</button>
+            <span className="text-xs text-ink-soft">{activeTabObj.label}</span>
+          </div>
       <main id="main-content" tabIndex={-1} className="p-4 sm:p-6 pb-24 sm:pb-6 max-w-5xl mx-auto">
         <AnimatePresence mode="wait">
           <motion.div
@@ -171,26 +182,17 @@ export default function OwnerDashboard() {
           </motion.div>
         </AnimatePresence>
       </main>
+        </div>
+      </div>
 
-      {/* Mobile bottom nav — the 5 most-reached-for sections, thumb-friendly */}
-      <nav
-        className="sm:hidden fixed bottom-0 inset-x-0 bg-paper-raised border-t border-brass/25 flex items-stretch z-40"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-        aria-label="Primary"
-      >
-        {TABS.filter((t) => MOBILE_PRIMARY.includes(t.id)).map((t) => (
-          <button
-            key={t.id}
-            onClick={() => navigate(`/owner/${t.route}`)}
-            aria-current={tab === t.id ? 'page' : undefined}
-            className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[11px] ${
-              tab === t.id ? 'text-cover font-semibold' : 'text-ink-soft'
-            }`}
-          >
-            <t.icon size={18} aria-hidden="true" />
-            {t.label}
+      {/* Mobile bottom nav */}
+      <nav className="sm:hidden fixed bottom-0 inset-x-0 bg-paper-raised/95 backdrop-blur border-t border-brass/25 flex z-40" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} aria-label="Primary">
+        {TABS.filter(t => MOBILE_PRIMARY.includes(t.id)).map(t => {
+          const Icon = t.icon
+          return <button key={t.id} onClick={() => navigate(`/owner/${t.route}`)} className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] ${tab === t.id ? 'text-cover font-semibold' : 'text-ink-soft'}`}>
+            <Icon size={18} aria-hidden="true" />{t.label}
           </button>
-        ))}
+        })}
       </nav>
 
       <OnboardingTour

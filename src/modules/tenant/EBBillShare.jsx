@@ -29,7 +29,7 @@ export default function EBBillShare() {
 
   async function refresh() {
     try {
-      setCycles(await listEbBillCycles())
+      setCycles(await listEbBillCycles({ houseId: user.houseId }))
       setPayments(await listEbPaymentsForHouse(user.houseId))
     } catch (err) {
       console.error(err)
