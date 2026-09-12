@@ -1,5 +1,5 @@
 import { collection, addDoc, getDocs, query, where, orderBy } from 'firebase/firestore'
-import { db } from './firebase'
+import { db, authedFetch } from './firebase'
 import { uploadPrivate } from './cloudinaryService'
 
 const agreementsRef = collection(db, 'rentAgreements')
@@ -22,4 +22,16 @@ export async function getAgreementForHouse(houseId) {
 export async function listAllAgreements() {
   const snap = await getDocs(query(agreementsRef, orderBy('uploadedAt', 'desc')))
   return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+// Owner can view any agreement; a tenant can only view their own house's —
+// enforced server-side in api/get-agreement-url.js, not just by the UI
+// hiding the button, since a client-side-only check isn't a real guarantee.
+export async function getAgreementViewUrl(agreement) {
+  const data = await authedFetch('/api/get-agreement-url', {
+    agreementId: agreement.id,
+    publicId: agreement.publicId,
+    resourceType: agreement.resourceType,
+  })
+  return data.url
 }

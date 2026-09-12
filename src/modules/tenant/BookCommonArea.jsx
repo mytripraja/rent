@@ -36,8 +36,8 @@ export default function BookCommonArea() {
   }
 
   return (
-    <div className="p-4 bg-paper min-h-screen font-sans text-ink">
-      <h1 className="text-2xl font-display text-cover mb-6">Book Common Area</h1>
+    <div>
+      <h3 className="font-semibold text-ink mb-3">Book Common Area</h3>
       
       <form onSubmit={handleSubmit} className="bg-paper-raised p-4 rounded-lg shadow-sm border border-ink/10 mb-8 space-y-4">
         <select name="area" required className="w-full p-2 border border-ink/20 rounded bg-paper">

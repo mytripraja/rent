@@ -7,12 +7,18 @@ const EBBillShare = React.lazy(() => import('./EBBillShare'))
 const WaterBillShare = React.lazy(() => import('./WaterBillShare'))
 const NoticeFeed = React.lazy(() => import('./NoticeFeed'))
 const RaiseComplaint = React.lazy(() => import('./RaiseComplaint'))
+const RentAgreementView = React.lazy(() => import('./RentAgreementView'))
 const Directory = React.lazy(() => import('./Directory'))
 const ServiceContacts = React.lazy(() => import('./ServiceContacts'))
 const RentRevisionBanner = React.lazy(() => import('./RentRevisionBanner'))
 const DocumentUpload = React.lazy(() => import('./DocumentUpload'))
 const TenantRentHero = React.lazy(() => import('./TenantRentHero'))
 const CommunityBoard = React.lazy(() => import('../shared/CommunityBoard'))
+const MaintenanceRequest = React.lazy(() => import('./MaintenanceRequest'))
+const VisitorLog = React.lazy(() => import('./VisitorLog'))
+const BookCommonArea = React.lazy(() => import('./BookCommonArea'))
+const EventCalendar = React.lazy(() => import('../shared/EventCalendar'))
+const WasteSchedule = React.lazy(() => import('../shared/WasteSchedule'))
 import LoadingScreen from '../shared/LoadingScreen'
 import PullToRefresh from '../shared/ui/PullToRefresh'
 import OnboardingTour from '../shared/OnboardingTour'
@@ -79,11 +85,30 @@ export default function TenantDashboard() {
               <h2 id="more-heading" className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-2">More</h2>
               <div className="grid md:grid-cols-2 gap-4">
                 <RaiseComplaint />
+                <RentAgreementView />
                 <Directory />
                 <ServiceContacts />
                 <DocumentUpload />
+                <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
+                  <MaintenanceRequest />
+                </div>
+                <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
+                  <VisitorLog />
+                </div>
+                <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
+                  <BookCommonArea />
+                </div>
               </div>
             </section>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
+                <EventCalendar />
+              </div>
+              <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
+                <WasteSchedule />
+              </div>
+            </div>
 
             <CommunityBoard user={user} />
 

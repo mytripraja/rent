@@ -11,6 +11,9 @@ export default function GoogleSheetsExport() {
   async function fetchRentData() {
     setLoading(true)
     try {
+      const houses = await listHouses()
+      const houseById = Object.fromEntries(houses.map((h) => [h.id, h]))
+
       const q = query(collection(db, 'rentPayments'), orderBy('month', 'desc'))
       const snap = await getDocs(q)
       const data = snap.docs.map(doc => {
@@ -19,7 +22,10 @@ export default function GoogleSheetsExport() {
           id: doc.id,
           month: d.month || '',
           houseId: d.houseId || '',
-          tenantName: d.recordedBy?.name || 'Unknown',
+          // The tenant's name comes from the house record, not recordedBy —
+          // recordedBy is whoever submitted the entry (could be the owner
+          // doing a manual entry), which isn't the same person as the tenant.
+          tenantName: houseById[d.houseId]?.tenantName || 'Unknown',
           amount: d.amount || 0,
           status: d.status || '',
           date: d.dateSent || '',

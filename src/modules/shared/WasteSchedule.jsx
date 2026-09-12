@@ -20,8 +20,8 @@ export default function WasteSchedule() {
   }
 
   return (
-    <div className="p-4 bg-paper min-h-screen font-sans text-ink">
-      <h1 className="text-2xl font-display text-cover mb-6">Waste Collection Schedule</h1>
+    <div>
+      <h3 className="font-semibold text-ink mb-3">Waste Collection Schedule</h3>
       <div className="bg-paper-raised rounded-lg border border-ink/10 p-4">
         <div className="grid grid-cols-2 gap-4">
           {days.map(day => {

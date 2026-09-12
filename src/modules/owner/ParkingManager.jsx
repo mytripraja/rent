@@ -31,9 +31,9 @@ export default function ParkingManager() {
   }
 
   return (
-    <div className="p-4 bg-paper min-h-screen font-sans text-ink">
+    <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-display text-cover">Parking Manager</h1>
+        <h2 className="text-lg font-semibold text-ink">Parking Manager</h2>
         <button onClick={handleAddSlot} className="px-4 py-2 bg-cover text-paper rounded text-sm">Add Slot</button>
       </div>
 

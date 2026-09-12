@@ -6,7 +6,10 @@ import { createGoogleCalendarLink } from '../../utils/calendarLinks'
 
 export default function EventCalendar() {
   const { user } = useAuth()
-  const isOwner = user?.role === 'owner'
+  // 'admin' is the super-admin's role and 'owner' is a co-owner's — both are
+  // owner-level accounts with identical day-to-day access (see firestore.rules'
+  // isOwner() helper, which treats them the same way).
+  const isOwner = user?.role === 'owner' || user?.role === 'admin'
   const [events, setEvents] = useState([])
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7)) // YYYY-MM
   const [showForm, setShowForm] = useState(false)
@@ -35,9 +38,9 @@ export default function EventCalendar() {
   }
 
   return (
-    <div className="p-4 bg-paper min-h-screen font-sans text-ink">
+    <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-display text-cover">Community Events</h1>
+        <h3 className="font-semibold text-ink">Community Events</h3>
         {isOwner && (
           <button onClick={() => setShowForm(!showForm)} className="p-2 bg-cover text-paper rounded-full">
             <Plus size={20} />

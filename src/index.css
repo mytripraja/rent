@@ -1,147 +1,182 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
-/*
-  DESIGN SYSTEM — "Ledger"
-  Grounded in the product itself: the Customer ID system is explicitly modeled
-  on a bank passbook, so the whole visual language follows that thread —
-  aged ledger paper, an oxblood passbook cover, brass door-plate accents, and
-  rubber-stamp status badges instead of generic pill badges. Signature element:
-  the rotated ink-stamp badge (see .stamp-* classes), used everywhere a
-  paid/pending/not-paid status appears.
+/* Rental Manager — modern property workspace
+   Visual direction: calm ivory canvas + deep ink/navy + teal actions + warm amber accents.
+   The old oxblood/aged-paper treatment has been replaced with a cleaner, premium interface.
 */
 @theme {
-  --color-paper: #f5f1e4;       /* aged ledger paper — page background */
-  --color-paper-raised: #fbf8ef; /* cards sitting slightly "above" the paper */
-  --color-ink: #2b2620;         /* warm near-black — body text */
-  --color-ink-soft: #6b6255;    /* muted ledger-pencil text */
-  --color-cover: #5b2a2a;       /* oxblood passbook cover — header, primary actions */
-  --color-cover-dark: #45201f;
-  --color-brass: #b8873d;       /* brass door-plate accent — highlights, active state */
-  --color-brass-light: #e4c98a;
-  --color-stamp-green: #2f6e4f; /* paid / approved */
-  --color-stamp-amber: #b8873d; /* waiting */
-  --color-stamp-red: #a63a32;   /* not paid / urgent */
-
-  /* Backward-compatible aliases so existing bg-brand / text-brand classes
-     across the app pick up the new palette without a full find-replace. */
-  --color-brand: #5b2a2a;
-  --color-brand-dark: #45201f;
-  --color-paid: #2f6e4f;
-  --color-waiting: #b8873d;
-  --color-notpaid: #a63a32;
-
-  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
-  --font-display: 'Fraunces', Georgia, serif;
+  --color-paper: #f5f7f6;
+  --color-paper-raised: #ffffff;
+  --color-ink: #18212f;
+  --color-ink-soft: #667085;
+  --color-cover: #172033;
+  --color-cover-dark: #0e1523;
+  --color-brass: #d4943a;
+  --color-brass-light: #f2c878;
+  --color-stamp-green: #16836b;
+  --color-stamp-amber: #c88425;
+  --color-stamp-red: #d14b4b;
+  --color-brand: #0f766e;
+  --color-brand-dark: #0b5d57;
+  --color-paid: #16836b;
+  --color-waiting: #c88425;
+  --color-notpaid: #d14b4b;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-display: 'Manrope', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not(.light) {
-    --color-paper: #1a1814;
-    --color-paper-raised: #252219;
-    --color-ink: #e8e0d0;
-    --color-ink-soft: #a89e8e;
-    --color-cover: #7a3a3a;
-    --color-brass: #c9974d;
-  }
+:root {
+  --rm-border: #e4e8e5;
+  --rm-border-strong: #d7ddd9;
+  --rm-surface-soft: #eef5f3;
+  --rm-shadow: 0 8px 28px rgba(23, 32, 51, .07);
+  --rm-shadow-hover: 0 14px 34px rgba(23, 32, 51, .11);
 }
 
 .dark {
-  --color-paper: #1a1814;
-  --color-paper-raised: #252219;
-  --color-ink: #e8e0d0;
-  --color-ink-soft: #a89e8e;
-  --color-cover: #7a3a3a;
-  --color-brass: #c9974d;
+  --color-paper: #0f1724;
+  --color-paper-raised: #172033;
+  --color-ink: #eef3f5;
+  --color-ink-soft: #a6b1bd;
+  --color-cover: #0b1220;
+  --color-cover-dark: #070c15;
+  --color-brass: #e0a94f;
+  --color-brass-light: #f0c77e;
+  --color-brand: #2aa897;
+  --color-brand-dark: #218c80;
+  --rm-border: #283444;
+  --rm-border-strong: #354255;
+  --rm-surface-soft: #1d2b3b;
+  --rm-shadow: 0 8px 28px rgba(0,0,0,.22);
+  --rm-shadow-hover: 0 14px 34px rgba(0,0,0,.32);
 }
 
+* { box-sizing: border-box; }
+html { background: var(--color-paper); }
 body {
+  margin: 0;
+  min-width: 320px;
   font-family: var(--font-sans);
-  background-color: var(--color-paper);
+  background:
+    radial-gradient(circle at 90% -10%, rgba(15,118,110,.07), transparent 28rem),
+    var(--color-paper);
   color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+.font-display { font-family: var(--font-display); }
+.font-mono-tab { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Global surface polish: existing Tailwind utility combinations now read as one system. */
+.bg-paper-raised {
+  box-shadow: var(--rm-shadow);
+  border-color: var(--rm-border) !important;
+}
+.rounded-2xl.bg-paper-raised:hover { box-shadow: var(--rm-shadow-hover); }
+
+input, textarea, select {
+  border-color: var(--rm-border-strong) !important;
+  background: var(--color-paper-raised) !important;
+  color: var(--color-ink) !important;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+input::placeholder, textarea::placeholder { color: #98a2b3; }
+input:focus, textarea:focus, select:focus {
+  border-color: var(--color-brand) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 14%, transparent);
+  outline: none;
 }
 
-.font-display {
-  font-family: var(--font-display);
-}
+/* Primary actions: softer, modern teal instead of brown. */
+.bg-cover { background-color: var(--color-cover) !important; }
+.hover\:bg-cover-dark:hover { background-color: var(--color-cover-dark) !important; }
+.bg-brand { background-color: var(--color-brand) !important; }
+.hover\:bg-brand-dark:hover { background-color: var(--color-brand-dark) !important; }
+.text-brand { color: var(--color-brand) !important; }
+.text-cover { color: var(--color-cover) !important; }
+.border-brand { border-color: var(--color-brand) !important; }
 
-.font-mono-tab {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Signature element: a rubber-stamp status badge. Ink color per status,
-   slight rotation and a double-ring border to read as an actual stamp
-   impression rather than a flat pill. */
+/* Status stamps are retained as a product signature, but cleaner and less decorative. */
 .stamp {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 0.25rem 0.65rem;
-  border-radius: 4px;
-  border: 1.5px solid currentColor;
-  outline: 1px solid currentColor;
-  outline-offset: 2px;
-  transform: rotate(-2deg);
-  background: transparent;
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-family: var(--font-mono); font-size: .68rem; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase;
+  padding: .3rem .62rem; border-radius: 999px; border: 1px solid currentColor;
+  outline: none; transform: none; background: color-mix(in srgb, currentColor 7%, transparent);
 }
-
 .stamp-green { color: var(--color-stamp-green); }
 .stamp-amber { color: var(--color-stamp-amber); }
 .stamp-red { color: var(--color-stamp-red); }
 .stamp-ink { color: var(--color-ink-soft); }
+.ledger-rule { border-bottom: 1px solid var(--rm-border); }
 
-/* Ledger rule — a warm hairline divider used on the home/summary screens
-   instead of plain gray borders, echoing ruled ledger paper. */
-.ledger-rule {
-  border-bottom: 1px solid color-mix(in srgb, var(--color-brass) 35%, transparent);
+/* Page typography and cards */
+main h1, main h2, main h3 { letter-spacing: -.02em; }
+main h2.font-display, main h2.text-lg { font-weight: 800; }
+main .shadow-sm { box-shadow: var(--rm-shadow); }
+main .border-brass\/20 { border-color: var(--rm-border) !important; }
+main .border-brass\/30 { border-color: var(--rm-border-strong) !important; }
+
+/* Modern form labels */
+label { font-weight: 500; }
+
+/* Scrollbars */
+* { scrollbar-width: thin; scrollbar-color: #cbd4d0 transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #cbd4d0; border-radius: 99px; }
+.dark *::-webkit-scrollbar-thumb { background: #3b4757; }
+
+*:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.skip-link {
+  position: absolute; left: -9999px; top: 0; z-index: 200;
+  background: var(--color-cover); color: white; padding: .75rem 1.25rem;
+  border-radius: 0 0 10px 0; font-weight: 700; font-size: .875rem;
+}
+.skip-link:focus { left: 0; }
+
+/* Reusable modern shell helpers */
+.rm-card {
+  background: var(--color-paper-raised);
+  border: 1px solid var(--rm-border);
+  border-radius: 18px;
+  box-shadow: var(--rm-shadow);
+}
+.rm-card-hover { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+.rm-card-hover:hover { transform: translateY(-2px); box-shadow: var(--rm-shadow-hover); border-color: #cbd8d3; }
+.rm-kicker { font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--color-ink-soft); }
+
+@media (max-width: 640px) {
+  body { background: var(--color-paper); }
+  .rm-card { border-radius: 15px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
 
-/* Accessibility: a visible, high-contrast focus ring on every interactive
-   element (not just inputs) for keyboard users — Tailwind's default outline
-   removal on :focus without a replacement is a common a11y failure. */
-*:focus-visible {
-  outline: 2px solid var(--color-brass);
-  outline-offset: 2px;
-  border-radius: 2px;
-}
-
-/* Skip-to-content link — hidden until keyboard-focused, standard pattern for
-   screen-reader/keyboard users to bypass repeated navigation. */
-.skip-link {
-  position: absolute;
-  left: -9999px;
-  top: 0;
-  z-index: 200;
-  background: var(--color-cover);
-  color: var(--color-paper);
-  padding: 0.75rem 1.25rem;
-  border-radius: 0 0 8px 0;
-  font-weight: 600;
-  font-size: 0.875rem;
-}
-.skip-link:focus {
-  left: 0;
-}
-
-/* Creative loading animation — a rubber stamp coming down, echoing the
-   passbook/ledger identity instead of a generic spinner. */
-@keyframes stamp-down {
-  0%   { transform: translateY(-14px) rotate(-8deg); opacity: 0; }
-  50%  { transform: translateY(2px) rotate(-2deg); opacity: 1; }
-  65%  { transform: translateY(-2px) rotate(-2deg); }
-  100% { transform: translateY(0) rotate(-2deg); opacity: 1; }
-}
-.loading-stamp {
-  animation: stamp-down 1.1s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
-}
+/* Public website + modern auth */
+.rm-logo-mark{display:grid;place-items:center;width:40px;height:40px;border-radius:13px;background:linear-gradient(145deg,var(--color-brand),var(--color-brand-dark));color:#fff;font-family:var(--font-display);font-weight:800;box-shadow:0 8px 22px rgba(15,118,110,.2)}
+.rm-logo-mark-dark{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);box-shadow:none}
+.rm-public-nav-cta{display:inline-flex;align-items:center;gap:7px;border-radius:12px;background:var(--color-cover);color:#fff;padding:.65rem .9rem;transition:transform .18s ease,box-shadow .18s ease}.rm-public-nav-cta:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(23,32,51,.16)}
+.rm-icon-button{display:grid;place-items:center;width:42px;height:42px;border:1px solid var(--rm-border);border-radius:13px;background:var(--color-paper-raised);color:var(--color-ink)}
+.rm-hero-button{display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:15px;background:var(--color-cover);color:#fff;padding:.9rem 1.15rem;font-weight:800;box-shadow:0 12px 28px rgba(23,32,51,.14);transition:transform .18s ease,box-shadow .18s ease}.rm-hero-button:hover{transform:translateY(-2px);box-shadow:0 18px 35px rgba(23,32,51,.18)}
+.rm-secondary-button{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--rm-border-strong);border-radius:15px;background:var(--color-paper-raised);padding:.9rem 1.15rem;font-weight:800;color:var(--color-ink);transition:transform .18s ease,background .18s ease}.rm-secondary-button:hover{transform:translateY(-2px);background:var(--color-paper)}
+.rm-orb{position:absolute;z-index:-1;border-radius:999px;filter:blur(1px);pointer-events:none}.rm-orb-one{width:34rem;height:34rem;right:-14rem;top:-7rem;background:radial-gradient(circle,rgba(15,118,110,.13),transparent 67%)}.rm-orb-two{width:25rem;height:25rem;left:-14rem;bottom:-12rem;background:radial-gradient(circle,rgba(212,148,58,.10),transparent 68%)}
+.rm-dashboard-preview{overflow:hidden;border:1px solid rgba(255,255,255,.12);border-radius:28px;background:linear-gradient(150deg,#172033,#0b1220);box-shadow:0 35px 90px rgba(23,32,51,.22);transform:perspective(1100px) rotateY(-3deg) rotateX(2deg)}
+.rm-preview-avatar{display:grid;place-items:center;width:36px;height:36px;border-radius:12px;background:rgba(255,255,255,.1);font-weight:800;color:#fff}.rm-float-card{position:absolute;right:-18px;bottom:28px;display:flex;align-items:center;gap:8px;border:1px solid var(--rm-border);border-radius:15px;background:var(--color-paper-raised);padding:.75rem .9rem;font-size:.75rem;font-weight:800;box-shadow:0 18px 38px rgba(23,32,51,.14)}
+.rm-public-card,.rm-role-card{border:1px solid var(--rm-border);border-radius:20px;background:var(--color-paper-raised);padding:1.35rem;box-shadow:var(--rm-shadow);transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease}.rm-public-card:hover,.rm-role-card:hover{transform:translateY(-4px);box-shadow:var(--rm-shadow-hover);border-color:var(--rm-border-strong)}.rm-feature-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:rgba(15,118,110,.09);color:var(--color-brand)}.rm-role-number{font-family:var(--font-mono);font-size:.72rem;font-weight:700;letter-spacing:.08em;color:var(--color-brand)}
+.rm-trust-panel{display:grid;gap:1.5rem;border-radius:28px;background:linear-gradient(135deg,#172033,#0b5d57);padding:1.5rem;box-shadow:0 24px 60px rgba(15,118,110,.15)}@media(min-width:900px){.rm-trust-panel{grid-template-columns:1fr 1fr;padding:2rem}}
+.rm-login-shell{background:radial-gradient(circle at 20% 0%,rgba(15,118,110,.08),transparent 24rem),var(--color-paper)}.rm-login-grid{position:absolute;inset:0;opacity:.32;background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:38px 38px;mask-image:linear-gradient(to bottom,black,transparent)}.rm-login-card{border:1px solid var(--rm-border);border-radius:25px;background:var(--color-paper-raised);padding:1.5rem;box-shadow:0 22px 70px rgba(23,32,51,.09)}
+.rm-legal-icon{display:grid;place-items:center;flex:0 0 auto;width:48px;height:48px;border-radius:15px;background:rgba(15,118,110,.1);color:var(--color-brand)}.rm-legal-meta{border:1px solid var(--rm-border);border-radius:14px;background:var(--color-paper-raised);padding:.8rem 1rem;font-size:.75rem;color:var(--color-ink-soft)}.rm-legal-section{border:1px solid var(--rm-border);border-radius:18px;background:var(--color-paper-raised);padding:1.25rem 1.35rem;box-shadow:0 5px 20px rgba(23,32,51,.035)}
+@keyframes rm-fade-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}.rm-public main section{animation:rm-fade-up .65s ease both}.rm-public main section:nth-child(2){animation-delay:.05s}.rm-public main section:nth-child(3){animation-delay:.1s}.rm-public main section:nth-child(4){animation-delay:.15s}
+@media(max-width:640px){.rm-dashboard-preview{transform:none;border-radius:22px}.rm-float-card{right:10px;bottom:14px}.rm-login-card{padding:1.2rem;border-radius:20px}}

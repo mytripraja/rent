@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { getHouses } from '../../services/houseService'
+import { listHouses } from '../../services/houseService'
 import { Share2, Copy } from 'lucide-react'
 
 export default function VacancyListing() {
   const [vacantHouses, setVacantHouses] = useState([])
 
   useEffect(() => {
-    getHouses().then(houses => {
+    listHouses().then(houses => {
       setVacantHouses(houses.filter(h => h.status === 'vacant'))
     })
   }, [])
@@ -30,8 +30,8 @@ export default function VacancyListing() {
   }
 
   return (
-    <div className="p-4 bg-paper min-h-screen font-sans text-ink">
-      <h1 className="text-2xl font-display text-cover mb-6">Vacancy Listings</h1>
+    <div>
+      <h2 className="text-lg font-semibold text-ink mb-6">Vacancy Listings</h2>
       
       <div className="space-y-4">
         {vacantHouses.length === 0 && <p className="text-ink-soft">No vacant houses currently.</p>}

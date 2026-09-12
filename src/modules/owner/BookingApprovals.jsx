@@ -16,8 +16,8 @@ export default function BookingApprovals() {
   const pending = bookings.filter(b => b.status === 'pending')
 
   return (
-    <div className="p-4 bg-paper min-h-screen font-sans text-ink">
-      <h1 className="text-2xl font-display text-cover mb-6">Booking Approvals</h1>
+    <div>
+      <h2 className="text-lg font-semibold text-ink mb-6">Booking Approvals</h2>
       
       <div className="space-y-4">
         {pending.length === 0 && <p className="text-ink-soft">No pending requests.</p>}

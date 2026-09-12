@@ -11,8 +11,8 @@ export default function FestivalGreetings() {
   const activeFest = festivals.find(f => f.id === selected)
 
   return (
-    <div className="p-4 bg-paper min-h-screen font-sans text-ink">
-      <h1 className="text-2xl font-display text-cover mb-6">Send Festival Greetings</h1>
+    <div>
+      <h2 className="text-lg font-semibold text-ink mb-6">Send Festival Greetings</h2>
       
       <div className="grid grid-cols-2 gap-4 mb-8">
         {festivals.map(f => (

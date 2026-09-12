@@ -15,8 +15,8 @@ export default function VisitorOverview() {
   }
 
   return (
-    <div className="p-4 bg-paper min-h-screen font-sans text-ink">
-      <h1 className="text-2xl font-display text-cover mb-6">Today's Visitors</h1>
+    <div>
+      <h2 className="text-lg font-semibold text-ink mb-6">Today's Visitors</h2>
       
       <div className="space-y-4">
         {visitors.length === 0 && (

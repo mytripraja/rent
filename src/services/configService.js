@@ -4,57 +4,65 @@ import { db } from './firebase'
 const configDocRef = doc(db, 'appConfig', 'general')
 const DEFAULT_RECEIVERS = ['Deepu', 'Rajavel', 'Siva', 'Hemalathe']
 
+const DEFAULTS = {
+  cashReceivers: DEFAULT_RECEIVERS,
+  apartmentName: 'Rental Manager',
+  apartmentAddress: '',
+  dueDate: 5,
+  gracePeriod: 3,
+  penaltyPerDay: 100,
+  upiId: '',
+  ownerName: '',
+  paymentModes: ['upi', 'cash', 'bank_transfer'],
+  lateFeeType: 'flat',
+  lateFeeAmount: 500,
+  lateFeeGraceDays: 5,
+  wasteSchedule: {
+    monday: 'dry',
+    tuesday: 'wet',
+    wednesday: 'mixed',
+    thursday: 'none',
+    friday: 'dry',
+    saturday: 'wet',
+    sunday: 'none'
+  }
+}
+
 export async function getAppConfig() {
-  const snap = await getDoc(configDocRef)
+  // Every cashReceivers/templates/properties/wasteSchedule lookup in the app
+  // funnels through this one function, so a single network hiccup here used
+  // to break all of them at once (the Firestore read had no error handling —
+  // a rejected getDoc() propagated up and left every dependent dropdown/list
+  // empty for the rest of the session, cash payment included). Falling back
+  // to sane defaults here fixes it everywhere in one place instead of
+  // patching six separate .catch() handlers with six different fallbacks.
+  let snap
+  try {
+    snap = await getDoc(configDocRef)
+  } catch (err) {
+    console.warn('appConfig unreachable, using defaults:', err.message)
+    return { ...DEFAULTS }
+  }
+
   if (snap.exists()) {
     const data = snap.data()
     return {
       cashReceivers: data.cashReceivers || DEFAULT_RECEIVERS,
-      apartmentName: data.apartmentName || 'Rental Manager',
-      apartmentAddress: data.apartmentAddress || '',
-      dueDate: data.dueDate || 5,
-      gracePeriod: data.gracePeriod || 3,
-      penaltyPerDay: data.penaltyPerDay || 100,
-      upiId: data.upiId || '',
-      ownerName: data.ownerName || '',
-      paymentModes: data.paymentModes || ['upi', 'cash', 'bank_transfer'],
-      lateFeeType: data.lateFeeType || 'flat',
-      lateFeeAmount: data.lateFeeAmount || 500,
-      lateFeeGraceDays: data.lateFeeGraceDays || 5,
-      wasteSchedule: data.wasteSchedule || {
-        monday: 'dry',
-        tuesday: 'wet',
-        wednesday: 'mixed',
-        thursday: 'none',
-        friday: 'dry',
-        saturday: 'wet',
-        sunday: 'none'
-      }
+      apartmentName: data.apartmentName || DEFAULTS.apartmentName,
+      apartmentAddress: data.apartmentAddress || DEFAULTS.apartmentAddress,
+      dueDate: data.dueDate || DEFAULTS.dueDate,
+      gracePeriod: data.gracePeriod || DEFAULTS.gracePeriod,
+      penaltyPerDay: data.penaltyPerDay || DEFAULTS.penaltyPerDay,
+      upiId: data.upiId || DEFAULTS.upiId,
+      ownerName: data.ownerName || DEFAULTS.ownerName,
+      paymentModes: data.paymentModes || DEFAULTS.paymentModes,
+      lateFeeType: data.lateFeeType || DEFAULTS.lateFeeType,
+      lateFeeAmount: data.lateFeeAmount || DEFAULTS.lateFeeAmount,
+      lateFeeGraceDays: data.lateFeeGraceDays || DEFAULTS.lateFeeGraceDays,
+      wasteSchedule: data.wasteSchedule || DEFAULTS.wasteSchedule,
     }
   }
-  return { 
-    cashReceivers: DEFAULT_RECEIVERS, 
-    apartmentName: 'Rental Manager', 
-    apartmentAddress: '',
-    dueDate: 5,
-    gracePeriod: 3,
-    penaltyPerDay: 100,
-    upiId: '',
-    ownerName: '',
-    paymentModes: ['upi', 'cash', 'bank_transfer'],
-    lateFeeType: 'flat',
-    lateFeeAmount: 500,
-    lateFeeGraceDays: 5,
-    wasteSchedule: {
-      monday: 'dry',
-      tuesday: 'wet',
-      wednesday: 'mixed',
-      thursday: 'none',
-      friday: 'dry',
-      saturday: 'wet',
-      sunday: 'none'
-    }
-  }
+  return { ...DEFAULTS }
 }
 
 export async function updateAppConfig(fields) {

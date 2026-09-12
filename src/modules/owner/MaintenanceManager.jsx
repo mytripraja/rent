@@ -20,8 +20,8 @@ export default function MaintenanceManager() {
   const filtered = filter === 'all' ? requests : requests.filter(r => r.status === filter)
 
   return (
-    <div className="p-4 bg-paper min-h-screen font-sans text-ink">
-      <h1 className="text-2xl font-display text-cover mb-4">Maintenance Requests</h1>
+    <div>
+      <h2 className="text-lg font-semibold text-ink mb-4">Maintenance Requests</h2>
       
       <div className="flex gap-2 mb-6 overflow-x-auto">
         {['all', 'open', 'in_progress', 'resolved'].map(f => (

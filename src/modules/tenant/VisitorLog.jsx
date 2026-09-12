@@ -38,8 +38,8 @@ export default function VisitorLog() {
   }
 
   return (
-    <div className="p-4 bg-paper min-h-screen font-sans text-ink">
-      <h1 className="text-2xl font-display text-cover mb-6">Visitor Log</h1>
+    <div>
+      <h3 className="font-semibold text-ink mb-3">Visitor Log</h3>
       
       <form onSubmit={handleSubmit} className="bg-paper-raised p-4 rounded-lg shadow-sm border border-ink/10 mb-8 space-y-4">
         <h2 className="font-medium text-lg">Pre-register Visitor</h2>

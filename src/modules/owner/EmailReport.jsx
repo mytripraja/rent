@@ -4,6 +4,21 @@ import { db } from '../../services/firebase'
 import { listHouses } from '../../services/houseService'
 import { useToast } from '../shared/ui/Toast'
 
+// Escapes text before it's interpolated into an HTML string. This report is
+// built from tenant- and owner-entered data (names, complaint messages) and
+// then rendered with dangerouslySetInnerHTML for the print-style preview —
+// without escaping, a tenant putting HTML/script content in a complaint
+// message would execute in the OWNER's authenticated browser session when
+// they view this report. Every dynamic value below must go through this.
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export default function EmailReport() {
   const [html, setHtml] = useState('')
   const [summaryText, setSummaryText] = useState('')
@@ -22,56 +37,59 @@ export default function EmailReport() {
       const allRents = rentSnap.docs.map(d => ({ id: d.id, ...d.data() }))
       const complaintsSnap = await getDocs(collection(db, 'complaints'))
       const complaints = complaintsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-      
+
       const currentMonth = new Date().toISOString().substring(0, 7) // YYYY-MM
-      
+
       const rentsThisMonth = allRents.filter(r => r.month === currentMonth)
       let expected = 0
       let collected = 0
-      
+
       houses.forEach(h => {
         if (h.status === 'occupied') {
           expected += Number(h.rentAmount || 0)
         }
       })
-      
+
       rentsThisMonth.forEach(r => {
         if (r.status === 'approved') {
           collected += Number(r.amount || 0)
         }
       })
-      
+
       const pendingRents = houses.filter(h => h.status === 'occupied' && !rentsThisMonth.some(r => r.houseId === h.id && r.status === 'approved'))
       const openComplaints = complaints.filter(c => c.status !== 'resolved')
 
+      // Every dynamic value is escaped before going into the HTML string —
+      // tenant names, complaint messages, and door numbers are all user-
+      // or owner-entered data, not trusted markup.
       let reportHtml = `
         <div style="font-family: sans-serif; color: #2b2620; max-width: 600px; margin: 0 auto; background: #fbf8ef; padding: 20px; border-radius: 8px;">
-          <h2 style="color: #5b2a2a;">Monthly Rental Report - ${currentMonth}</h2>
+          <h2 style="color: #5b2a2a;">Monthly Rental Report - ${escapeHtml(currentMonth)}</h2>
           
           <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
             <h3 style="margin-top: 0; color: #b8873d;">Collection Summary</h3>
-            <p><strong>Expected:</strong> ₹${expected}</p>
-            <p><strong>Collected:</strong> ₹${collected}</p>
-            <p><strong>Pending:</strong> ₹${expected - collected}</p>
+            <p><strong>Expected:</strong> ₹${escapeHtml(expected)}</p>
+            <p><strong>Collected:</strong> ₹${escapeHtml(collected)}</p>
+            <p><strong>Pending:</strong> ₹${escapeHtml(expected - collected)}</p>
           </div>
           
           <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
             <h3 style="margin-top: 0; color: #a63a32;">Pending Tenants (${pendingRents.length})</h3>
             <ul>
-              ${pendingRents.map(h => `<li>House ${h.internalDoorNumber} (${h.tenantName})</li>`).join('')}
+              ${pendingRents.map(h => `<li>House ${escapeHtml(h.internalDoorNumber)} (${escapeHtml(h.tenantName)})</li>`).join('')}
             </ul>
           </div>
           
           <div style="background: white; padding: 15px; border-radius: 8px;">
             <h3 style="margin-top: 0; color: #b8873d;">Open Complaints (${openComplaints.length})</h3>
             <ul>
-              ${openComplaints.map(c => `<li>${c.title}</li>`).join('')}
+              ${openComplaints.map(c => `<li>${escapeHtml(c.message)}</li>`).join('')}
             </ul>
           </div>
         </div>
       `
       setHtml(reportHtml)
-      
+
       const text = `Monthly Rental Report - ${currentMonth}
 Expected: ₹${expected}
 Collected: ₹${collected}
