@@ -157,6 +157,11 @@ export async function listWaterPaymentsForHouse(houseId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
+export async function listWaterPaymentsForBill(billId) {
+  const snap = await getDocs(query(waterBillPaymentsRef, where('billId', '==', billId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
 export async function approveWaterPayment(paymentId, { neighborCollectedBy, actionedBy } = {}) {
   await updateDoc(doc(db, 'waterBillPayments', paymentId), {
     status: 'approved',

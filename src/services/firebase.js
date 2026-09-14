@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore, enableMultiTabIndexedDbPersistence } from 'firebase/firestore'
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore'
 
 // Paste your Firebase project config here (from Firebase console > Project settings).
 // On Vercel, prefix each value with VITE_ and read via import.meta.env, e.g.
@@ -22,10 +22,11 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
-export const db = getFirestore(app)
-
-enableMultiTabIndexedDbPersistence(db).catch((err) => {
-  console.warn('Offline persistence failed:', err)
+// Firebase's current persistentLocalCache API replaces the older
+// enableMultiTabIndexedDbPersistence() helper. It keeps the app responsive
+// when a tenant briefly loses connectivity and supports multiple tabs.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 })
 
 // Used by any client call into /api/* — attaches the current user's Firebase

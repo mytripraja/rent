@@ -35,6 +35,7 @@ import IconButton from '../shared/ui/IconButton'
 import ThemeToggle from '../shared/ui/ThemeToggle'
 import NotificationBell from '../shared/ui/NotificationBell'
 import LanguageSwitcher from '../shared/ui/LanguageSwitcher'
+import InstallAppPrompt from '../shared/ui/InstallAppPrompt'
 import PropertySwitcher from './PropertySwitcher'
 import { OWNER_TOUR_STEPS } from './ownerTourSteps'
 import { logout } from '../../services/authService'
@@ -224,6 +225,7 @@ export default function OwnerDashboard() {
         })}
       </nav>
 
+      <InstallAppPrompt />
       <OnboardingTour steps={OWNER_TOUR_STEPS} storageKey={`tour_seen_owner_${user?.uid}`} forceOpen={replayTour ? true : undefined} onClose={() => setReplayTour(false)} />
     </div>
   )

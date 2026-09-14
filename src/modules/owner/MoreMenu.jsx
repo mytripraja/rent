@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  UserRound, Settings, KeyRound, TrendingUp, Building2, Upload,
+  UserRound, Settings, KeyRound, TrendingUp, Building2, Upload, ShieldCheck,
   CarFront, Wrench, Footprints, Landmark, PartyPopper, ScrollText,
   BarChart3, Mail, DatabaseBackup, Sheet, BriefcaseBusiness, ArrowLeft
 } from 'lucide-react'
@@ -22,6 +22,7 @@ import ParkingManager from './ParkingManager'
 import BookingApprovals from './BookingApprovals'
 import VacancyListing from './VacancyListing'
 import FestivalGreetings from './FestivalGreetings'
+import SecurityDataCenter from './SecurityDataCenter'
 import { useAuth } from '../../context/AuthContext'
 
 const SECTIONS = [
@@ -42,6 +43,9 @@ const SECTIONS = [
   ]},
   { label: 'Community', items: [
     { id: 'festivals', label: 'Festival Greetings', icon: PartyPopper, desc: 'Send community greetings' },
+  ]},
+  { label: 'Security & data', items: [
+    { id: 'security', label: 'Security & Data Center', icon: ShieldCheck, desc: 'Audit, backup and account controls' },
   ]},
   { label: 'Reports & Data', items: [
     { id: 'activity', label: 'Activity Log', icon: ScrollText, desc: 'See who changed what' },
@@ -68,6 +72,7 @@ export default function MoreMenu() {
       googleSheets: <GoogleSheetsExport />, tally: <TallyExport />, maintenance: <MaintenanceManager />, visitors: <VisitorOverview />,
       parking: <ParkingManager />, bookings: <BookingApprovals />, vacancy: <VacancyListing />, festivals: <FestivalGreetings />,
       owners: isAdmin ? <OwnerManager /> : null,
+      security: <SecurityDataCenter />,
     }
     return map[view] || null
   }

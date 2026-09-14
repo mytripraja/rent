@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Search, SlidersHorizontal, ChevronRight, Users, Home, Clock3, CircleCheck } from 'lucide-react'
+import { Search, SlidersHorizontal, ChevronRight, Users, Home, Clock3, Sparkles } from 'lucide-react'
 import { listHouses, listPastTenants } from '../../services/houseService'
 import { listRentHistory, countMonthsPending } from '../../services/rentService'
 import { Skeleton } from '../shared/ui/Skeleton'
@@ -56,7 +56,6 @@ export default function TenantsList({ onSelectHouse }) {
     return base.filter((t) => [t.tenantName, t.name, t.internalDoorNumber, t.phone, t.houseId].filter(Boolean).some(v => String(v).toLowerCase().includes(q)))
   }, [filter, current, old, pending, query])
 
-  const activeLabel = FILTERS.find(f => f.id === filter)?.label || 'Current'
 
   return (
     <div className="space-y-4 pb-3">
@@ -94,7 +93,7 @@ export default function TenantsList({ onSelectHouse }) {
         })}
       </div>
 
-      <div className="md:hidden grid grid-cols-[1fr_auto] gap-2">
+      <div className="md:hidden">
         <label className="sr-only" htmlFor="tenant-filter">Tenant view</label>
         <div className="relative">
           <SlidersHorizontal size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand pointer-events-none" />
@@ -102,10 +101,9 @@ export default function TenantsList({ onSelectHouse }) {
             {FILTERS.map((f) => <option key={f.id} value={f.id}>{f.label} · {f.id === 'current' ? current.length : f.id === 'old' ? old.length : f.id === 'pending' ? pending.length : current.length + old.length}</option>)}
           </select>
         </div>
-        <div className="rounded-2xl border border-[var(--rm-border)] bg-paper-raised px-3.5 py-3 text-xs font-semibold text-ink-soft flex items-center gap-1.5">
-          <CircleCheck size={15} className="text-brand" /> {activeLabel}
-        </div>
       </div>
+
+      {!loading && !error && <div className="flex items-center gap-2 rounded-2xl bg-brand/5 border border-brand/10 px-3.5 py-2.5 text-xs text-ink-soft"><Sparkles size={14} className="text-brand shrink-0"/><span>Tap a tenant to open the complete household profile.</span></div>}
 
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center">

@@ -26,12 +26,12 @@ export default function AnalyticsDashboard() {
         <div className="bg-paper-raised rounded-2xl border border-brass/20 p-4 shadow-sm">
           <div className="flex items-center gap-2 text-ink-soft mb-1"><DollarSign size={16} /> <span className="text-xs font-medium uppercase">Expected Rent</span></div>
           <p className="text-2xl font-semibold text-ink">₹{data.currentExpected.toLocaleString()}</p>
-          <p className="text-xs text-stamp-green flex items-center gap-1 mt-1"><TrendingUp size={12}/> Stable</p>
+          <p className="text-xs text-stamp-green flex items-center gap-1 mt-1"><TrendingUp size={12}/> Current</p>
         </div>
         <div className="bg-paper-raised rounded-2xl border border-brass/20 p-4 shadow-sm">
           <div className="flex items-center gap-2 text-ink-soft mb-1"><TrendingUp size={16} /> <span className="text-xs font-medium uppercase">3 Mo Projection</span></div>
           <p className="text-2xl font-semibold text-ink">₹{data.projected.toLocaleString()}</p>
-          <p className="text-xs text-ink-soft mt-1">Based on current occupancy</p>
+          <p className="text-xs text-ink-soft mt-1">Current occupied homes × monthly rent</p>
         </div>
       </div>
 

@@ -176,6 +176,11 @@ export async function listEbPaymentsForHouse(houseId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
+export async function listEbPaymentsForBill(billId) {
+  const snap = await getDocs(query(ebBillPaymentsRef, where('billId', '==', billId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
 export async function approveEbPayment(paymentId, { neighborCollectedBy, actionedBy } = {}) {
   await updateDoc(doc(db, 'ebBillPayments', paymentId), {
     status: 'approved',

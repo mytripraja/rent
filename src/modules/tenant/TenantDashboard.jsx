@@ -27,6 +27,7 @@ import IconButton from '../shared/ui/IconButton'
 import ThemeToggle from '../shared/ui/ThemeToggle'
 import NotificationBell from '../shared/ui/NotificationBell'
 import LanguageSwitcher from '../shared/ui/LanguageSwitcher'
+import InstallAppPrompt from '../shared/ui/InstallAppPrompt'
 import { TENANT_TOUR_STEPS } from './tenantTourSteps'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
@@ -68,22 +69,22 @@ export default function TenantDashboard() {
 
       <PullToRefresh onRefresh={handleRefresh}>
         <Suspense fallback={<LoadingScreen />}>
-          <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
+          <div id="tenant-home" className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4 scroll-mt-4">
             {tenantCan(user, 'rent') && <TenantRentHero key={`hero-${refreshKey}`} onPayNow={() => payRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />}
             {tenantCan(user, 'rent') && <RentRevisionBanner />}
             {tenantCan(user, 'notices') && <NoticeFeed />
             }
           </div>
 
-          <main id="main-content" tabIndex={-1} className="px-4 sm:px-6 pb-6 max-w-4xl mx-auto space-y-6">
-            {tenantCan(user, 'rent') && <div ref={payRef} className="grid md:grid-cols-2 gap-4">
+          <main id="main-content" tabIndex={-1} className="px-4 sm:px-6 pb-24 lg:pb-6 max-w-4xl mx-auto space-y-6 scroll-mt-4">
+            {tenantCan(user, 'rent') && <div id="tenant-rent" ref={payRef} className="grid md:grid-cols-2 gap-4">
               <RentSubmission onSubmitted={() => setRefreshKey(k => k + 1)} />
               <RentHistory key={`history-${refreshKey}`} />
             </div>}
 
-            {tenantCan(user, 'bills') && <><EBBillShare key={`eb-${refreshKey}`} /><WaterBillShare key={`water-${refreshKey}`} /></>}
+            {tenantCan(user, 'bills') && <section id="tenant-bills" className="space-y-4 scroll-mt-4"><EBBillShare key={`eb-${refreshKey}`} /><WaterBillShare key={`water-${refreshKey}`} /></section>}
 
-            <section aria-labelledby="more-heading">
+            <section id="tenant-more" aria-labelledby="more-heading" className="scroll-mt-4">
               <h2 id="more-heading" className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-2">More</h2>
               <div className="grid md:grid-cols-2 gap-4">
                 {tenantCan(user, 'complaints') && <RaiseComplaint />}
@@ -112,6 +113,11 @@ export default function TenantDashboard() {
           </main>
         </Suspense>
       </PullToRefresh>
+
+      <InstallAppPrompt />
+      <nav className="tenant-mobile-nav lg:hidden fixed bottom-0 inset-x-0 z-40 bg-paper-raised/95 backdrop-blur-xl border-t border-[var(--rm-border)]" aria-label="Tenant quick navigation" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {[['home','Home'],['rent','Rent'],['bills','Bills'],['more','More']].map(([id,label]) => <button key={id} onClick={() => document.getElementById(`tenant-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="flex-1 py-3 text-xs font-semibold text-ink-soft">{label}</button>)}
+      </nav>
 
       <OnboardingTour
         steps={TENANT_TOUR_STEPS}

@@ -93,7 +93,7 @@ export default function HouseManager() {
         <div>
           <h2 className="font-display text-xl text-ink">Houses</h2>
           <p className="font-mono-tab text-xs text-ink-soft mt-0.5">
-            {occupiedCount} occupied · {houses.length - occupiedCount} vacant · {houses.length} total
+            {occupiedCount} occupied · {houses.length} total · tap a house for its complete profile
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -231,8 +231,8 @@ function HouseDetailModal({ house, user, onClose, onVacate, onBook }) {
   const currentHistory = history.find(h => !h.movedOutAt)
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/55 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <motion.div initial={{ opacity: 0, y: 18, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="w-full max-w-3xl max-h-[92vh] overflow-hidden rounded-3xl bg-paper-raised border border-[var(--rm-border)] shadow-2xl flex flex-col">
+    <div className="fixed inset-0 z-[70] bg-black/55 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ opacity: 0, y: 18, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="w-full max-w-3xl max-h-[94vh] sm:max-h-[92vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-paper-raised border border-[var(--rm-border)] shadow-2xl flex flex-col">
         <div className="px-5 sm:px-7 py-5 bg-cover text-paper flex items-start justify-between gap-4">
           <div>
             <p className="text-[10px] uppercase tracking-[.18em] text-brass-light font-bold">House profile</p>
@@ -242,8 +242,8 @@ function HouseDetailModal({ house, user, onClose, onVacate, onBook }) {
           <button onClick={onClose} className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center" aria-label="Close"><X size={20}/></button>
         </div>
 
-        <div className="px-5 sm:px-7 pt-4 border-b border-[var(--rm-border)] overflow-x-auto">
-          <div className="flex gap-1 min-w-max">
+        <div className="px-4 sm:px-7 pt-3 border-b border-[var(--rm-border)] overflow-x-auto sticky top-0 bg-paper-raised z-10">
+          <div className="flex gap-1 min-w-max pb-0.5">
             {[['overview','Overview'],['residents','Residents'],['rent','Rent history'],['history','Occupancy history']].map(([id,label]) => (
               <button key={id} onClick={() => setTab(id)} className={`px-4 py-2.5 rounded-t-xl text-sm font-semibold ${tab===id ? 'text-brand border-b-2 border-brand bg-brand/5' : 'text-ink-soft'}`}>{label}</button>
             ))}
