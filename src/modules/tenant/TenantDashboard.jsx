@@ -17,6 +17,7 @@ const CommunityBoard = React.lazy(() => import('../shared/CommunityBoard'))
 const MaintenanceRequest = React.lazy(() => import('./MaintenanceRequest'))
 const VisitorLog = React.lazy(() => import('./VisitorLog'))
 const BookCommonArea = React.lazy(() => import('./BookCommonArea'))
+const FamilyAccounts = React.lazy(() => import('./FamilyAccounts'))
 const EventCalendar = React.lazy(() => import('../shared/EventCalendar'))
 const WasteSchedule = React.lazy(() => import('../shared/WasteSchedule'))
 import LoadingScreen from '../shared/LoadingScreen'
@@ -29,6 +30,7 @@ import LanguageSwitcher from '../shared/ui/LanguageSwitcher'
 import { TENANT_TOUR_STEPS } from './tenantTourSteps'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
+import { tenantCan } from '../../services/tenantAccountService'
 
 export default function TenantDashboard() {
   const { user } = useAuth()
@@ -67,50 +69,42 @@ export default function TenantDashboard() {
       <PullToRefresh onRefresh={handleRefresh}>
         <Suspense fallback={<LoadingScreen />}>
           <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
-            <TenantRentHero key={`hero-${refreshKey}`} onPayNow={() => payRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />
-            <RentRevisionBanner />
-            <NoticeFeed />
+            {tenantCan(user, 'rent') && <TenantRentHero key={`hero-${refreshKey}`} onPayNow={() => payRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />}
+            {tenantCan(user, 'rent') && <RentRevisionBanner />}
+            {tenantCan(user, 'notices') && <NoticeFeed />
+            }
           </div>
 
           <main id="main-content" tabIndex={-1} className="px-4 sm:px-6 pb-6 max-w-4xl mx-auto space-y-6">
-            <div ref={payRef} className="grid md:grid-cols-2 gap-4">
+            {tenantCan(user, 'rent') && <div ref={payRef} className="grid md:grid-cols-2 gap-4">
               <RentSubmission onSubmitted={() => setRefreshKey(k => k + 1)} />
               <RentHistory key={`history-${refreshKey}`} />
-            </div>
+            </div>}
 
-            <EBBillShare key={`eb-${refreshKey}`} />
-            <WaterBillShare key={`water-${refreshKey}`} />
+            {tenantCan(user, 'bills') && <><EBBillShare key={`eb-${refreshKey}`} /><WaterBillShare key={`water-${refreshKey}`} /></>}
 
             <section aria-labelledby="more-heading">
               <h2 id="more-heading" className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-2">More</h2>
               <div className="grid md:grid-cols-2 gap-4">
-                <RaiseComplaint />
-                <RentAgreementView />
-                <Directory />
-                <ServiceContacts />
-                <DocumentUpload />
-                <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
-                  <MaintenanceRequest />
-                </div>
-                <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
-                  <VisitorLog />
-                </div>
-                <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
-                  <BookCommonArea />
-                </div>
+                {tenantCan(user, 'complaints') && <RaiseComplaint />}
+                {tenantCan(user, 'rent') && <RentAgreementView />}
+                {tenantCan(user, 'directory') && <Directory />}
+                {tenantCan(user, 'notices') && <ServiceContacts />}
+                {tenantCan(user, 'documents') && <DocumentUpload />}
+                {tenantCan(user, 'maintenance') && <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><MaintenanceRequest /></div>}
+                {tenantCan(user, 'visitors') && <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><VisitorLog /></div>}
+                {tenantCan(user, 'commonArea') && <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><BookCommonArea /></div>}
+                {isSubAccount(user) && <FamilyAccessNotice />}
               </div>
             </section>
 
             <div className="grid md:grid-cols-2 gap-4">
-              <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
-                <EventCalendar />
-              </div>
-              <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
-                <WasteSchedule />
-              </div>
+              <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><EventCalendar /></div>
+              <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><WasteSchedule /></div>
             </div>
 
-            <CommunityBoard user={user} />
+            {tenantCan(user, 'community') && <CommunityBoard user={user} />}
+            {isPrimary(user) && <FamilyAccounts />}
 
             <footer className="text-center text-xs text-ink-soft py-4 border-t border-brass/15">
               Need help? Check <span className="font-medium text-ink">Service Contacts</span> above, or raise a complaint and the owner will reach out.
@@ -128,3 +122,7 @@ export default function TenantDashboard() {
     </div>
   )
 }
+
+function isSubAccount(user) { return user?.role === 'tenant' && user?.accountType === 'sub' }
+function isPrimary(user) { return user?.role === 'tenant' && user?.accountType !== 'sub' }
+function FamilyAccessNotice() { return <div className="md:col-span-2 rounded-2xl border border-brand/10 bg-brand/5 p-4 text-sm text-ink-soft">Some household tools are hidden by the main tenant. Ask the main account holder to enable access in Family accounts.</div> }

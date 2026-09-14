@@ -72,6 +72,7 @@ export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, 
     cycleMonths,
     dueDate,
     shares,
+    houseIds: shares.map((share) => share.houseId),
     createdAt: Date.now(),
   })
 
@@ -99,8 +100,9 @@ export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, 
   return { id: docRef.id, shares }
 }
 
-export async function listEbBillCycles() {
-  const snap = await getDocs(query(billsRef, orderBy('createdAt', 'desc')))
+export async function listEbBillCycles(houseId = null) {
+  const base = houseId ? query(billsRef, where('houseIds', 'array-contains', houseId), orderBy('createdAt', 'desc')) : query(billsRef, orderBy('createdAt', 'desc'))
+  const snap = await getDocs(base)
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 

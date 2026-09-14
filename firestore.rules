@@ -27,6 +27,18 @@ service cloud.firestore {
       return isSignedIn() && userDoc().data.role == 'tenant';
     }
 
+    // A tenant account is either the main household account (legacy tenant
+    // profiles without accountType are treated as primary) or a controlled
+    // family sub-account. Sub-accounts can be limited feature-by-feature by
+    // the main tenant.
+    function isPrimaryTenant() {
+      return isTenant() && userDoc().data.accountType != 'sub';
+    }
+
+    function tenantCan(permission) {
+      return isTenant() && (isPrimaryTenant() || userDoc().data.tenantPermissions[permission] == true);
+    }
+
     function myHouseId() {
       return userDoc().data.houseId;
     }
@@ -71,35 +83,35 @@ service cloud.firestore {
     // Safe-fields-only mirror of houses (no rent/advance amounts) so tenants can
     // browse neighbors and vacant units without ever reading each other's house doc.
     match /directory/{houseId} {
-      allow read: if isSignedIn();
-      allow write: if isOwner() || (isTenant() && myHouseId() == houseId);
+      allow read: if isOwner() || tenantCan('directory');
+      allow write: if isOwner() || (tenantCan('directory') && myHouseId() == houseId);
     }
 
     // ---- rentPayments ----
     // Tenant can create a submission for their own house, and read only their own house's payments.
     // Only the owner can approve/reject (update status).
     match /rentPayments/{paymentId} {
-      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
-      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow read: if isOwner() || (tenantCan('rent') && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (tenantCan('rent') && request.resource.data.houseId == myHouseId());
       allow update: if isOwner();
       allow delete: if isOwner();
     }
 
     // ---- ebBills / ebBillPayments ----
     match /ebBills/{billId} {
-      allow read: if isOwner() || isTenant();
+      allow read: if isOwner() || (tenantCan('bills') && billId != null && resource.data.houseIds is list && myHouseId() in resource.data.houseIds);
       allow write: if isOwner();
     }
     match /ebBillPayments/{paymentId} {
-      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
-      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow read: if isOwner() || (tenantCan('bills') && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (tenantCan('bills') && request.resource.data.houseId == myHouseId());
       allow update: if isOwner();
     }
 
     // ---- notices ----
     // Everyone signed in can read; only owner writes.
     match /notices/{noticeId} {
-      allow read: if isSignedIn();
+      allow read: if isOwner() || tenantCan('notices');
       allow write: if isOwner();
     }
 
@@ -109,11 +121,11 @@ service cloud.firestore {
     // Owner can read/write everything.
     match /complaints/{complaintId} {
       allow read: if isOwner()
-        || (isTenant() && resource.data.fromHouseId == myHouseId())
-        || (isTenant() && resource.data.direction == 'owner_to_house'
+        || (tenantCan('complaints') && resource.data.fromHouseId == myHouseId())
+        || (tenantCan('complaints') && resource.data.direction == 'owner_to_house'
             && (resource.data.targetHouseIds == 'all'
                 || (resource.data.targetHouseIds is list && myHouseId() in resource.data.targetHouseIds)));
-      allow create: if isOwner() || (isTenant() && request.resource.data.fromHouseId == myHouseId());
+      allow create: if isOwner() || (tenantCan('complaints') && request.resource.data.fromHouseId == myHouseId());
       allow update, delete: if isOwner();
     }
 
@@ -127,8 +139,8 @@ service cloud.firestore {
 
     // ---- community board ----
     match /communityMessages/{msgId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read: if isOwner() || tenantCan('community');
+      allow create: if isOwner() || tenantCan('community');
       allow update, delete: if isOwner();
     }
 
@@ -138,8 +150,8 @@ service cloud.firestore {
     // freshly-signed URL that api/get-signed-url.js mints for owner-level accounts.
     // This collection just tracks who uploaded what.
     match /documents/{docId} {
-      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
-      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow read: if isOwner() || (tenantCan('documents') && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (tenantCan('documents') && request.resource.data.houseId == myHouseId());
       allow update, delete: if isOwner();
     }
     match /vacateRecords/{recordId} {
@@ -184,7 +196,7 @@ service cloud.firestore {
 
     // ---- advanceLedger (partial advance payments over time) ----
     match /advanceLedger/{entryId} {
-      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
+      allow read: if isOwner() || (tenantCan('bills') && resource.data.houseId == myHouseId());
       allow create, update, delete: if isOwner();
     }
 
@@ -195,33 +207,33 @@ service cloud.firestore {
 
     // ---- waterBills / waterBillPayments ----
     match /waterBills/{billId} {
-      allow read: if isOwner() || isTenant();
+      allow read: if isOwner() || (tenantCan('bills') && resource.data.houseIds is list && myHouseId() in resource.data.houseIds);
       allow write: if isOwner();
     }
     match /waterBillPayments/{paymentId} {
-      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
-      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow read: if isOwner() || (tenantCan('bills') && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (tenantCan('bills') && request.resource.data.houseId == myHouseId());
       allow update: if isOwner();
     }
 
     // ---- maintenanceRequests ----
     match /maintenanceRequests/{requestId} {
-      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
-      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
+      allow read: if isOwner() || (tenantCan('maintenance') && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (tenantCan('maintenance') && request.resource.data.houseId == myHouseId());
       allow update, delete: if isOwner();
     }
 
     // ---- visitors ----
     match /visitors/{visitorId} {
-      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
-      allow create: if isOwner() || (isTenant() && request.resource.data.houseId == myHouseId());
-      allow update: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
+      allow read: if isOwner() || (tenantCan('visitors') && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (tenantCan('visitors') && request.resource.data.houseId == myHouseId());
+      allow update: if isOwner() || (tenantCan('visitors') && resource.data.houseId == myHouseId());
       allow delete: if isOwner();
     }
 
     // ---- rentAgreements ----
     match /rentAgreements/{agreementId} {
-      allow read: if isOwner() || (isTenant() && resource.data.houseId == myHouseId());
+      allow read: if isOwner() || (tenantCan('rent') && resource.data.houseId == myHouseId());
       allow write: if isOwner();
     }
 
@@ -239,8 +251,8 @@ service cloud.firestore {
 
     // ---- areaBookings ----
     match /areaBookings/{bookingId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read: if isOwner() || tenantCan('commonArea');
+      allow create: if isOwner() || tenantCan('commonArea');
       allow update, delete: if isOwner();
     }
   }

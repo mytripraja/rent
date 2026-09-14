@@ -63,11 +63,13 @@ export default async function handler(req, res) {
 
     await db.collection('users').doc(userRecord.uid).set({
       role: 'tenant',
+      accountType: 'primary',
       name,
       email,
       phone,
       houseId,
       customerId,
+      tenantPermissions: { rent: true, bills: true, notices: true, complaints: true, maintenance: true, visitors: true, commonArea: true, documents: true, directory: true, community: true },
       createdAt: Date.now(),
       createdBy: recordedBy,
     })

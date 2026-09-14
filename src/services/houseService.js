@@ -55,6 +55,7 @@ export async function createHouse({ govtDoorNumber, internalDoorNumber, floor, e
     currentTenantId: null,
     rentAmount: 0,
     advanceAmount: 0,
+    familyAccountCount: 0,
     phoneVisibleToNeighbors: true,
     ebShareOverrideMonths: null, // e.g. 1 => only occupied 1 of the 2 months in this bill cycle
     hasOwnEbMeter: false, // if true, this house is excluded from the shared EB split entirely
@@ -94,7 +95,7 @@ export async function deleteHouse(houseId) {
 
 
 // Book a vacant house: attach a new tenant profile without deleting history
-export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmount, advanceAmount, phoneVisibleToNeighbors = true, moveInDate, recordedBy, photoUrl }) {
+export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmount, advanceAmount, phoneVisibleToNeighbors = true, moveInDate, memberCount = 1, recordedBy, photoUrl }) {
   const houseUpdate = {
     status: 'occupied',
     currentTenantId: tenantId,
@@ -104,6 +105,7 @@ export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmo
     tenantPhotoUrl: photoUrl || null,
     rentAmount,
     advanceAmount,
+    memberCount: Number(memberCount || 1),
     phoneVisibleToNeighbors,
     moveInDate: moveInDate || null, // the date they actually moved in, as entered by the owner
     movedInAt: Date.now(),
@@ -121,6 +123,7 @@ export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmo
     photoUrl: photoUrl || null,
     rentAmount,
     advanceAmount,
+    memberCount: Number(memberCount || 1),
     moveInDate: moveInDate || null,
     movedInAt: Date.now(),
     movedOutAt: null,
@@ -163,6 +166,8 @@ export async function vacateHouse(houseId, { advanceDeducted, deductionReason, b
     tenantName: null,
     tenantPhone: null,
     tenantEmail: null,
+    memberCount: 0,
+    familyAccountCount: 0,
     accessRevokeScheduledAt: Date.now() + 60 * 60 * 1000, // 1 hour from now
   })
 

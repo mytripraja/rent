@@ -42,7 +42,20 @@ export default async function handler(req, res) {
         }
       }
 
-      await houseDoc.ref.update({ accessRevokeScheduledAt: 0 })
+      // Family sub-accounts belong to the household, so their access is also
+      // disabled when the household moves out. Their records stay in Firestore
+      // for audit/history but they cannot log back into the old house.
+      const familySnap = await db.collection('users')
+        .where('houseId', '==', houseDoc.id)
+        .where('accountType', '==', 'sub')
+        .get()
+      for (const familyDoc of familySnap.docs) {
+        await auth.updateUser(familyDoc.id, { disabled: true }).catch(() => {})
+        await familyDoc.ref.update({ disabled: true })
+        revoked++
+      }
+
+      await houseDoc.ref.update({ accessRevokeScheduledAt: 0, familyAccountCount: 0 })
     }
 
     res.status(200).json({ checked: snap.size, revoked })

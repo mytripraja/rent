@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { DoorOpen, Phone, X } from 'lucide-react'
+import { DoorOpen, Phone, X, Users, IndianRupee, CalendarDays, History, ChevronRight, MoreHorizontal, ShieldCheck } from 'lucide-react'
 import TextField from '../shared/ui/TextField'
 import SelectField from '../shared/ui/SelectField'
 import Button from '../shared/ui/Button'
 import IconButton from '../shared/ui/IconButton'
-import { listHouses, bookHouse, vacateHouse } from '../../services/houseService'
+import { listHouses, getHouseHistory, bookHouse, vacateHouse } from '../../services/houseService'
 import { createTenantAccount } from '../../services/authService'
 import { addAdvancePayment } from '../../services/advanceLedgerService'
 import { uploadUnsigned } from '../../services/cloudinaryService'
@@ -16,6 +16,8 @@ import { SkeletonCard } from '../shared/ui/Skeleton'
 import BulkActions from './BulkActions'
 import { useNavigate } from 'react-router-dom'
 import { createNotification } from '../../services/notificationService'
+import { listRentHistory } from '../../services/rentService'
+import { listHouseTenantAccounts } from '../../services/tenantAccountService'
 
 export default function HouseManager() {
   const { user } = useAuth()
@@ -23,6 +25,7 @@ export default function HouseManager() {
   const [loading, setLoading] = useState(true)
   const [bookingHouse, setBookingHouse] = useState(null)
   const [vacatingHouse, setVacatingHouse] = useState(null)
+  const [detailHouse, setDetailHouse] = useState(null)
   const [bulkMode, setBulkMode] = useState(false)
   const [selectedHouseIds, setSelectedHouseIds] = useState(new Set())
   const toast = useToast()
@@ -128,7 +131,7 @@ export default function HouseManager() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05, duration: 0.3 }}
               className={`bg-paper-raised rounded-2xl shadow-sm border overflow-hidden transition-colors ${selectedHouseIds.has(h.id) ? 'border-cover' : 'border-brass/20'}`}
-              onClick={() => bulkMode && toggleSelection(h.id)}
+              onClick={() => bulkMode ? toggleSelection(h.id) : setDetailHouse(h)}
             >
               {/* Door plate header */}
               <div className="bg-cover text-paper px-4 py-3 flex items-center justify-between">
@@ -156,14 +159,7 @@ export default function HouseManager() {
                     <p className="text-sm font-medium text-ink">{h.tenantName}</p>
                     <p className="text-xs text-ink-soft flex items-center gap-1 mt-0.5"><Phone size={11} />{h.tenantPhone}</p>
                     <p className="font-mono-tab text-sm text-brass mt-2">₹{h.rentAmount}<span className="text-ink-soft">/mo</span></p>
-                    {!bulkMode && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setVacatingHouse(h) }}
-                        className="mt-3 text-xs text-stamp-red font-medium hover:underline"
-                      >
-                        Mark Vacate
-                      </button>
-                    )}
+                    <p className="mt-3 text-xs text-ink-soft">Tap for complete house details →</p>
                   </>
                 ) : (
                   !bulkMode && (
@@ -186,6 +182,16 @@ export default function HouseManager() {
         )}
       </div>
 
+      {detailHouse && (
+        <HouseDetailModal
+          house={detailHouse}
+          user={user}
+          onClose={() => setDetailHouse(null)}
+          onVacate={() => { setVacatingHouse(detailHouse); setDetailHouse(null) }}
+          onBook={() => { setBookingHouse(detailHouse); setDetailHouse(null) }}
+        />
+      )}
+
       {bookingHouse && (
         <BookHouseModal house={bookingHouse} user={user} onClose={() => setBookingHouse(null)} onDone={refresh} />
       )}
@@ -203,11 +209,109 @@ export default function HouseManager() {
 }
 
 
+function HouseDetailModal({ house, user, onClose, onVacate, onBook }) {
+  const [tab, setTab] = useState('overview')
+  const [history, setHistory] = useState([])
+  const [payments, setPayments] = useState([])
+  const [accounts, setAccounts] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let live = true
+    Promise.all([getHouseHistory(house.id), listRentHistory(house.id), listHouseTenantAccounts(house.id)])
+      .then(([h, p, a]) => { if (live) { setHistory(h); setPayments(p); setAccounts(a); setLoading(false) } })
+      .catch(() => { if (live) setLoading(false) })
+    return () => { live = false }
+  }, [house.id])
+
+  const approved = payments.filter(p => p.status === 'approved')
+  const paidTotal = approved.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+  const currentAccountCount = accounts.length
+  const currentMembers = Number(house.memberCount || house.familyMemberCount || currentAccountCount || 1)
+  const currentHistory = history.find(h => !h.movedOutAt)
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/55 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ opacity: 0, y: 18, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="w-full max-w-3xl max-h-[92vh] overflow-hidden rounded-3xl bg-paper-raised border border-[var(--rm-border)] shadow-2xl flex flex-col">
+        <div className="px-5 sm:px-7 py-5 bg-cover text-paper flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] uppercase tracking-[.18em] text-brass-light font-bold">House profile</p>
+            <h2 className="font-display text-2xl font-extrabold mt-1">{house.internalDoorNumber}</h2>
+            <p className="text-sm text-paper/70 mt-1">{house.govtDoorNumber || 'Government door number not set'}</p>
+          </div>
+          <button onClick={onClose} className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center" aria-label="Close"><X size={20}/></button>
+        </div>
+
+        <div className="px-5 sm:px-7 pt-4 border-b border-[var(--rm-border)] overflow-x-auto">
+          <div className="flex gap-1 min-w-max">
+            {[['overview','Overview'],['residents','Residents'],['rent','Rent history'],['history','Occupancy history']].map(([id,label]) => (
+              <button key={id} onClick={() => setTab(id)} className={`px-4 py-2.5 rounded-t-xl text-sm font-semibold ${tab===id ? 'text-brand border-b-2 border-brand bg-brand/5' : 'text-ink-soft'}`}>{label}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="overflow-y-auto p-5 sm:p-7">
+          {loading ? <div className="py-14 text-center text-sm text-ink-soft">Loading house history…</div> : (
+            <>
+              {tab === 'overview' && <div className="space-y-5">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <InfoStat icon={DoorOpen} label="Status" value={house.status === 'occupied' ? 'Occupied' : 'Vacant'} />
+                  <InfoStat icon={Users} label="People" value={currentMembers} />
+                  <InfoStat icon={IndianRupee} label="Monthly rent" value={house.status === 'occupied' ? `₹${Number(house.rentAmount || 0).toLocaleString('en-IN')}` : '—'} />
+                  <InfoStat icon={CalendarDays} label="Moved in" value={house.moveInDate || '—'} />
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <DetailCard title="Current resident" icon={Users}>
+                    {house.status === 'occupied' ? <>
+                      <p className="font-semibold text-ink">{house.tenantName}</p>
+                      <p className="text-sm text-ink-soft mt-1">{house.tenantPhone || 'No phone'} · {house.tenantEmail || 'No email'}</p>
+                      <p className="text-xs text-ink-soft mt-3">Move-in: {house.moveInDate || 'Not recorded'}</p>
+                      <p className="text-xs text-ink-soft">Members: {currentMembers}</p>
+                    </> : <p className="text-sm text-ink-soft">Currently vacant. Previous residents remain available in Occupancy history.</p>}
+                  </DetailCard>
+                  <DetailCard title="Property details" icon={DoorOpen}>
+                    <p className="text-sm text-ink-soft">Floor: <span className="text-ink font-medium">{house.floor || '—'}</span></p>
+                    <p className="text-sm text-ink-soft mt-2">EB number: <span className="text-ink font-medium">{house.ebNumber || '—'}</span></p>
+                    <p className="text-sm text-ink-soft mt-2">Advance: <span className="text-ink font-medium">{house.status === 'occupied' ? `₹${Number(house.advanceAmount || 0).toLocaleString('en-IN')}` : '—'}</span></p>
+                    <p className="text-sm text-ink-soft mt-2">Total approved rent recorded: <span className="text-ink font-medium">₹{paidTotal.toLocaleString('en-IN')}</span></p>
+                  </DetailCard>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {house.status === 'occupied' ? <button onClick={onVacate} className="px-4 py-2.5 rounded-xl border border-stamp-red/30 text-stamp-red text-sm font-semibold hover:bg-stamp-red/5">More actions · Vacate house</button> : <button onClick={onBook} className="px-4 py-2.5 rounded-xl bg-brand text-white text-sm font-semibold">Book this house</button>}
+                  <span className="px-4 py-2.5 rounded-xl bg-paper border border-[var(--rm-border)] text-sm text-ink-soft">Created {house.createdAt ? new Date(house.createdAt).toLocaleDateString('en-IN') : '—'}</span>
+                </div>
+              </div>}
+
+              {tab === 'residents' && <div className="space-y-3">
+                <div className="flex items-center justify-between mb-2"><div><h3 className="font-display text-lg font-bold text-ink">Accounts & household</h3><p className="text-sm text-ink-soft">{accounts.length} login account{accounts.length === 1 ? '' : 's'} · up to 5 family accounts</p></div><ShieldCheck className="text-brand"/></div>
+                {accounts.length ? accounts.map(a => <div key={a.uid} className="rounded-2xl border border-[var(--rm-border)] bg-paper p-4 flex items-center gap-3"><div className="w-11 h-11 rounded-xl bg-brand/10 text-brand flex items-center justify-center font-bold">{(a.name || '?')[0]}</div><div className="min-w-0 flex-1"><p className="font-semibold text-ink truncate">{a.name}</p><p className="text-xs text-ink-soft truncate">{a.accountType === 'sub' ? `${a.relationship || 'Family member'} · Family account` : 'Main tenant account'}</p><p className="text-xs text-ink-soft truncate">{a.email || 'No email'}</p></div><span className="text-xs rounded-full px-2.5 py-1 bg-brand/10 text-brand font-semibold">{a.accountType === 'sub' ? 'Sub account' : 'Main'}</span></div>) : <p className="text-sm text-ink-soft py-8 text-center">No tenant accounts found.</p>}
+              </div>}
+
+              {tab === 'rent' && <div><div className="grid grid-cols-2 gap-3 mb-4"><InfoStat icon={IndianRupee} label="Approved total" value={`₹${paidTotal.toLocaleString('en-IN')}`} /><InfoStat icon={History} label="Payments" value={payments.length} /></div><div className="space-y-2">{payments.slice(0, 30).map(p => <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-paper border border-[var(--rm-border)]"><div className="flex-1"><p className="text-sm font-semibold text-ink">{p.month}</p><p className="text-xs text-ink-soft">{p.mode || '—'} · {p.tenantId === house.currentTenantId ? 'Current tenant' : 'House account'}</p></div><p className="font-mono-tab text-sm text-ink">₹{Number(p.amount || 0).toLocaleString('en-IN')}</p><span className={`text-[10px] px-2 py-1 rounded-full font-bold ${p.status==='approved'?'bg-emerald-100 text-emerald-700':p.status==='waiting_approval'?'bg-amber-100 text-amber-700':'bg-red-100 text-red-700'}`}>{p.status.replace('_',' ')}</span></div>)}{payments.length===0 && <p className="text-sm text-ink-soft py-8 text-center">No rent payments recorded yet.</p>}</div></div>}
+
+              {tab === 'history' && <div className="space-y-3">{history.map((h, i) => <div key={h.id} className="relative pl-7 pb-3"><div className="absolute left-1.5 top-1.5 w-3 h-3 rounded-full bg-brand ring-4 ring-brand/10"/><div className="rounded-2xl border border-[var(--rm-border)] bg-paper p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-ink">{h.name || 'Resident'}</p><p className="text-xs text-ink-soft mt-1">Moved in {h.moveInDate || (h.movedInAt ? new Date(h.movedInAt).toLocaleDateString('en-IN') : '—')}</p></div><span className="text-xs rounded-full px-2.5 py-1 bg-paper-raised border border-[var(--rm-border)] text-ink-soft">{h.movedOutAt ? 'Past resident' : 'Current'}</span></div>{h.movedOutAt && <p className="text-xs text-ink-soft mt-3">Moved out {new Date(h.movedOutAt).toLocaleDateString('en-IN')} · Advance deducted ₹{Number(h.advanceDeducted || 0).toLocaleString('en-IN')} · Returned ₹{Number(h.balanceReturned || 0).toLocaleString('en-IN')}</p>}</div></div>)}{history.length===0 && <p className="text-sm text-ink-soft py-8 text-center">No occupancy history yet.</p>}</div>}
+            </>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+function InfoStat({ icon: Icon, label, value }) {
+  return <div className="rounded-2xl bg-paper border border-[var(--rm-border)] p-4"><Icon size={17} className="text-brand"/><p className="text-lg font-bold text-ink mt-2 truncate">{value}</p><p className="text-xs text-ink-soft mt-0.5">{label}</p></div>
+}
+
+function DetailCard({ title, icon: Icon, children }) {
+  return <section className="rounded-2xl border border-[var(--rm-border)] bg-paper p-4"><div className="flex items-center gap-2 mb-3"><Icon size={16} className="text-brand"/><h3 className="font-semibold text-ink">{title}</h3></div>{children}</section>
+}
+
+
 function BookHouseModal({ house, user, onClose, onDone }) {
   const { showToast } = useToast()
   const [form, setForm] = useState({
     name: '', phone: '', email: '', password: '', rentAmount: '', advanceAmount: '', aadhaarNumber: '', phoneVisibleToNeighbors: true,
-    moveInDate: '', advancePaidNow: '',
+    moveInDate: '', advancePaidNow: '', memberCount: '1',
   })
   const [touched, setTouched] = useState({})
   const [photoFile, setPhotoFile] = useState(null)
@@ -231,6 +335,7 @@ function BookHouseModal({ house, user, onClose, onDone }) {
       ? 'Password should be at least 6 characters.' : '',
     rentAmount: touched.rentAmount && form.rentAmount && Number(form.rentAmount) <= 0
       ? 'Rent must be greater than ₹0.' : '',
+    memberCount: touched.memberCount && (Number(form.memberCount) < 1 || Number(form.memberCount) > 20) ? 'Enter 1–20 household members.' : '',
     advancePaidNow: touched.advancePaidNow && form.advanceAmount && Number(form.advancePaidNow) > Number(form.advanceAmount)
       ? `Can't exceed the agreed advance of ₹${form.advanceAmount}.` : '',
   }
@@ -238,7 +343,7 @@ function BookHouseModal({ house, user, onClose, onDone }) {
 
   async function submit(e) {
     e.preventDefault()
-    setTouched({ email: true, phone: true, password: true, rentAmount: true, advancePaidNow: true })
+    setTouched({ email: true, phone: true, password: true, rentAmount: true, advancePaidNow: true, memberCount: true })
     if (hasErrors) return
 
     setSubmitting(true)
@@ -267,6 +372,7 @@ function BookHouseModal({ house, user, onClose, onDone }) {
         advanceAmount: Number(form.advanceAmount),
         phoneVisibleToNeighbors: form.phoneVisibleToNeighbors,
         moveInDate: form.moveInDate,
+        memberCount: Number(form.memberCount || 1),
         recordedBy,
         photoUrl,
       })
@@ -354,6 +460,7 @@ function BookHouseModal({ house, user, onClose, onDone }) {
           onChange={(e) => setForm({ ...form, advancePaidNow: e.target.value })} onBlur={() => touch('advancePaidNow')}
           error={errors.advancePaidNow}
         />
+        <TextField label="Household members" hint="Used for the house profile. You can create separate family logins after booking." type="number" min="1" max="20" value={form.memberCount} onChange={(e) => setForm({ ...form, memberCount: e.target.value })} onBlur={() => touch('memberCount')} error={errors.memberCount} />
         <label className="flex items-center gap-2 text-sm text-ink-soft">
           <input type="checkbox" checked={form.phoneVisibleToNeighbors} onChange={(e) => setForm({ ...form, phoneVisibleToNeighbors: e.target.checked })} />
           Show phone number to neighbors in directory

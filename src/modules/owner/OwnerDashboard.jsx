@@ -93,17 +93,17 @@ export default function OwnerDashboard() {
       <a href="#main-content" className="skip-link">Skip to main content</a>
 
       <header className="sticky top-0 z-50 bg-cover text-white border-b border-white/10 shadow-lg">
-        <div className="h-[72px] px-4 lg:px-6 flex items-center justify-between gap-3 rm-mobile-header">
+        <div className="h-[72px] px-4 lg:px-6 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <button className="lg:hidden w-10 h-10 rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
               <Menu size={20} />
             </button>
-            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center font-bold overflow-hidden shrink-0 rm-mobile-header-avatar">
+            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center font-bold overflow-hidden shrink-0">
               {user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} alt="" className="w-full h-full object-cover" /> : user?.name?.[0]}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="font-display text-lg font-extrabold truncate rm-mobile-header-title">Rental Manager</h1>
+                <h1 className="font-display text-lg font-extrabold truncate">Rental Manager</h1>
                 <PropertySwitcher />
               </div>
               <p className="text-xs text-white/65 truncate">{user?.name}{user?.role === 'admin' ? ' · Super Admin' : ' · Owner'}</p>
@@ -118,7 +118,7 @@ export default function OwnerDashboard() {
             <IconButton icon={HelpCircle} label="Replay onboarding tour" onClick={() => setReplayTour(true)} />
             <IconButton icon={LogOut} label="Log out" onClick={logout} />
           </div>
-          <div className="md:hidden flex items-center gap-1 rm-mobile-header-actions">
+          <div className="md:hidden flex items-center gap-1">
             <NotificationBell userId={user?.uid} />
             <ThemeToggle />
           </div>
@@ -181,9 +181,9 @@ export default function OwnerDashboard() {
           )}
         </AnimatePresence>
 
-        <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 rm-mobile-main">
+        <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8">
           <div className="max-w-[1400px] mx-auto">
-            <div className="md:hidden mb-4 rm-mobile-search"><SearchBar onSelectHouse={handleSearchSelect} /></div>
+            <div className="md:hidden mb-4"><SearchBar onSelectHouse={handleSearchSelect} /></div>
             <AnimatePresence mode="wait">
               <motion.div key={location.pathname} role="tabpanel" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: .16 }}>
                 <Suspense fallback={<LoadingScreen />}>
@@ -217,11 +217,10 @@ export default function OwnerDashboard() {
         </main>
       </div>
 
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-paper-raised/95 backdrop-blur-xl border-t border-[var(--rm-border)] flex items-stretch z-40 shadow-[0_-8px_24px_rgba(23,32,51,.08)] rm-mobile-nav" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} aria-label="Primary">
+      <nav className="rm-mobile-nav lg:hidden fixed bottom-0 inset-x-0 bg-paper-raised/95 backdrop-blur-xl border-t border-[var(--rm-border)] flex items-stretch z-40 shadow-[0_-8px_24px_rgba(23,32,51,.08)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} aria-label="Primary">
         {TABS.filter(t => MOBILE_PRIMARY.includes(t.id)).map(t => {
           const active = tab === t.id
-          const label = { home: 'Home', houses: 'Houses', approvals: 'Approvals', tenants: 'Tenants', more: 'More' }[t.id] || t.label
-          return <button key={t.id} onClick={() => go(t.id)} className={`rm-mobile-nav-item ${active ? 'text-brand font-bold' : 'text-ink-soft'}`} aria-current={active ? 'page' : undefined}><span className={`rm-mobile-nav-icon flex items-center justify-center ${active ? 'bg-brand/10' : ''}`}><t.icon /></span><span className="rm-mobile-nav-label">{label}</span></button>
+          return <button key={t.id} onClick={() => go(t.id)} className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 py-2.5 px-1 text-[10px] whitespace-nowrap ${active ? 'text-brand font-bold' : 'text-ink-soft'}`} aria-current={active ? 'page' : undefined}><span className={`w-8 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-brand/10' : ''}`}><t.icon size={18} /></span>{t.label}</button>
         })}
       </nav>
 

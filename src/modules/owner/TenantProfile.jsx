@@ -9,6 +9,7 @@ import TextField from '../shared/ui/TextField'
 import SelectField from '../shared/ui/SelectField'
 import Button from '../shared/ui/Button'
 import { useAuth } from '../../context/AuthContext'
+import FamilyAccounts from '../tenant/FamilyAccounts'
 
 export default function TenantProfile({ houseId, onBack }) {
   const { user } = useAuth()
@@ -55,6 +56,8 @@ export default function TenantProfile({ houseId, onBack }) {
           <p className="text-sm text-ink-soft">House {house.internalDoorNumber} {isVacant && '· Currently vacant'}</p>
         </div>
       </div>
+
+      {!isVacant && <FamilyAccounts houseId={houseId} ownerMode />}
 
       {!isVacant && (
         <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-2">

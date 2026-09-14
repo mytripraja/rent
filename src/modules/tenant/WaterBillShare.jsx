@@ -23,7 +23,7 @@ export default function WaterBillShare() {
 
   async function refresh() {
     try {
-      setCycles(await listWaterBillCycles())
+      setCycles(await listWaterBillCycles(user.houseId))
       setPayments(await listWaterPaymentsForHouse(user.houseId))
     } catch (err) {
       console.error(err)
