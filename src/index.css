@@ -183,3 +183,17 @@ label { font-weight: 500; }
 
 .rm-mobile-nav button { min-width: 0; line-height: 1.05; }
 @media (max-width: 380px) { .rm-mobile-nav button { font-size: 9px; } .rm-mobile-nav button > span { width: 30px; height: 26px; } }
+
+/* V4.2 mobile tenant navigation: never expose a horizontal scrollbar for filter controls. */
+.rm-mobile-nav { min-height: 66px; padding-top: 5px; }
+.rm-mobile-nav button { min-width: 0; line-height: 1.05; padding-bottom: 7px; }
+.rm-mobile-nav button > span { flex: 0 0 auto; }
+@media (max-width: 380px) {
+  .rm-mobile-nav { min-height: 62px; }
+  .rm-mobile-nav button { font-size: 9px; gap: 2px; }
+  .rm-mobile-nav button > span { width: 28px; height: 25px; }
+}
+@media (max-width: 640px) {
+  main { padding-bottom: 82px !important; }
+  input, select { min-height: 46px; }
+}

@@ -1,6 +1,5 @@
 import {
   collection,
-  collectionGroup,
   doc,
   getDoc,
   getDocs,
@@ -142,15 +141,28 @@ export async function bookHouse(houseId, { tenantId, name, phone, email, rentAmo
   })
 }
 
-// Past tenants across every house — used by the "Old Tenants" tab. Reads the
-// `history` subcollection across all houses at once via a collection group
-// query. Firestore will prompt you to create a composite index the first time
-// this runs (console link appears in the error) — click it once and it's done.
+// Past tenants across every house — used by the "Old Tenants" tab.
+//
+// IMPORTANT: Do not use a collectionGroup(history) query here. Although the
+// owner rules allow individual history reads, collection-group queries can be
+// rejected by Firestore rules/index configuration and cause the entire Tenants
+// screen to fail with "Missing or insufficient permissions". We already know
+// the owner's houses, so read each house's history subcollection directly.
+// This also removes the need for a composite index.
 export async function listPastTenants() {
-  const snap = await getDocs(
-    query(collectionGroup(db, 'history'), where('movedOutAt', '!=', null), orderBy('movedOutAt', 'desc'))
+  const houses = await listHouses()
+  const results = await Promise.all(
+    houses.map(async (house) => {
+      const snap = await getDocs(collection(db, 'houses', house.id, 'history'))
+      return snap.docs
+        .map((d) => ({ id: d.id, houseId: house.id, ...d.data() }))
+        .filter((entry) => entry.movedOutAt != null)
+    })
   )
-  return snap.docs.map((d) => ({ id: d.id, houseId: d.ref.parent.parent.id, ...d.data() }))
+
+  return results
+    .flat()
+    .sort((a, b) => Number(b.movedOutAt || 0) - Number(a.movedOutAt || 0))
 }
 
 // Vacate: closes history entry, house becomes vacant.
