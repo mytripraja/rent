@@ -4,7 +4,7 @@ import {
   Home, AlertCircle, Users, Zap, Bell, PenSquare, ArrowRight, CalendarDays,
   ReceiptIndianRupee, Wrench, UserPlus, FileBarChart, Megaphone, Droplets,
   MoreHorizontal, Activity, BarChart3, ShieldCheck, WalletCards, Settings2,
-  ClipboardCheck, CircleCheck, Building2, Clock3
+  ClipboardCheck, CircleCheck, Building2, Clock3, Sparkles
 } from 'lucide-react'
 import { listHouses } from '../../services/houseService'
 import { listRentHistory, countMonthsPending, currentMonthStr, resolveMonthStatus } from '../../services/rentService'
