@@ -1,0 +1,10 @@
+{
+  "appId": "com.rds.rentalmanager",
+  "appName": "Rental Manager",
+  "webDir": "dist",
+  "server": {
+    "url": "https://REPLACE-WITH-YOUR-VERCEL-DOMAIN.vercel.app",
+    "androidScheme": "https",
+    "cleartext": false
+  }
+}
