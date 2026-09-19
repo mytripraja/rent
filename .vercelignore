@@ -1,1 +1,3 @@
-api
+api/test-*.js
+api/temp-*.js
+api/old-*.js
