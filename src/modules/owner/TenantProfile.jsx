@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { getHouse, getHouseHistory } from '../../services/houseService'
 import { listRentHistory } from '../../services/rentService'
 import { listAdvanceLedger, addAdvancePayment, getAdvanceCollected } from '../../services/advanceLedgerService'
-import { updateTenantContact } from '../../services/authService'
+import { updateTenantContact, getUserProfile } from '../../services/authService'
+import { ALL_TENANT_PERMISSIONS, TENANT_PERMISSION_LABELS, updateTenantPermissions } from '../../services/tenantAccountService'
 import { uploadAgreement, getAgreementForHouse, getAgreementViewUrl } from '../../services/agreementService'
 import ApprovalStatusBadge from '../shared/ApprovalStatusBadge'
 import TextField from '../shared/ui/TextField'
@@ -22,6 +23,9 @@ export default function TenantProfile({ houseId, onBack }) {
   const [editingContact, setEditingContact] = useState(false)
   const [addingAdvance, setAddingAdvance] = useState(false)
   const [uploadingAgreement, setUploadingAgreement] = useState(false)
+  const [tenantPermissions, setTenantPermissions] = useState({})
+  const [savingPermissions, setSavingPermissions] = useState(false)
+  const [permissionError, setPermissionError] = useState('')
 
   useEffect(() => {
     load()
@@ -30,6 +34,9 @@ export default function TenantProfile({ houseId, onBack }) {
   async function load() {
     const h = await getHouse(houseId)
     setHouse(h)
+    if (h?.currentTenantId) {
+      try { const profile = await getUserProfile(h.currentTenantId); setTenantPermissions(profile?.tenantPermissions || {}) } catch (e) { console.warn('Tenant permissions unavailable', e) }
+    }
     setRentHistory(await listRentHistory(houseId))
     setPastOccupants((await getHouseHistory(houseId)).filter((entry) => entry.movedOutAt))
     if (h?.status === 'occupied') {
@@ -58,6 +65,27 @@ export default function TenantProfile({ houseId, onBack }) {
       </div>
 
       {!isVacant && <FamilyAccounts houseId={houseId} ownerMode />}
+
+      {!isVacant && user?.role === 'admin' && (
+        <div className="bg-paper-raised rounded-2xl border border-brand/20 shadow-sm p-5 space-y-4">
+          <div><h3 className="font-semibold text-ink text-sm">Tenant access controls</h3><p className="text-xs text-ink-soft mt-1">Turn individual tenant features on or off. Rent & payment submission controls the tenant's Pay/Submit Rent screen.</p></div>
+          {permissionError && <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700">{permissionError}</div>}
+          <div className="grid sm:grid-cols-2 gap-2">
+            {ALL_TENANT_PERMISSIONS.map(permission => {
+              const enabled = tenantPermissions[permission] !== false
+              return <label key={permission} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--rm-border)] bg-paper p-3 cursor-pointer">
+                <span><span className="block text-sm font-semibold text-ink">{TENANT_PERMISSION_LABELS[permission]}</span><span className="block text-[11px] text-ink-soft mt-0.5">{enabled ? 'Allowed' : 'Blocked'}</span></span>
+                <input type="checkbox" checked={enabled} onChange={e => setTenantPermissions(prev => ({ ...prev, [permission]: e.target.checked }))} aria-label={`Allow ${TENANT_PERMISSION_LABELS[permission]}`} />
+              </label>
+            })}
+          </div>
+          <button disabled={savingPermissions || !house.currentTenantId} onClick={async () => {
+            setSavingPermissions(true); setPermissionError('')
+            try { await updateTenantPermissions(house.currentTenantId, tenantPermissions); setPermissionError(''); } catch (e) { setPermissionError(e.message || 'Could not save access controls.') } finally { setSavingPermissions(false) }
+          }} className="w-full rounded-xl bg-brand text-white py-3 text-sm font-bold disabled:opacity-60">{savingPermissions ? 'Saving access…' : 'Save tenant access'}</button>
+          <p className="text-[11px] text-ink-soft">Changes apply to the tenant's account immediately. Existing accounts without a saved permission value remain enabled.</p>
+        </div>
+      )}
 
       {!isVacant && (
         <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-2">

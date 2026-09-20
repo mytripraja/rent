@@ -40,7 +40,7 @@ export default function DadLiteDashboard() {
     if (quiet) setRefreshing(true)
     else setLoading(true)
     try {
-      const data = await authedFetch('/api/dad-lite-roster', { month })
+      const data = await authedFetch('/api/dad-lite', { action: 'roster', month })
       setHouses(data.houses || [])
       setPayments(data.payments || [])
     } catch (err) {
@@ -112,7 +112,7 @@ export default function DadLiteDashboard() {
 
     setSaving(true)
     try {
-      await authedFetch('/api/dad-lite-submit-rent', {
+      await authedFetch('/api/dad-lite', { action: 'submit-rent',
         houseId: selected.id,
         month,
         dateSent: form.dateSent,

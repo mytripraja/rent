@@ -27,6 +27,10 @@ export async function assignSlot(slotId, { houseId, tenantName, vehicleNumber })
   })
 }
 
+export async function updateSlotPosition(slotId, { x, y }) {
+  await updateDoc(doc(db, 'parkingSlots', slotId), { x, y })
+}
+
 export async function releaseSlot(slotId) {
   await updateDoc(doc(db, 'parkingSlots', slotId), {
     assignedHouseId: null,

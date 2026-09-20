@@ -9,6 +9,8 @@ import OwnerDashboard from './modules/owner/OwnerDashboard'
 import TenantDashboard from './modules/tenant/TenantDashboard'
 import PublicHome from './modules/public/PublicHome'
 import LegalPage from './modules/public/LegalPage'
+import NotFoundPage from './modules/public/NotFoundPage'
+import LanguagePreferenceGate from './modules/shared/LanguagePreferenceGate'
 
 function RootRedirect() {
   const { user, loading } = useAuth()
@@ -26,6 +28,7 @@ export default function App() {
       <LanguageProvider>
         <ToastProvider>
           <BrowserRouter>
+            <LanguagePreferenceGate />
             <Routes>
               <Route path="/welcome" element={<PublicHome />} />
               <Route path="/login" element={<LoginPage />} />
@@ -50,6 +53,7 @@ export default function App() {
                 }
               />
               <Route path="/" element={<RootRedirect />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </BrowserRouter>
         </ToastProvider>

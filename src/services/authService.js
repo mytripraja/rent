@@ -168,11 +168,12 @@ export async function listOwners() {
 // ---- Profile self-editing ----
 // Anyone (owner-level or tenant) can update their own name/phone/photo directly
 // — the Firestore rule only allows those three fields to be self-edited, never role/houseId.
-export async function updateOwnProfile({ uid, name, phone, profilePhotoUrl }) {
+export async function updateOwnProfile({ uid, name, phone, profilePhotoUrl, preferredLanguage }) {
   const updates = {}
   if (name !== undefined) updates.name = name
   if (phone !== undefined) updates.phone = phone
   if (profilePhotoUrl !== undefined) updates.profilePhotoUrl = profilePhotoUrl
+  if (preferredLanguage !== undefined) updates.preferredLanguage = preferredLanguage
   await updateDoc(doc(db, 'users', uid), updates)
 }
 

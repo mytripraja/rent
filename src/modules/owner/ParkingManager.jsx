@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { CarFront, Check, ChevronDown, MapPin, Plus, RotateCcw, UserRound, X } from 'lucide-react'
-import { listSlots, createSlot, assignSlot, releaseSlot } from '../../services/parkingService'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Bike, CarFront, Check, ChevronDown, MapPin, Plus, RotateCcw, UserRound, X, Zap } from 'lucide-react'
+import { listSlots, createSlot, assignSlot, releaseSlot, updateSlotPosition } from '../../services/parkingService'
 import { listHouses } from '../../services/houseService'
 
 function slotPosition(slot, index) {
@@ -20,6 +20,8 @@ export default function ParkingManager() {
   const [assignment, setAssignment] = useState({ houseId: '', tenantName: '', vehicleNumber: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const dragRef = useRef(null)
+  const didDragRef = useRef(false)
 
   async function load() {
     setError('')
@@ -63,6 +65,50 @@ export default function ParkingManager() {
     catch (e) { setError(e?.message || 'Could not release parking.') }
     finally { setSaving(false) }
   }
+  function vehicleIcon(type) {
+    if (type === 'two_wheeler') return Bike
+    if (type === 'ev') return Zap
+    return CarFront
+  }
+
+  function startDrag(e, slot) {
+    if (e.button !== undefined && e.button !== 0) return
+    const x = Number(slot.x ?? 8), y = Number(slot.y ?? 8)
+    dragRef.current = { id: slot.id, startX: e.clientX, startY: e.clientY, x, y, lastX: x, lastY: y }
+    didDragRef.current = false
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+
+  function moveDrag(e) {
+    const drag = dragRef.current
+    if (!drag) return
+    const distance = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY)
+    if (distance < 4) return
+    didDragRef.current = true
+    const rect = e.currentTarget.getBoundingClientRect()
+    const dx = ((e.clientX - drag.startX) / rect.width) * 100
+    const dy = ((e.clientY - drag.startY) / rect.height) * 100
+    const nextX = Math.max(4, Math.min(96, drag.x + dx))
+    const nextY = Math.max(6, Math.min(94, drag.y + dy))
+    drag.lastX = nextX
+    drag.lastY = nextY
+    setSlots(prev => prev.map(s => s.id === drag.id ? { ...s, x: nextX, y: nextY } : s))
+  }
+
+  async function endDrag(e) {
+    const drag = dragRef.current
+    if (!drag) return
+    const moved = didDragRef.current
+    const slot = slots.find(s => s.id === drag.id)
+    const finalX = drag.lastX ?? slot?.x
+    const finalY = drag.lastY ?? slot?.y
+    dragRef.current = null
+    if (moved && slot) {
+      try { await updateSlotPosition(slot.id, { x: Number(finalX), y: Number(finalY) }) }
+      catch (err) { setError(err?.message || 'Could not save parking position.') }
+    }
+  }
+
 
   return <div className="space-y-4">
     <div className="rm-card p-4 sm:p-5">
@@ -75,22 +121,23 @@ export default function ParkingManager() {
     </div>
 
     <section className="rm-card p-3 sm:p-5 overflow-hidden">
-      <div className="relative min-h-[440px] rounded-2xl border-2 border-[var(--rm-border-strong)] bg-paper overflow-hidden">
+      <div className="relative min-h-[440px] sm:min-h-[500px] rounded-2xl border-2 border-[var(--rm-border-strong)] bg-paper overflow-hidden touch-none" onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
         <div className="absolute inset-0 opacity-45" style={{backgroundImage:'linear-gradient(var(--rm-border) 1px, transparent 1px),linear-gradient(90deg,var(--rm-border) 1px,transparent 1px)',backgroundSize:'5% 5%'}}/>
         <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full bg-paper-raised/90 border border-[var(--rm-border)] px-3 py-1.5 text-xs font-semibold text-ink-soft"><MapPin size={13}/> Entry / driveway</div>
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] uppercase tracking-[.3em] text-ink-soft/60 rotate-90">Drive lane</div>
         {visible.map((slot, index) => {
           const pos = slotPosition(slot, index)
           const assigned = slot.status === 'assigned'
-          return <button key={slot.id} onClick={() => openAssign(slot)} className={`absolute -translate-x-1/2 -translate-y-1/2 w-[15%] min-w-[74px] max-w-[118px] aspect-[1.45] rounded-xl border-2 p-2 text-left transition active:scale-95 ${assigned ? 'bg-brand/15 border-brand text-brand shadow-sm' : 'bg-paper-raised border-[var(--rm-border-strong)] text-ink hover:border-brand hover:shadow-md'}`} style={{left:`${pos.x}%`,top:`${pos.y}%`}}>
-            <div className="flex items-center justify-between gap-1"><CarFront size={16}/><span className="text-[10px] font-mono font-bold">{slot.slotNumber}</span></div>
-            <p className="text-[9px] uppercase tracking-wide mt-1">{slot.type?.replace('_',' ')}</p>
+          const VehicleIcon = vehicleIcon(slot.type)
+          return <button key={slot.id} onPointerDown={e => startDrag(e, slot)} onClick={() => { if (!didDragRef.current) openAssign(slot) }} className={`absolute -translate-x-1/2 -translate-y-1/2 w-[15%] min-w-[74px] max-w-[118px] aspect-[1.45] rounded-xl border-2 p-2 text-left transition active:scale-95 ${assigned ? 'bg-brand/15 border-brand text-brand shadow-sm' : 'bg-paper-raised border-[var(--rm-border-strong)] text-ink hover:border-brand hover:shadow-md'}`} style={{left:`${pos.x}%`,top:`${pos.y}%`}}>
+            <div className="flex items-center justify-between gap-1"><VehicleIcon size={16}/><span className="text-[10px] font-mono font-bold">{slot.slotNumber}</span></div>
+            <p className="text-[9px] uppercase tracking-wide mt-1">{slot.type === 'two_wheeler' ? 'TWO WHEELER' : slot.type === 'four_wheeler' ? 'CAR' : 'EV'}</p>
             {assigned ? <p className="text-[10px] font-semibold mt-1 truncate">{slot.assignedTenantName}</p> : <p className="text-[10px] text-ink-soft mt-1">Available</p>}
           </button>
         })}
         {!visible.length && <div className="absolute inset-0 grid place-items-center text-center p-6"><div><CarFront className="mx-auto mb-2 text-ink-soft/50" size={32}/><p className="font-semibold text-ink">No slots on {floor}</p><p className="text-sm text-ink-soft mt-1">Add a slot and it will appear on the map.</p></div></div>}
       </div>
-      <div className="flex flex-wrap gap-3 mt-3 text-xs text-ink-soft"><span className="inline-flex items-center gap-2"><i className="w-3 h-3 rounded bg-brand/20 border border-brand"/> Assigned</span><span className="inline-flex items-center gap-2"><i className="w-3 h-3 rounded bg-paper-raised border border-[var(--rm-border-strong)]"/> Available</span></div>
+      <p className="text-xs text-ink-soft mt-3">Drag any vehicle slot to arrange the parking map. The position is saved automatically.</p><div className="flex flex-wrap gap-3 mt-3 text-xs text-ink-soft"><span className="inline-flex items-center gap-2"><i className="w-3 h-3 rounded bg-brand/20 border border-brand"/> Assigned</span><span className="inline-flex items-center gap-2"><i className="w-3 h-3 rounded bg-paper-raised border border-[var(--rm-border-strong)]"/> Available</span></div>
     </section>
 
     {showAdd && <div className="fixed inset-0 z-[80] bg-black/45 p-4 grid place-items-center" onMouseDown={e => e.currentTarget === e.target && setShowAdd(false)}><div className="w-full max-w-md rm-card p-5">

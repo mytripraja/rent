@@ -29,6 +29,7 @@ export default function BlueprintManager() {
   const [selected, setSelected] = useState(null)
   const [drag, setDrag] = useState(null)
   const [tenantVisible, setTenantVisible] = useState(false)
+  const [resolvedScope, setResolvedScope] = useState(houseId)
 
   useEffect(() => { if (owner) listHouses().then(setHouses).catch(() => setError('Could not load houses.')) }, [owner])
   useEffect(() => { load() }, [houseId, user?.uid])
@@ -39,12 +40,28 @@ export default function BlueprintManager() {
     try {
       if (tenant) {
         const house = await getHouse(houseId)
-        const allowed = !!house?.blueprintVisibleToTenants
-        setTenantVisible(allowed)
-        if (!allowed) { setBlueprint(normalizeBlueprint(null)); setLoading(false); return }
+        const houseAllowed = !!house?.blueprintVisibleToTenants
+        if (houseAllowed) {
+          const data = await getHouseBlueprint(houseId)
+          setResolvedScope(houseId)
+          setTenantVisible(true)
+          setBlueprint(normalizeBlueprint(data))
+          setFloorId(data?.floors?.[0]?.id || 'ground')
+        } else {
+          let propertyData = null
+          try { propertyData = await getPropertyBlueprint() } catch (propertyError) { console.warn('Shared property blueprint unavailable', propertyError) }
+          const propertyAllowed = !!propertyData?.visibleToTenants
+          setResolvedScope('property')
+          setTenantVisible(propertyAllowed)
+          setBlueprint(normalizeBlueprint(propertyData))
+          setFloorId(propertyData?.floors?.[0]?.id || 'ground')
+        }
+        setLoading(false)
+        return
       }
       const data = houseId === 'property' ? await getPropertyBlueprint() : await getHouseBlueprint(houseId)
-      setBlueprint(normalizeBlueprint(data)); setTenantVisible(Boolean(data?.visibleToTenants || (tenant && tenantVisible))); setFloorId(data?.floors?.[0]?.id || 'ground')
+      setResolvedScope(houseId)
+      setBlueprint(normalizeBlueprint(data)); setTenantVisible(Boolean(data?.visibleToTenants)); setFloorId(data?.floors?.[0]?.id || 'ground')
     } catch (e) { console.error(e); setError(e?.message || 'Could not load blueprint.') }
     finally { setLoading(false) }
   }
@@ -100,7 +117,7 @@ export default function BlueprintManager() {
   return <div className="space-y-4 print-area">
     <div className="rm-card p-4 sm:p-5">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        <div><div className="rm-kicker">Floor plans</div><h2 className="font-display text-2xl font-extrabold mt-1">{houseId === 'property' ? 'Apartment blueprint' : 'House blueprint'}</h2><p className="text-sm text-ink-soft mt-1">Build a simple visual plan with rooms, entry, stairs and lift positions.</p></div>
+        <div><div className="rm-kicker">Floor plans</div><h2 className="font-display text-2xl font-extrabold mt-1">{resolvedScope === 'property' ? 'Property blueprint' : 'House blueprint'}</h2><p className="text-sm text-ink-soft mt-1">Build a simple visual plan with rooms, entry, stairs, lift and parking positions.</p></div>
         <div className="flex flex-wrap gap-2">
           <button onClick={printBlueprint} className="rm-secondary-button"><Download size={16}/> Print / PDF</button>
           {owner && <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"><Save size={16}/>{saving ? 'Saving…' : 'Save blueprint'}</button>}
@@ -113,25 +130,26 @@ export default function BlueprintManager() {
       {error && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
     </div>
 
-    <div className="grid lg:grid-cols-[220px_1fr_250px] gap-4">
-      <aside className="rm-card p-3 space-y-3">
+    <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_250px] gap-4">
+
+      <aside className="rm-card p-3 space-y-3 order-2 lg:order-1">
         <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[.14em] text-ink-soft">Floors</p>{owner && <button onClick={addFloor} className="p-1.5 rounded-lg bg-brand/10 text-brand" title="Add floor"><Plus size={15}/></button>}</div>
         <div className="space-y-1">{blueprint.floors.map((f, i) => <button key={f.id} onClick={() => { setFloorId(f.id); setSelected(null) }} className={`w-full text-left px-3 py-2.5 rounded-xl text-sm ${f.id === floor.id ? 'bg-brand/10 text-brand font-bold' : 'text-ink-soft hover:bg-paper'}`}>{f.name || `Floor ${i + 1}`}</button>)}</div>
         {owner && blueprint.floors.length > 1 && <button onClick={removeFloor} className="text-xs text-stamp-red font-semibold">Remove current floor</button>}
         {owner && <div className="pt-3 border-t border-[var(--rm-border)] space-y-2"><p className="text-xs font-bold uppercase tracking-[.14em] text-ink-soft">Add</p><div className="grid grid-cols-2 gap-1.5">{ROOM_TYPES.slice(0,6).map(type => <button key={type} onClick={() => addRoom(type)} className="rounded-lg border border-[var(--rm-border)] px-2 py-2 text-xs text-ink hover:border-brand/30">{type}</button>)}</div><div className="grid grid-cols-2 gap-1.5">{FEATURE_TYPES.map(([type]) => <button key={type} onClick={() => addFeature(type)} className="rounded-lg border border-[var(--rm-border)] px-2 py-2 text-xs text-ink hover:border-brand/30">{type}</button>)}</div></div>}
       </aside>
 
-      <section className="rm-card p-3 sm:p-5 overflow-hidden">
+      <section className="rm-card p-3 sm:p-5 overflow-hidden order-1 lg:order-2">
         <div className="flex items-center justify-between mb-3"><input disabled={!owner} value={floor?.name || ''} onChange={e => updateFloor({ ...floor, name: e.target.value })} className="!min-h-0 !py-2 !px-3 font-bold"/><span className="text-xs text-ink-soft">Drag blocks to position them</span></div>
-        <div className="relative aspect-[4/3] min-h-[360px] max-h-[680px] rounded-2xl border-2 border-[var(--rm-border-strong)] bg-paper overflow-hidden touch-none" onPointerMove={pointerMove} onPointerUp={endDrag} onPointerCancel={endDrag}>
+        <div className="relative aspect-[4/3] min-h-[280px] sm:min-h-[360px] max-h-[680px] rounded-2xl border-2 border-[var(--rm-border-strong)] bg-paper overflow-hidden touch-none" onPointerMove={pointerMove} onPointerUp={endDrag} onPointerCancel={endDrag}>
           <div className="absolute inset-0 opacity-50" style={{backgroundImage:'linear-gradient(var(--rm-border) 1px, transparent 1px),linear-gradient(90deg,var(--rm-border) 1px,transparent 1px)',backgroundSize:'5% 5%'}}/>
-          {floor?.rooms.map(item => <div key={item.id} onPointerDown={e => owner && startDrag(e,item)} onClick={() => setSelected(item.id)} className={`absolute rounded-lg border-2 p-2 cursor-grab select-none overflow-hidden ${selected === item.id ? 'border-brand ring-2 ring-brand/20' : 'border-slate-400'}`} style={{left:`${item.x}%`,top:`${item.y}%`,width:`${item.w}%`,height:`${item.h}%`,background:item.color}}><div className="flex items-start gap-1 text-xs font-bold text-slate-700"><Grip size={13}/><span className="truncate">{item.name}</span></div><span className="text-[10px] text-slate-600">{item.type}</span></div>)}
-          {floor?.features.map(item => <div key={item.id} onPointerDown={e => owner && startDrag(e,item)} onClick={() => setSelected(item.id)} className={`absolute rounded-lg border-2 border-dashed p-2 cursor-grab select-none overflow-hidden bg-paper-raised/90 ${selected === item.id ? 'border-brand ring-2 ring-brand/20' : 'border-brand/60'}`} style={{left:`${item.x}%`,top:`${item.y}%`,width:`${item.w}%`,height:`${item.h}%`}}><div className="text-xs font-bold text-brand">{item.type}</div><div className="text-[10px] text-ink-soft">Common feature</div></div>)}
+          {floor?.rooms.map(item => <div key={item.id} tabIndex={owner ? 0 : -1} role="button" aria-label={`${item.name} room. Use arrow keys to move.`} onPointerDown={e => owner && startDrag(e,item)} onClick={() => setSelected(item.id)} onKeyDown={e => { if (!owner) return; const step=e.shiftKey?5:1; if(e.key==='ArrowLeft'){e.preventDefault();patchSelected({x:Math.max(0,item.x-step)})} if(e.key==='ArrowRight'){e.preventDefault();patchSelected({x:Math.min(100-item.w,item.x+step)})} if(e.key==='ArrowUp'){e.preventDefault();patchSelected({y:Math.max(0,item.y-step)})} if(e.key==='ArrowDown'){e.preventDefault();patchSelected({y:Math.min(100-item.h,item.y+step)})} }} className={`absolute rounded-lg border-2 p-2 cursor-grab select-none overflow-hidden ${selected === item.id ? 'border-brand ring-2 ring-brand/20' : 'border-slate-400'}`} style={{left:`${item.x}%`,top:`${item.y}%`,width:`${item.w}%`,height:`${item.h}%`,background:item.color}}><div className="flex items-start gap-1 text-xs font-bold text-slate-700"><Grip size={13}/><span className="truncate">{item.name}</span></div><span className="text-[10px] text-slate-600">{item.type}</span></div>)}
+          {floor?.features.map(item => <div key={item.id} tabIndex={owner ? 0 : -1} role="button" aria-label={`${item.name} feature. Use arrow keys to move.`} onPointerDown={e => owner && startDrag(e,item)} onClick={() => setSelected(item.id)} className={`absolute rounded-lg border-2 border-dashed p-2 cursor-grab select-none overflow-hidden bg-paper-raised/90 ${selected === item.id ? 'border-brand ring-2 ring-brand/20' : 'border-brand/60'}`} style={{left:`${item.x}%`,top:`${item.y}%`,width:`${item.w}%`,height:`${item.h}%`}}><div className="text-xs font-bold text-brand">{item.type}</div><div className="text-[10px] text-ink-soft">Common feature</div></div>)}
           {(!floor?.rooms.length && !floor?.features.length) && <div className="absolute inset-0 flex items-center justify-center text-sm text-ink-soft"><div className="text-center"><Building2 className="mx-auto mb-2 opacity-40"/><p>Add rooms or features from the left.</p></div></div>}
         </div>
       </section>
 
-      <aside className="rm-card p-4">
+      <aside className="rm-card p-4 order-3 lg:order-3">
         {selectedItem ? <>
           <div className="flex items-center justify-between"><div><p className="text-xs uppercase tracking-[.14em] font-bold text-ink-soft">Selected</p><h3 className="font-display text-lg font-bold text-ink mt-1">{selectedItem.name}</h3></div>{owner && <button onClick={removeSelected} className="p-2 rounded-lg text-stamp-red hover:bg-red-50"><Trash2 size={16}/></button>}</div>
           {owner && <div className="space-y-3 mt-4">

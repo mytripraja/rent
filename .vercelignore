@@ -1,6 +1,16 @@
+# Vercel Hobby allows up to 12 bundled Serverless Functions per deployment.
+# Keep the public API surface at exactly 12 functions; family and Dad Lite
+# endpoints are consolidated into routers under api/subtenant.js and api/dad-lite.js.
 api/*
 !api/create-owner.js
 !api/delete-owner.js
 !api/get-agreement-url.js
 !api/get-signed-url.js
+!api/news.js
 !api/sign-upload.js
+!api/resolve-customer-id.js
+!api/create-tenant.js
+!api/update-tenant-contact.js
+!api/revoke-vacated-access.js
+!api/subtenant.js
+!api/dad-lite.js

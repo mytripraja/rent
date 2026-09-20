@@ -12,22 +12,32 @@ export const DEFAULT_TENANT_PERMISSIONS = {
   documents: true,
   directory: true,
   community: true,
+  blueprint: true,
+  calendar: true,
+  news: true,
+  family: true,
+  serviceContacts: true,
 }
 
 export async function listHouseTenantAccounts(houseId) {
-  return authedFetch('/api/list-subtenants', { houseId })
+  return authedFetch('/api/subtenant', { action: 'list', houseId })
 }
 
 export async function createSubTenantAccount({ houseId, email, password, name, phone, relationship, permissions }) {
-  return authedFetch('/api/create-subtenant', { houseId, email, password, name, phone, relationship, permissions })
+  return authedFetch('/api/subtenant', { action: 'create', houseId, email, password, name, phone, relationship, permissions })
 }
 
 export async function updateSubTenantAccount(uid, { name, phone, relationship, permissions, disabled }) {
-  return authedFetch('/api/update-subtenant', { uid, name, phone, relationship, permissions, disabled })
+  return authedFetch('/api/subtenant', { action: 'update', uid, name, phone, relationship, permissions, disabled })
 }
 
 export async function deleteSubTenantAccount(uid) {
-  return authedFetch('/api/delete-subtenant', { uid })
+  return authedFetch('/api/subtenant', { action: 'delete', uid })
+}
+
+export async function updateTenantPermissions(uid, tenantPermissions) {
+  if (!uid) throw new Error('Tenant account is missing.')
+  await updateDoc(doc(db, 'users', uid), { tenantPermissions })
 }
 
 export function isPrimaryTenant(user) {
@@ -35,5 +45,26 @@ export function isPrimaryTenant(user) {
 }
 
 export function tenantCan(user, permission) {
-  return isPrimaryTenant(user) || user?.tenantPermissions?.[permission] !== false
+  return user?.role === 'tenant' && user?.tenantPermissions?.[permission] !== false
 }
+
+export const TENANT_PERMISSION_LABELS = {
+  rent: 'Rent & payment submission',
+  bills: 'EB / water bills',
+  notices: 'Notices',
+  complaints: 'Complaints',
+  maintenance: 'Maintenance requests',
+  visitors: 'Visitors',
+  commonArea: 'Common-area booking',
+  documents: 'Documents',
+  directory: 'Neighbour directory',
+  community: 'Community',
+  blueprint: 'Property blueprint',
+  calendar: 'Calendar & weather',
+  news: 'News Hub',
+  family: 'Family accounts',
+  serviceContacts: 'Service contacts',
+}
+
+export const ALL_TENANT_PERMISSIONS = Object.keys(TENANT_PERMISSION_LABELS)
+

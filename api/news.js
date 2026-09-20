@@ -3,6 +3,7 @@ import { XMLParser } from 'fast-xml-parser'
 const parser = new XMLParser({ ignoreAttributes:false, attributeNamePrefix:'@_' })
 const DEFAULT_FEEDS = [
   { id:'pib', name:'PIB India', type:'common', url:'https://pib.gov.in/RssMain.aspx?ModId=6&Lang=1&Regid=1' },
+  { id:'google-news-india', name:'Google News India', type:'common', url:'https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en' },
 ]
 
 function configuredLocalFeeds(place) {

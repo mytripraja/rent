@@ -32,6 +32,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({ uid: userRecord.uid })
   } catch (err) {
+    if (err?.code === 'auth/email-already-exists') return res.status(409).json({ error: 'An account already exists for this email address.' })
     res.status(err.statusCode || 500).json({ error: err.message })
   }
 }

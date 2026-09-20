@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Home, DoorOpen, Users, CheckCircle2, PenSquare, Zap, ZapOff,
-  Bell, MessageSquareWarning, Phone, FileText, MessagesSquare, MoreHorizontal,
+  Bell, MessageSquareWarning, Phone, FileText, MessagesSquare, MoreHorizontal, Settings,
   LogOut, HelpCircle, IndianRupee, BarChart3, Droplets, CalendarDays,
   Wrench, Megaphone, ReceiptIndianRupee
 } from 'lucide-react'
@@ -34,8 +34,7 @@ import SearchBar from '../shared/SearchBar'
 import OnboardingTour from '../shared/OnboardingTour'
 import IconButton from '../shared/ui/IconButton'
 import ThemeToggle from '../shared/ui/ThemeToggle'
-import NotificationBell from '../shared/ui/NotificationBell'
-import LanguageSwitcher from '../shared/ui/LanguageSwitcher'
+import UserSettingsModal from '../shared/UserSettingsModal'
 import InstallAppPrompt from '../shared/ui/InstallAppPrompt'
 import PropertySwitcher from './PropertySwitcher'
 import { OWNER_TOUR_STEPS } from './ownerTourSteps'
@@ -78,6 +77,7 @@ export default function OwnerDashboard() {
   const tab = activeTabObj.id
   const [replayTour, setReplayTour] = useState(false)
   const [searchHouseId, setSearchHouseId] = useState(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   function go(t) {
     const target = TABS.find(x => x.id === t)?.route || 'home'
@@ -110,14 +110,13 @@ export default function OwnerDashboard() {
 
           <div className="hidden md:flex items-center gap-2 shrink-0">
             <SearchBar onSelectHouse={handleSearchSelect} />
-            <LanguageSwitcher />
-            <NotificationBell userId={user?.uid} darkHeader />
+            <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={19}/></button>
             <ThemeToggle />
             <IconButton icon={HelpCircle} label="Replay onboarding tour" onClick={() => setReplayTour(true)} />
             <IconButton icon={LogOut} label="Log out" onClick={logout} />
           </div>
           <div className="md:hidden flex items-center gap-1">
-            <NotificationBell userId={user?.uid} darkHeader />
+            <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={18}/></button>
             <ThemeToggle />
           </div>
         </div>
@@ -201,6 +200,7 @@ export default function OwnerDashboard() {
       </nav>
 
       <InstallAppPrompt />
+      <UserSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <OnboardingTour steps={OWNER_TOUR_STEPS} storageKey={`tour_seen_owner_${user?.uid}`} forceOpen={replayTour ? true : undefined} onClose={() => setReplayTour(false)} />
     </div>
   )

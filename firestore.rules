@@ -42,7 +42,7 @@ service cloud.firestore {
     }
 
     function tenantCan(permission) {
-      return isTenant() && (isPrimaryTenant() || userDoc().data.tenantPermissions[permission] == true);
+      return isTenant() && (!userDoc().data.keys().hasAny(['tenantPermissions']) || !userDoc().data.tenantPermissions.keys().hasAny([permission]) || userDoc().data.tenantPermissions[permission] == true);
     }
 
     function myHouseId() {
@@ -62,7 +62,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && (request.auth.uid == uid || isOwner());
       allow update: if isAdmin()
         || (isSignedIn() && request.auth.uid == uid
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'profilePhotoUrl']));
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'profilePhotoUrl', 'preferredLanguage']));
       allow create, delete: if isAdmin();
     }
 
