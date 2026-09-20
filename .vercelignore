@@ -1,0 +1,6 @@
+api/*
+!api/create-owner.js
+!api/delete-owner.js
+!api/get-agreement-url.js
+!api/get-signed-url.js
+!api/sign-upload.js
