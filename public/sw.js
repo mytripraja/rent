@@ -1,4 +1,4 @@
-const CACHE = 'rental-manager-shell-v6-7'
+const CACHE = 'rental-manager-shell-v6-8'
 const APP_SHELL = ['/', '/manifest.webmanifest', '/offline.html', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', event => {
@@ -17,10 +17,11 @@ self.addEventListener('fetch', event => {
 
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).then(response => {
+      if (!response.ok) return caches.match('/') || caches.match('/offline.html') || response
       const copy = response.clone()
       caches.open(CACHE).then(cache => cache.put('/', copy))
       return response
-    }).catch(() => caches.match('/offline.html')))
+    }).catch(() => caches.match('/') || caches.match('/offline.html')))
     return
   }
 

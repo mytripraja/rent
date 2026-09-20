@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ShieldCheck, Sparkles } from 'lucide-react'
-import { login, loginWithGoogle, loginWithCustomerId, resetPassword } from '../../services/authService'
+import { login, loginWithGoogle, loginWithCustomerId, resetPassword, getLoginGuard, recordFailedLogin, isWrongPasswordError } from '../../services/authService'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAuth } from '../../context/AuthContext'
 import TextField from './ui/TextField'
 import Button from './ui/Button'
 import { requestNotificationPermission } from '../../services/pushService'
+import { getAppCheckHeader } from '../../services/firebase'
 
 const METHODS = [{ id: 'email', label: 'Email' }, { id: 'customerId', label: 'Customer ID' }, { id: 'google', label: 'Google' }]
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -15,7 +16,7 @@ const CUSTOMER_ID_RE = /^RM\d+$/i
 export default function LoginPage() {
   const { t } = useLanguage(); const { user, loading: authLoading } = useAuth(); const navigate = useNavigate()
   const [method, setMethod] = useState('email'); const [email, setEmail] = useState(''); const [customerId, setCustomerId] = useState(''); const [password, setPassword] = useState('')
-  const [touched, setTouched] = useState({}); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const [legal, setLegal] = useState(false)
+  const [touched, setTouched] = useState({}); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const [attemptsLeft, setAttemptsLeft] = useState(null); const [lockedUntil, setLockedUntil] = useState(0); const [legal, setLegal] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false); const [resetEmail, setResetEmail] = useState(''); const [resetMessage, setResetMessage] = useState(''); const [resetError, setResetError] = useState(''); const [resetLoading, setResetLoading] = useState(false)
 
   useEffect(() => { if (!authLoading && user) navigate(user.role === 'owner' || user.role === 'admin' ? '/owner' : '/tenant', { replace: true }) }, [authLoading, user, navigate])
@@ -27,18 +28,76 @@ export default function LoginPage() {
   function markTouched(field) { setTouched(t => ({ ...t, [field]: true })) }
   function acknowledge() { sessionStorage.setItem('rm_legal_ack', '1'); setLegal(true) }
   async function handleResetPassword(e) { e.preventDefault(); setResetMessage(''); setResetError(''); setResetLoading(true); try { await resetPassword(resetEmail); setResetMessage('Password reset email sent. Check your inbox.') } catch (err) { setResetError(err.message || 'Failed to send reset email.') } finally { setResetLoading(false) } }
-  async function handleEmailSubmit(e) { e.preventDefault(); if (!legal) return; setError(''); setLoading(true); try { sessionStorage.setItem('rm_legal_ack','1'); await login(email,password); requestNotificationPermission() } catch { setError('Login failed. Check your email and password.') } finally { setLoading(false) } }
-  async function handleCustomerIdSubmit(e) { e.preventDefault(); if (!legal) return; setError(''); setLoading(true); try { sessionStorage.setItem('rm_legal_ack','1'); await loginWithCustomerId(customerId,password); requestNotificationPermission() } catch (err) { setError(err.message || 'Login failed. Check your Customer ID and password.') } finally { setLoading(false) } }
+  function formatLockTime(until) {
+    const minutes = Math.max(1, Math.ceil((Number(until || 0) - Date.now()) / 60000))
+    return `${minutes} minute${minutes === 1 ? '' : 's'}`
+  }
+
+  async function checkLoginGuard(identifier) {
+    const guard = await getLoginGuard(identifier)
+    setAttemptsLeft(Number.isFinite(guard?.remaining) ? guard.remaining : 3)
+    setLockedUntil(Number(guard?.lockedUntil || 0))
+    if (guard?.locked && guard.lockedUntil > Date.now()) {
+      throw new Error(`This sign-in is temporarily locked. Try again in ${formatLockTime(guard.lockedUntil)}.`)
+    }
+  }
+
+  async function handlePasswordFailure(identifier, err, label) {
+    if (!isWrongPasswordError(err)) return false
+    const guard = await recordFailedLogin(identifier)
+    setAttemptsLeft(Number.isFinite(guard?.remaining) ? guard.remaining : 0)
+    setLockedUntil(Number(guard?.lockedUntil || 0))
+    if (guard?.locked) {
+      setError(`Password is wrong. Your account is temporarily locked for 15 minutes. Use Forgot password if you need to reset it.`)
+    } else {
+      setError(`Password is wrong. ${guard?.remaining ?? 0} attempt${guard?.remaining === 1 ? '' : 's'} left.`)
+    }
+    return true
+  }
+
+  async function handleEmailSubmit(e) {
+    e.preventDefault(); if (!legal) return; setError(''); setLoading(true)
+    try {
+      sessionStorage.setItem('rm_legal_ack','1')
+      await checkLoginGuard(email)
+      await login(email,password)
+      setAttemptsLeft(3); setLockedUntil(0)
+      requestNotificationPermission()
+    } catch (err) {
+      const handled = await handlePasswordFailure(email, err, 'email')
+      if (!handled) setError(err.message || 'Login failed. Check your email and password.')
+    } finally { setLoading(false) }
+  }
+
+  async function handleCustomerIdSubmit(e) {
+    e.preventDefault(); if (!legal) return; setError(''); setLoading(true)
+    let resolvedEmail = ''
+    try {
+      sessionStorage.setItem('rm_legal_ack','1')
+      const lookup = await fetch('/api/resolve-customer-id', { method:'POST', headers:{'Content-Type':'application/json', ...(await getAppCheckHeader())}, body:JSON.stringify({customerId:customerId.trim().toUpperCase()}) })
+      const data = await lookup.json().catch(()=>({}))
+      if (!lookup.ok || !data.email) throw new Error(data.error || 'No account found for that Customer ID.')
+      resolvedEmail = data.email
+      await checkLoginGuard(resolvedEmail)
+      await loginWithCustomerId(customerId,password)
+      setAttemptsLeft(3); setLockedUntil(0)
+      requestNotificationPermission()
+    } catch (err) {
+      const identifier = resolvedEmail || customerId.trim().toUpperCase()
+      const handled = await handlePasswordFailure(identifier, err, 'customerId')
+      if (!handled) setError(err.message || 'Login failed. Check your Customer ID and password.')
+    } finally { setLoading(false) }
+  }
   async function handleGoogleClick() { if (!legal) return; setError(''); setLoading(true); sessionStorage.setItem('rm_legal_ack','1'); try { await loginWithGoogle(); requestNotificationPermission() } catch (err) { setError(err.message || 'Google sign-in failed.') } finally { setLoading(false) } }
 
   return <div className="rm-login-shell min-h-[100dvh] bg-paper text-ink"><div className="mx-auto grid min-h-[100dvh] max-w-7xl lg:grid-cols-[.9fr_1.1fr]">
     <section className="hidden lg:flex relative overflow-hidden bg-cover p-10 text-white"><div className="rm-login-grid"/><div className="relative z-10 flex flex-col justify-between"><Link to="/" className="flex items-center gap-3"><span className="rm-logo-mark rm-logo-mark-dark">R</span><span><span className="block font-display text-lg font-extrabold">Rental Manager</span><span className="text-xs text-white/50">Private property workspace</span></span></Link><div className="max-w-lg"><div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/8 px-3 py-1.5 text-xs font-bold text-emerald-300"><Sparkles size={14}/> Secure access for authorised users</div><h1 className="font-display text-5xl font-extrabold leading-[1.02] tracking-[-.04em]">Everything about your property, in one calm place.</h1><p className="mt-5 max-w-md leading-7 text-white/55">Rent, utility bills, houses, residents, documents and daily operations — organised around the ledger.</p><div className="mt-8 grid grid-cols-2 gap-3"><div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-xs text-white/45">Access</p><p className="mt-1 font-bold">Owner + Tenant</p></div><div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-xs text-white/45">Languages</p><p className="mt-1 font-bold">English + Tamil</p></div></div></div><p className="text-xs text-white/35">Use only the account provided or authorised by your property administrator.</p></div></section>
     <section className="flex items-center justify-center px-5 py-8 sm:px-8"><div className="w-full max-w-md"><div className="mb-6 flex items-center justify-between"><Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold text-ink-soft hover:text-ink"><ArrowLeft size={16}/> Home</Link><Link to="/privacy" className="text-xs font-semibold text-ink-soft hover:text-ink">Privacy</Link></div><div className="rm-login-card"><div className="mb-7"><div className="mb-4 flex items-center gap-3"><span className="rm-logo-mark">R</span><div><p className="font-display text-xl font-extrabold">Welcome back</p><p className="text-xs text-ink-soft">Sign in to {t('appName')}</p></div></div><p className="text-sm leading-6 text-ink-soft">Use the login method your property administrator gave you.</p></div>
       <div className="mb-5 flex gap-1.5 rounded-2xl bg-paper p-1" role="tablist" aria-label="Sign-in method">{METHODS.map(m=><button key={m.id} type="button" role="tab" aria-selected={method===m.id} onClick={()=>{setMethod(m.id);setError('');setTouched({})}} className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-bold transition ${method===m.id?'bg-paper-raised text-ink shadow-sm':'text-ink-soft hover:text-ink'}`}>{m.label}</button>)}</div>
-      {method==='email' && !showForgotPassword && <form onSubmit={handleEmailSubmit} className="space-y-4" noValidate><TextField label="Email" type="email" required inputMode="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} onBlur={()=>markTouched('email')} error={emailError}/><TextField label="Password" type="password" required autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} onBlur={()=>markTouched('password')} error={passwordError}/>{error&&<p className="text-sm text-red-600" role="alert">{error}</p>}<LegalCheck checked={legal} onChange={setLegal}/><Button type="submit" fullWidth loading={loading} loadingText="Signing in…" disabled={!legal}>Sign in</Button><button type="button" onClick={()=>{setShowForgotPassword(true);setResetEmail(email);setResetMessage('');setResetError('')}} className="w-full text-sm font-semibold text-brand hover:underline">Forgot password?</button></form>}
+      {method==='email' && !showForgotPassword && <form onSubmit={handleEmailSubmit} className="space-y-4" noValidate><TextField label="Email" type="email" required inputMode="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} onBlur={()=>markTouched('email')} error={emailError}/><TextField label="Password" type="password" required autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} onBlur={()=>markTouched('password')} error={passwordError}/>{error&&<div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700" role="alert" aria-live="assertive"><strong>{error}</strong>{attemptsLeft !== null && !lockedUntil && <span className="block text-xs mt-1">Remaining password attempts: {attemptsLeft}.</span>}</div>}<LegalCheck checked={legal} onChange={setLegal}/><Button type="submit" fullWidth loading={loading} loadingText="Signing in…" disabled={!legal}>Sign in</Button><button type="button" onClick={()=>{setShowForgotPassword(true);setResetEmail(email);setResetMessage('');setResetError('')}} className="w-full text-sm font-semibold text-brand hover:underline">Forgot password?</button></form>}
       {method==='email' && showForgotPassword && <form onSubmit={handleResetPassword} className="space-y-4" noValidate><p className="text-sm text-ink-soft">Enter your email to receive a password reset link.</p><TextField label="Email" type="email" required inputMode="email" value={resetEmail} onChange={e=>setResetEmail(e.target.value)}/>{resetMessage&&<p className="text-sm text-stamp-green">{resetMessage}</p>}{resetError&&<p className="text-sm text-red-600">{resetError}</p>}<Button type="submit" fullWidth loading={resetLoading} loadingText="Sending…">Send reset link</Button><button type="button" onClick={()=>setShowForgotPassword(false)} className="w-full text-sm font-semibold text-ink-soft hover:underline">Back to login</button></form>}
-      {method==='customerId' && <form onSubmit={handleCustomerIdSubmit} className="space-y-4" noValidate><TextField label="Customer ID" required autoCapitalize="characters" placeholder="RM1001" hint={!customerIdError?'e.g. RM1001 — given when your account was created':undefined} value={customerId} onChange={e=>setCustomerId(e.target.value)} onBlur={()=>markTouched('customerId')} error={customerIdError}/><TextField label="Password" type="password" required autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} onBlur={()=>markTouched('password')} error={passwordError}/>{error&&<p className="text-sm text-red-600">{error}</p>}<LegalCheck checked={legal} onChange={setLegal}/><Button type="submit" fullWidth loading={loading} loadingText="Signing in…" disabled={!legal}>Sign in</Button></form>}
-      {method==='google' && <div className="space-y-4"><div className="rounded-2xl bg-paper p-4 text-sm leading-6 text-ink-soft">Your Google email must match the email authorised for your Rental Manager account.</div>{error&&<p className="text-sm text-red-600">{error}</p>}<LegalCheck checked={legal} onChange={setLegal}/><button type="button" onClick={handleGoogleClick} disabled={loading||!legal} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--rm-border-strong)] bg-paper-raised py-3 text-sm font-bold transition hover:-translate-y-0.5 hover:shadow-sm disabled:opacity-50"><GoogleIcon/>{loading?'Signing in…':'Continue with Google'}</button></div>}
+      {method==='customerId' && <form onSubmit={handleCustomerIdSubmit} className="space-y-4" noValidate><TextField label="Customer ID" required autoCapitalize="characters" placeholder="RM1001" hint={!customerIdError?'e.g. RM1001 — given when your account was created':undefined} value={customerId} onChange={e=>setCustomerId(e.target.value)} onBlur={()=>markTouched('customerId')} error={customerIdError}/><TextField label="Password" type="password" required autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} onBlur={()=>markTouched('password')} error={passwordError}/>{error&&<div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700" role="alert" aria-live="assertive"><strong>{error}</strong>{attemptsLeft !== null && !lockedUntil && <span className="block text-xs mt-1">Remaining password attempts: {attemptsLeft}.</span>}</div>}<LegalCheck checked={legal} onChange={setLegal}/><Button type="submit" fullWidth loading={loading} loadingText="Signing in…" disabled={!legal}>Sign in</Button></form>}
+      {method==='google' && <div className="space-y-4"><div className="rounded-2xl bg-paper p-4 text-sm leading-6 text-ink-soft">Your Google email must match the email authorised for your Rental Manager account.</div>{error&&<div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700" role="alert" aria-live="assertive"><strong>{error}</strong>{attemptsLeft !== null && !lockedUntil && <span className="block text-xs mt-1">Remaining password attempts: {attemptsLeft}.</span>}</div>}<LegalCheck checked={legal} onChange={setLegal}/><button type="button" onClick={handleGoogleClick} disabled={loading||!legal} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--rm-border-strong)] bg-paper-raised py-3 text-sm font-bold transition hover:-translate-y-0.5 hover:shadow-sm disabled:opacity-50"><GoogleIcon/>{loading?'Signing in…':'Continue with Google'}</button></div>}
       <p className="mt-6 text-center text-xs leading-5 text-ink-soft">Tenant accounts are created by the owner. Need help? Contact your property administrator.</p></div><p className="mt-5 text-center text-[11px] leading-5 text-ink-soft">By signing in, you acknowledge the <Link to="/terms" className="font-semibold underline">Terms</Link>, <Link to="/privacy" className="font-semibold underline">Privacy Notice</Link> and <Link to="/acceptable-use" className="font-semibold underline">Acceptable Use</Link>.</p></div></section>
   </div></div>
 }

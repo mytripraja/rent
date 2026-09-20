@@ -266,3 +266,10 @@ label { font-weight: 500; }
 @media(max-width:360px){.tenant-mobile-nav button{font-size:9px}.tenant-mobile-nav button span{max-width:64px;overflow:hidden;text-overflow:ellipsis}.rm-card{border-radius:14px}}
 @media(prefers-contrast:more){*:focus-visible{outline-width:3px}.rm-card{border-width:2px}}
 .rm-calendar-mobile-list{display:none}@media(max-width:640px){.rm-calendar-grid{display:none}.rm-calendar-mobile-list{display:block}.rm-calendar-mobile-list button{min-height:58px}.rm-calendar-mobile-list button:focus-visible{outline-offset:2px}}
+
+/* V6.8 accessibility: persistent keyboard focus and comfortable controls. */
+.rm-a11y-focus *:focus-visible{outline:3px solid var(--color-brass)!important;outline-offset:3px!important;box-shadow:0 0 0 2px var(--color-cover)!important}
+.rm-a11y-contrast body{background:#fff!important;color:#111827!important}
+.rm-a11y-contrast .text-ink-soft{color:#344054!important}
+.rm-a11y-contrast button,.rm-a11y-contrast input,.rm-a11y-contrast select,.rm-a11y-contrast textarea{border-color:#475467!important}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{scroll-behavior:auto!important}}

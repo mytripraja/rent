@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, Suspense } from 'react'
-import { CalendarDays, FileText, HelpCircle, Home, IndianRupee, LogOut, Map, Newspaper, ReceiptText, Settings, UsersRound } from 'lucide-react'
+import { CalendarDays, FileText, Home, IndianRupee, LogOut, Map, Newspaper, ReceiptText, Settings, UsersRound } from 'lucide-react'
 
 const RentSubmission = React.lazy(() => import('./RentSubmission'))
 const RentHistory = React.lazy(() => import('./RentHistory'))
@@ -25,12 +25,10 @@ const WasteSchedule = React.lazy(() => import('../shared/WasteSchedule'))
 const BlueprintManager = React.lazy(() => import('../owner/BlueprintManager'))
 import LoadingScreen from '../shared/LoadingScreen'
 import PullToRefresh from '../shared/ui/PullToRefresh'
-import OnboardingTour from '../shared/OnboardingTour'
 import IconButton from '../shared/ui/IconButton'
 import ThemeToggle from '../shared/ui/ThemeToggle'
 import InstallAppPrompt from '../shared/ui/InstallAppPrompt'
 import UserSettingsModal from '../shared/UserSettingsModal'
-import { TENANT_TOUR_STEPS } from './tenantTourSteps'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 import { tenantCan } from '../../services/tenantAccountService'
@@ -43,7 +41,6 @@ function useIsMobile() {
 
 export default function TenantDashboard() {
   const { user } = useAuth()
-  const [replayTour, setReplayTour] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const isMobile = useIsMobile()
@@ -60,7 +57,6 @@ export default function TenantDashboard() {
       <div className="flex items-center gap-1 shrink-0">
         <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={19}/></button>
         <ThemeToggle />
-        <span className="hidden sm:inline-flex"><IconButton icon={HelpCircle} label="Replay onboarding tour" onClick={() => setReplayTour(true)} /></span>
         <IconButton icon={LogOut} label="Log out" onClick={logout} />
       </div>
     </header>
@@ -73,26 +69,25 @@ export default function TenantDashboard() {
 
     <InstallAppPrompt />
     <UserSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-    <OnboardingTour steps={TENANT_TOUR_STEPS} storageKey={`tour_seen_tenant_${user?.uid}`} forceOpen={replayTour ? true : undefined} onClose={() => setReplayTour(false)} />
   </div>
 }
 
 function DesktopTenantContent({ user, refreshKey, setRefreshKey }) {
   const payRef = useRef(null)
   return <>
-    <div id="tenant-home" className="p-4 sm:p-6 max-w-4xl mx-auto space-y-4 scroll-mt-4">
+    <div id="tenant-home" className="p-4 sm:p-6 max-w-7xl mx-auto space-y-4 scroll-mt-4">
       {tenantCan(user, 'rent') && <TenantRentHero key={`hero-${refreshKey}`} onPayNow={() => payRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />}
       {tenantCan(user, 'rent') && <RentRevisionBanner />}
       {tenantCan(user, 'notices') && <NoticeFeed />}
     </div>
-    <main id="main-content" tabIndex={-1} className="px-4 sm:px-6 pb-24 lg:pb-6 max-w-4xl mx-auto space-y-6 scroll-mt-4">
+    <main id="main-content" tabIndex={-1} className="px-4 sm:px-6 pb-24 lg:pb-8 max-w-7xl mx-auto space-y-6 scroll-mt-4">
       {tenantCan(user, 'rent') && <div id="tenant-rent" ref={payRef} className="grid md:grid-cols-2 gap-4"> <RentSubmission onSubmitted={() => setRefreshKey(k => k + 1)} /><RentHistory key={`history-${refreshKey}`} /></div>}
       {tenantCan(user, 'bills') && <section id="tenant-bills" className="space-y-4"><EBBillShare key={`eb-${refreshKey}`} /><WaterBillShare key={`water-${refreshKey}`} /></section>}
       <section id="tenant-more" aria-labelledby="more-heading"><h2 id="more-heading" className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-2">More</h2><div className="grid md:grid-cols-2 gap-4">
-        {tenantCan(user, 'complaints') && <RaiseComplaint />}{tenantCan(user, 'rent') && <RentAgreementView />}{tenantCan(user, 'directory') && <Directory />}{tenantCan(user, 'serviceContacts') && <ServiceContacts />}{tenantCan(user, 'documents') && <DocumentUpload />}{tenantCan(user, 'blueprint') && <BlueprintManager />}{tenantCan(user, 'maintenance') && <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><MaintenanceRequest /></div>}{tenantCan(user, 'visitors') && <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><VisitorLog /></div>}{tenantCan(user, 'commonArea') && <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><BookCommonArea /></div>}{isSubAccount(user) && <FamilyAccessNotice />}
+        {tenantCan(user, 'complaints') && <RaiseComplaint />}{tenantCan(user, 'rent') && <RentAgreementView />}{tenantCan(user, 'directory') && <Directory />}{tenantCan(user, 'serviceContacts') && <ServiceContacts />}{tenantCan(user, 'documents') && <DocumentUpload />}{tenantCan(user, 'blueprint') && <div id="tenant-blueprint"><BlueprintManager /></div>}{tenantCan(user, 'maintenance') && <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><MaintenanceRequest /></div>}{tenantCan(user, 'visitors') && <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><VisitorLog /></div>}{tenantCan(user, 'commonArea') && <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><BookCommonArea /></div>}{isSubAccount(user) && <FamilyAccessNotice />}
       </div></section>
-      {tenantCan(user, 'calendar') && <div className="grid md:grid-cols-2 gap-4"><div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><IndiaCalendar compact /></div><div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><WasteSchedule /></div></div>}
-      {tenantCan(user, 'community') && <CommunityBoard user={user} />}{tenantCan(user, 'community') && <WifiShareBoard />}{tenantCan(user, 'news') && <NewsHub />}{isPrimary(user) && tenantCan(user, 'family') && <FamilyAccounts />}
+      {tenantCan(user, 'calendar') && <div id="tenant-calendar" className="grid lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,.75fr)] gap-4 items-start"><div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><IndiaCalendar compact /></div><div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><WasteSchedule /></div></div>}
+      {tenantCan(user, 'community') && <CommunityBoard user={user} />}{tenantCan(user, 'community') && <WifiShareBoard />}{tenantCan(user, 'news') && <div id="tenant-news"><NewsHub /></div>}{isPrimary(user) && tenantCan(user, 'family') && <FamilyAccounts />}
       <footer className="text-center text-xs text-ink-soft py-4 border-t border-brass/15">Need help? Check <span className="font-medium text-ink">Service Contacts</span> above, or raise a complaint and the owner will reach out.</footer>
     </main>
   </>
@@ -120,7 +115,7 @@ function MobileTenantContent({ user, refreshKey, setRefreshKey }) {
 
       {section === 'rent' && tenantCan(user, 'rent') && <section className="space-y-3"><SectionTitle title="Rent & payment" icon={IndianRupee} /><RentSubmission onSubmitted={() => setRefreshKey(k => k + 1)} /><RentHistory key={`mrent-${refreshKey}`} />{tenantCan(user, 'rent') && <RentAgreementView />}</section>}
       {section === 'bills' && tenantCan(user, 'bills') && <section className="space-y-3"><SectionTitle title="Bills" icon={ReceiptText} /><EBBillShare key={`meb-${refreshKey}`} /><WaterBillShare key={`mwater-${refreshKey}`} /></section>}
-      {section === 'tools' && <section className="space-y-3"><SectionTitle title="Tools" icon={Settings} /><div className="flex gap-2 overflow-x-auto pb-1"><ToolTab active={tool==='calendar'} onClick={()=>setTool('calendar')} icon={CalendarDays} label="Calendar" />{tenantCan(user,'blueprint')&&<ToolTab active={tool==='blueprint'} onClick={()=>setTool('blueprint')} icon={Map} label="Blueprint"/>}{tenantCan(user,'news')&&<ToolTab active={tool==='news'} onClick={()=>setTool('news')} icon={Newspaper} label="News"/>}</div><div className="min-w-0">{tool==='calendar' && tenantCan(user,'calendar') && <><IndiaCalendar compact /><WasteSchedule /></>}{tool==='blueprint' && tenantCan(user,'blueprint') && <BlueprintManager />}{tool==='news' && tenantCan(user,'news') && <NewsHub />}</div></section>}
+      {section === 'tools' && <section className="space-y-3" id={`tenant-${tool}`}><SectionTitle title="Tools" icon={Settings} /><div className="flex gap-2 overflow-x-auto pb-1"><ToolTab active={tool==='calendar'} onClick={()=>setTool('calendar')} icon={CalendarDays} label="Calendar" />{tenantCan(user,'blueprint')&&<ToolTab active={tool==='blueprint'} onClick={()=>setTool('blueprint')} icon={Map} label="Blueprint"/>}{tenantCan(user,'news')&&<ToolTab active={tool==='news'} onClick={()=>setTool('news')} icon={Newspaper} label="News"/>}</div><div className="min-w-0">{tool==='calendar' && tenantCan(user,'calendar') && <><IndiaCalendar compact /><WasteSchedule /></>}{tool==='blueprint' && tenantCan(user,'blueprint') && <BlueprintManager />}{tool==='news' && tenantCan(user,'news') && <NewsHub />}</div></section>}
       {section === 'more' && <section className="space-y-3"><SectionTitle title="More services" icon={FileText} /><div className="space-y-3">{tenantCan(user,'complaints')&&<RaiseComplaint/>}{tenantCan(user,'directory')&&<Directory/>}{tenantCan(user,'serviceContacts')&&<ServiceContacts/>}{tenantCan(user,'documents')&&<DocumentUpload/>}{tenantCan(user,'maintenance')&&<div className="rm-card p-4"><MaintenanceRequest/></div>}{tenantCan(user,'visitors')&&<div className="rm-card p-4"><VisitorLog/></div>}{tenantCan(user,'commonArea')&&<div className="rm-card p-4"><BookCommonArea/></div>}{tenantCan(user,'community')&&<CommunityBoard user={user}/>} {tenantCan(user,'community')&&<WifiShareBoard/>}{isPrimary(user)&&tenantCan(user,'family')&&<FamilyAccounts/>}{isSubAccount(user)&&<FamilyAccessNotice/>}</div></section>}
     </main>
     <nav className="tenant-mobile-nav lg:hidden fixed bottom-0 inset-x-0 z-40 bg-paper-raised/96 backdrop-blur-xl border-t border-[var(--rm-border)] grid grid-cols-4" aria-label="Tenant quick navigation" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>

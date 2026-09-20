@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   Home, DoorOpen, Users, CheckCircle2, PenSquare, Zap, ZapOff,
   Bell, MessageSquareWarning, Phone, FileText, MessagesSquare, MoreHorizontal, Settings,
-  LogOut, HelpCircle, IndianRupee, BarChart3, Droplets, CalendarDays,
+  LogOut, IndianRupee, BarChart3, Droplets, CalendarDays,
   Wrench, Megaphone, ReceiptIndianRupee
 } from 'lucide-react'
 
@@ -31,13 +31,11 @@ const MoreMenu = React.lazy(() => import('./MoreMenu'))
 import LoadingScreen from '../shared/LoadingScreen'
 import DadLiteDashboard from './DadLiteDashboard'
 import SearchBar from '../shared/SearchBar'
-import OnboardingTour from '../shared/OnboardingTour'
 import IconButton from '../shared/ui/IconButton'
 import ThemeToggle from '../shared/ui/ThemeToggle'
 import UserSettingsModal from '../shared/UserSettingsModal'
 import InstallAppPrompt from '../shared/ui/InstallAppPrompt'
 import PropertySwitcher from './PropertySwitcher'
-import { OWNER_TOUR_STEPS } from './ownerTourSteps'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 
@@ -75,7 +73,6 @@ export default function OwnerDashboard() {
   const pathSegment = location.pathname.split('/owner/')[1] || 'home'
   const activeTabObj = TABS.find(t => t.route === pathSegment) || TABS[0]
   const tab = activeTabObj.id
-  const [replayTour, setReplayTour] = useState(false)
   const [searchHouseId, setSearchHouseId] = useState(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -112,7 +109,6 @@ export default function OwnerDashboard() {
             <SearchBar onSelectHouse={handleSearchSelect} />
             <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={19}/></button>
             <ThemeToggle />
-            <IconButton icon={HelpCircle} label="Replay onboarding tour" onClick={() => setReplayTour(true)} />
             <IconButton icon={LogOut} label="Log out" onClick={logout} />
           </div>
           <div className="md:hidden flex items-center gap-1">
@@ -201,7 +197,6 @@ export default function OwnerDashboard() {
 
       <InstallAppPrompt />
       <UserSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <OnboardingTour steps={OWNER_TOUR_STEPS} storageKey={`tour_seen_owner_${user?.uid}`} forceOpen={replayTour ? true : undefined} onClose={() => setReplayTour(false)} />
     </div>
   )
 }

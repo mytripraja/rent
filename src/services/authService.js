@@ -12,7 +12,7 @@ import {
   PhoneAuthProvider,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore'
-import { auth, db, authedFetch } from './firebase'
+import { auth, db, authedFetch, getAppCheckHeader } from './firebase'
 
 // users/{uid} => { role: 'owner' | 'tenant', houseId?: string, name, email }
 
@@ -34,7 +34,50 @@ export async function getUserProfile(uid) {
 
 export async function login(email, password) {
   const cred = await signInWithEmailAndPassword(auth, email, password)
+  await resetLoginGuard(email).catch(() => {})
   return cred.user
+}
+
+async function loginGuard(identifier, mode) {
+  try {
+    const res = await fetch('/api/resolve-customer-id', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await getAppCheckHeader()) },
+      body: JSON.stringify({ action: 'guard', identifier, mode }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) return { locked: false, remaining: 3 }
+    return data
+  } catch {
+    return { locked: false, remaining: 3 }
+  }
+}
+
+export async function getLoginGuard(identifier) {
+  return loginGuard(identifier, 'status')
+}
+
+export async function recordFailedLogin(identifier) {
+  return loginGuard(identifier, 'failed')
+}
+
+export async function resetLoginGuard(identifier) {
+  const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null
+  if (!idToken) return null
+  try {
+    const res = await fetch('/api/resolve-customer-id', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await getAppCheckHeader()), Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify({ action: 'guard', identifier, mode: 'reset' }),
+    })
+    return await res.json().catch(() => ({}))
+  } catch {
+    return null
+  }
+}
+
+export function isWrongPasswordError(err) {
+  return ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-login-credentials'].includes(err?.code)
 }
 
 // Login by Customer ID: resolve the linked email through the server-side lookup
@@ -42,7 +85,7 @@ export async function login(email, password) {
 export async function loginWithCustomerId(customerId, password) {
   const { email } = await fetch('/api/resolve-customer-id', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await getAppCheckHeader()) },
     body: JSON.stringify({ customerId: customerId.trim().toUpperCase() }),
   }).then(async (res) => {
     const data = await res.json().catch(() => ({}))

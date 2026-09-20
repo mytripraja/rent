@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
+import { getToken, initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check'
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore'
 
 // Paste your Firebase project config here (from Firebase console > Project settings).
@@ -21,6 +22,17 @@ const firebaseConfig = {
 }
 
 export const app = initializeApp(firebaseConfig)
+
+// Optional production App Check. Configure VITE_RECAPTCHA_ENTERPRISE_SITE_KEY
+// after registering rent.deepusiva.com in Firebase App Check. The feature stays
+// disabled until the site key is supplied, so local development is unaffected.
+export const appCheck = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY
+  ? initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY),
+      isTokenAutoRefreshEnabled: true,
+    })
+  : null
+
 export const auth = getAuth(app)
 // Firebase's current persistentLocalCache API replaces the older
 // enableMultiTabIndexedDbPersistence() helper. It keeps the app responsive
@@ -31,12 +43,24 @@ export const db = initializeFirestore(app, {
 
 // Used by any client call into /api/* — attaches the current user's Firebase
 // ID token so the serverless function can verify who's calling.
+export async function getAppCheckHeader() {
+  if (!appCheck) return {}
+  try {
+    const token = await getToken(appCheck)
+    return token?.token ? { 'X-Firebase-AppCheck': token.token } : {}
+  } catch {
+    return {}
+  }
+}
+
 export async function authedFetch(path, body) {
   const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null
+  const appCheckHeader = await getAppCheckHeader()
   const res = await fetch(path, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...appCheckHeader,
       ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
     },
     body: JSON.stringify(body || {}),

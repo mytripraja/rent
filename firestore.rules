@@ -61,6 +61,9 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isSignedIn() && (request.auth.uid == uid || isOwner());
       allow update: if isAdmin()
+        || (isOwner() && resource.data.role == 'tenant'
+            && request.resource.data.role == 'tenant'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tenantPermissions']))
         || (isSignedIn() && request.auth.uid == uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'profilePhotoUrl', 'preferredLanguage']));
       allow create, delete: if isAdmin();
