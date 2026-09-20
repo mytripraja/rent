@@ -1,0 +1,383 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return isSignedIn() && userDoc().data.role == 'admin';
+    }
+
+    // "Owner-level" access - the super-admin (Deepu) AND any co-owner (dad,
+    // brother, mom, etc.) get the same day-to-day permissions. Only isAdmin()
+    // is checked separately, for the one thing co-owners can't do: managing
+    // other owner accounts.
+    function isDadLite() {
+      return isSignedIn() && userDoc().data.role == 'owner' && userDoc().data.appMode == 'dad-lite';
+    }
+
+    function isOwner() {
+      return isSignedIn() && (userDoc().data.role == 'admin'
+        || (userDoc().data.role == 'owner'
+            && (!userDoc().data.keys().hasAny(['appMode']) || userDoc().data.appMode != 'dad-lite')));
+    }
+
+    function isTenant() {
+      return isSignedIn() && userDoc().data.role == 'tenant';
+    }
+
+    // A tenant account is either the main household account (legacy tenant
+    // profiles without accountType are treated as primary) or a controlled
+    // family sub-account. Sub-accounts can be limited feature-by-feature by
+    // the main tenant.
+    function isPrimaryTenant() {
+      return isTenant() && userDoc().data.accountType != 'sub';
+    }
+
+    function tenantCan(permission) {
+      return isTenant() && (isPrimaryTenant() || userDoc().data.tenantPermissions[permission] == true);
+    }
+
+    function myHouseId() {
+      return userDoc().data.houseId;
+    }
+
+    // ---- users ----
+    // Anyone can read their own profile; owner-level accounts can read anyone's.
+    // A signed-in user can update their OWN name/phone/profile photo (self-service
+    // profile editing) but never their own role or houseId. Creating or deleting
+    // an owner-level account is admin-only — enforced both here and, more
+    // importantly, in api/create-owner.js / api/delete-owner.js which actually
+    // perform those actions via the Admin SDK (client-side create/delete of
+    // another Firebase Auth user isn't possible anyway; this rule just protects
+    // the Firestore doc from being spoofed independently of that).
+    match /users/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isOwner());
+      allow update: if isAdmin()
+        || (isSignedIn() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'profilePhotoUrl']));
+      allow create, delete: if isAdmin();
+    }
+
+    // ---- houses ----
+    // Owner: full access. Tenant: can read their own house, and read a *limited*
+    // public view of other houses is handled client-side (only expose safe fields
+    // in the directory query — see note below) since Firestore rules can't do
+    // per-field redaction on a single read.
+    match /houses/{houseId} {
+      allow read: if isOwner() || (isTenant() && myHouseId() == houseId);
+      // Tenants may only self-update their own phone-visibility toggle — everything
+      // else about a house (rent, advance, status, etc.) stays owner-only.
+      allow update: if isOwner()
+        || (isTenant() && myHouseId() == houseId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phoneVisibleToNeighbors']));
+      allow create, delete: if isOwner();
+
+      match /assets/{assetId} {
+        allow read: if isOwner();
+        allow write: if isOwner();
+      }
+      match /inspections/{inspectionId} {
+        allow read: if isOwner();
+        allow write: if isOwner();
+      }
+
+      match /history/{entryId} {
+        allow read, write: if isOwner();
+      }
+    }
+
+    // ---- directory ----
+    // Safe-fields-only mirror of houses (no rent/advance amounts) so tenants can
+    // browse neighbors and vacant units without ever reading each other's house doc.
+    match /directory/{houseId} {
+      allow read: if isOwner() || tenantCan('directory');
+      allow write: if isOwner() || (tenantCan('directory') && myHouseId() == houseId);
+    }
+
+    // ---- rentPayments ----
+    // Tenant can create a submission for their own house, and read only their own house's payments.
+    // Only the owner can approve/reject (update status).
+    match /rentPayments/{paymentId} {
+      allow read: if isOwner() || (tenantCan('rent') && resource.data.houseId == myHouseId());
+      allow create: if isOwner()
+        || (tenantCan('rent')
+            && request.resource.data.houseId == myHouseId()
+            && request.resource.data.tenantId == request.auth.uid
+            && request.resource.data.status == 'waiting_approval'
+            && request.resource.data.uploadedByOwner == false
+            && request.resource.data.approvedAt == null
+            && request.resource.data.actionedBy == null
+            && request.resource.data.rejectionReason == null
+            && request.resource.data.recordedBy.uid == request.auth.uid
+            && request.resource.data.amount > 0);
+      // Dad Lite can submit rent entries, but cannot approve/reject them.
+      // This keeps the verification step with the admin account even if the
+      // lite user reaches the Firestore API directly.
+      allow update: if isOwner()
+        && resource.data.status == 'waiting_approval'
+        && request.resource.data.status in ['approved', 'rejected']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvedAt', 'actionedBy', 'neighborCollectedBy', 'rejectionReason']);
+      allow delete: if isOwner();
+    }
+
+    // ---- ebBills / ebBillPayments ----
+    match /ebBills/{billId} {
+      allow read: if isOwner() || (tenantCan('bills') && billId != null && resource.data.houseIds is list && myHouseId() in resource.data.houseIds);
+      allow write: if isOwner();
+    }
+    match /ebBillPayments/{paymentId} {
+      allow read: if isOwner() || (tenantCan('bills') && resource.data.houseId == myHouseId());
+      allow create: if isOwner()
+        || (tenantCan('bills')
+            && request.resource.data.houseId == myHouseId()
+            && request.resource.data.tenantId == request.auth.uid
+            && request.resource.data.status == 'waiting_approval'
+            && request.resource.data.uploadedByOwner == false
+            && request.resource.data.approvedAt == null
+            && request.resource.data.actionedBy == null
+            && request.resource.data.rejectionReason == null
+            && request.resource.data.recordedBy.uid == request.auth.uid
+            && request.resource.data.amount > 0);
+      allow update: if isOwner();
+    }
+
+    // ---- notices ----
+    // Everyone signed in can read; only owner writes.
+    match /notices/{noticeId} {
+      allow read: if isOwner() || tenantCan('notices');
+      allow write: if isOwner();
+    }
+
+    // ---- complaints ----
+    // Tenant can create a complaint (from -> owner) and read: their own filed
+    // complaints, plus owner -> house complaints addressed to their house (or 'all').
+    // Owner can read/write everything.
+    match /complaints/{complaintId} {
+      allow read: if isOwner()
+        || (tenantCan('complaints') && resource.data.fromHouseId == myHouseId())
+        || (tenantCan('complaints') && resource.data.direction == 'owner_to_house'
+            && (resource.data.targetHouseIds == 'all'
+                || (resource.data.targetHouseIds is list && myHouseId() in resource.data.targetHouseIds)));
+      allow create: if isOwner() || (tenantCan('complaints') && request.resource.data.fromHouseId == myHouseId());
+      allow update, delete: if isOwner();
+    }
+
+    // ---- notifications ----
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && resource.data.recipientId == request.auth.uid;
+      allow create: if isOwner()
+        || (isTenant()
+            && request.resource.data.recipientType == 'owner'
+            && request.resource.data.recipientId != null
+            && (get(/databases/$(database)/documents/users/$(request.resource.data.recipientId)).data.role == 'owner'
+                || get(/databases/$(database)/documents/users/$(request.resource.data.recipientId)).data.role == 'admin'));
+      allow update: if isSignedIn() && resource.data.recipientId == request.auth.uid;
+      allow delete: if isOwner();
+    }
+
+    // ---- community board ----
+    match /communityMessages/{msgId} {
+      allow read: if isOwner() || tenantCan('community');
+      allow create: if isOwner() || tenantCan('community');
+      allow update, delete: if isOwner();
+    }
+
+    // ---- documents (Aadhaar / ration card, private) ----
+    // Firestore metadata is separate from the actual file — the file itself is a
+    // private Cloudinary asset (type: 'authenticated'), viewable only via a
+    // freshly-signed URL that api/get-signed-url.js mints for owner-level accounts.
+    // This collection just tracks who uploaded what.
+    match /documents/{docId} {
+      allow read: if isOwner() || (tenantCan('documents') && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (tenantCan('documents') && request.resource.data.houseId == myHouseId());
+      allow update, delete: if isOwner();
+    }
+    match /vacateRecords/{recordId} {
+      allow read, write: if isOwner();
+    }
+
+    // ---- serviceContacts ----
+    match /serviceContacts/{contactId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner();
+    }
+
+    // ---- appConfig ----
+    match /appConfig/{configId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner();
+    }
+
+    // ---- customers (bank-style unique Customer ID per real person) ----
+    // Full profile: owner can read/write anyone; a customer can read their own
+    // record (matched via linkedUids, since one customer can hold several house logins).
+    match /customers/{customerId} {
+      allow read: if isOwner() || (isSignedIn() && request.auth.uid in resource.data.linkedUids);
+      allow write: if isOwner();
+    }
+
+    // Minimal public lookup (customerId -> email only) so "login with Customer ID"
+    // can resolve an email BEFORE the user is authenticated. No other field lives here.
+    match /customerLookup/{customerId} {
+      // The browser must not be able to enumerate customer IDs -> emails.
+      // Customer-ID login uses /api/resolve-customer-id instead.
+      allow read: if false;
+      allow write: if isOwner();
+    }
+
+    // ---- counters (sequential Customer ID generator) ----
+    // Tightened to owner-only: tenant creation now runs entirely through the
+    // /api/create-tenant Admin SDK function (see lib/firebaseAdmin.js), which
+    // bypasses these rules anyway, so client-side writes are never needed here.
+    match /counters/{counterId} {
+      allow read: if isOwner();
+      allow write: if isOwner();
+    }
+
+    // ---- advanceLedger (partial advance payments over time) ----
+    match /advanceLedger/{entryId} {
+      allow read: if isOwner() || (tenantCan('bills') && resource.data.houseId == myHouseId());
+      allow create, update, delete: if isOwner();
+    }
+
+    // ---- expenses ----
+    match /expenses/{expenseId} {
+      allow read, write: if isOwner();
+    }
+
+    // ---- waterBills / waterBillPayments ----
+    match /waterBills/{billId} {
+      allow read: if isOwner() || (tenantCan('bills') && resource.data.houseIds is list && myHouseId() in resource.data.houseIds);
+      allow write: if isOwner();
+    }
+    match /waterBillPayments/{paymentId} {
+      allow read: if isOwner() || (tenantCan('bills') && resource.data.houseId == myHouseId());
+      allow create: if isOwner()
+        || (tenantCan('bills')
+            && request.resource.data.houseId == myHouseId()
+            && request.resource.data.tenantId == request.auth.uid
+            && request.resource.data.status == 'waiting_approval'
+            && request.resource.data.uploadedByOwner == false
+            && request.resource.data.approvedAt == null
+            && request.resource.data.actionedBy == null
+            && request.resource.data.rejectionReason == null
+            && request.resource.data.recordedBy.uid == request.auth.uid
+            && request.resource.data.amount > 0);
+      allow update: if isOwner();
+    }
+
+    // ---- maintenanceRequests ----
+    match /maintenanceRequests/{requestId} {
+      allow read: if isOwner() || (tenantCan('maintenance') && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (tenantCan('maintenance') && request.resource.data.houseId == myHouseId());
+      allow update, delete: if isOwner();
+    }
+
+    // ---- visitors ----
+    match /visitors/{visitorId} {
+      allow read: if isOwner() || (tenantCan('visitors') && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (tenantCan('visitors') && request.resource.data.houseId == myHouseId());
+      allow update: if isOwner() || (tenantCan('visitors') && resource.data.houseId == myHouseId());
+      allow delete: if isOwner();
+    }
+
+    // ---- rentAgreements ----
+    match /rentAgreements/{agreementId} {
+      allow read: if isOwner() || (tenantCan('rent') && resource.data.houseId == myHouseId());
+      allow write: if isOwner();
+    }
+
+    // ---- community Wi-Fi sharing ----
+    // Listings intentionally expose only sharing details. Never store or expose a Wi-Fi password here.
+    match /wifiShares/{listingId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && (isOwner() || request.resource.data.houseId == myHouseId())
+        && request.resource.data.status == 'active'
+        && request.resource.data.monthlyShare >= 0
+        && request.resource.data.maxMembers >= 1;
+      allow update: if isSignedIn() && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.houseId == resource.data.houseId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','speedMbps','monthlyShare','maxMembers','providerPhone','notes','updatedAt']);
+      allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+    match /wifiShareInterests/{interestId} {
+      allow read: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.seekerUid == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.seekerUid == request.auth.uid
+        && request.resource.data.ownerUid != request.auth.uid
+        && exists(/databases/$(database)/documents/wifiShares/$(request.resource.data.listingId))
+        && get(/databases/$(database)/documents/wifiShares/$(request.resource.data.listingId)).data.status == 'active'
+        && get(/databases/$(database)/documents/wifiShares/$(request.resource.data.listingId)).data.ownerUid == request.resource.data.ownerUid
+        && get(/databases/$(database)/documents/wifiShares/$(request.resource.data.listingId)).data.houseId == request.resource.data.houseId;
+      allow update: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.seekerUid == request.auth.uid);
+    }
+
+    // ---- personal calendar notes ----
+    match /calendarNotes/{noteId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ---- events ----
+    match /events/{eventId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner();
+    }
+
+    // ---- parkingSlots ----
+    // Vehicle numbers and house assignments are private property-management data.
+    match /parkingSlots/{slotId} {
+      allow read, write: if isOwner();
+    }
+
+
+    // ---- internal logs / reminder markers ----
+    match /activityLog/{entryId} {
+      allow read, write: if isOwner();
+    }
+    match /communicationLogs/{entryId} {
+      allow read, write: if isOwner();
+    }
+    match /remindersSent/{entryId} {
+      allow read, write: if isOwner();
+    }
+
+    // ---- blueprints ----
+    // Owners can create and edit visual plans. A tenant can only read the plan for
+    // their own house when the owner explicitly enables resident visibility.
+    match /houseBlueprints/{houseId} {
+      allow read: if isOwner()
+        || (isTenant() && myHouseId() == houseId && resource.data.visibleToTenants == true);
+      allow write: if isOwner();
+    }
+    match /propertyBlueprints/{blueprintId} {
+      allow read: if isOwner() || (isTenant() && resource.data.visibleToTenants == true);
+      allow write: if isOwner();
+    }
+
+    // ---- areaBookings ----
+    match /areaBookings/{bookingId} {
+      allow read: if isOwner() || (tenantCan('commonArea') && resource.data.houseId == myHouseId());
+      allow create: if isOwner() || (tenantCan('commonArea')
+        && request.resource.data.houseId == myHouseId()
+        && request.resource.data.tenantId == request.auth.uid
+        && request.resource.data.status == 'pending');
+      allow update, delete: if isOwner();
+    }
+  }
+}
+
