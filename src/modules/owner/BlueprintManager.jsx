@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Building2, DoorOpen, Download, Eye, Grip, LampCeiling, Plus, Save, Shield, Stairs, Trash2, CarFront } from 'lucide-react'
+import { Building2, DoorOpen, Download, Eye, Grip, LampCeiling, Plus, Save, Shield, Milestone, Trash2, CarFront } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { listHouses, getHouse, setBlueprintVisibility } from '../../services/houseService'
 import { getHouseBlueprint, saveHouseBlueprint, getPropertyBlueprint, savePropertyBlueprint } from '../../services/blueprintService'
 
 const ROOM_TYPES = ['Room', 'Bedroom', 'Kitchen', 'Hall', 'Bathroom', 'Balcony', 'Office', 'Store', 'Dining', 'Apartment unit']
 const FEATURE_TYPES = [
-  ['Entry', DoorOpen], ['Stairs', Stairs], ['Lift', Building2], ['Parking', CarFront], ['Electrical', LampCeiling]
+  ['Entry', DoorOpen], ['Stairs', Milestone], ['Lift', Building2], ['Parking', CarFront], ['Electrical', LampCeiling]
 ]
 const COLORS = ['#d9f2ee', '#e7eef8', '#f8edd9', '#ece7f7', '#e9ecef']
 
