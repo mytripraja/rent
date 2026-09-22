@@ -112,6 +112,7 @@ export default function OwnerDashboard() {
             <IconButton icon={LogOut} label="Log out" onClick={logout} />
           </div>
           <div className="md:hidden flex items-center gap-1">
+            <PropertySwitcher />
             <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={18}/></button>
             <ThemeToggle />
           </div>

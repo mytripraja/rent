@@ -73,6 +73,7 @@ export async function createHouse({ govtDoorNumber, internalDoorNumber, floor, e
     advanceAmount: 0,
     familyAccountCount: 0,
     phoneVisibleToNeighbors: true,
+    propertyId: propertyId || getActivePropertyId() || 'default',
     ebShareOverrideMonths: null, // e.g. 1 => only occupied 1 of the 2 months in this bill cycle
     hasOwnEbMeter: false, // if true, this house is excluded from the shared EB split entirely
     createdAt: Date.now(),

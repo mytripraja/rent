@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore'
 import { db } from './firebase'
 
 const configDocRef = doc(db, 'appConfig', 'general')
@@ -121,4 +121,20 @@ export function getActivePropertyId() {
 
 export function setActivePropertyId(id) {
   localStorage.setItem('activePropertyId', id)
+}
+
+const rentReminderRulesRef = collection(db, 'rentReminderRules')
+
+export async function getRentReminderRules() {
+  const snap = await getDocs(rentReminderRulesRef)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+export async function updateRentReminderRules(rules) {
+  const { writeBatch } = await import('firebase/firestore')
+  const snap = await getDocs(rentReminderRulesRef)
+  const batch = writeBatch(db)
+  snap.docs.forEach(d => batch.delete(d.ref))
+  rules.forEach(rule => batch.set(doc(rentReminderRulesRef, rule.id || `rent-${rule.houseId}`), rule))
+  await batch.commit()
 }

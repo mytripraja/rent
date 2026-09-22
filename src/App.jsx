@@ -11,6 +11,7 @@ import PublicHome from './modules/public/PublicHome'
 import LegalPage from './modules/public/LegalPage'
 import NotFoundPage from './modules/public/NotFoundPage'
 import LanguagePreferenceGate from './modules/shared/LanguagePreferenceGate'
+import AppLockGate from './modules/shared/AppLockGate'
 
 function RootRedirect() {
   const { user, loading } = useAuth()
@@ -40,7 +41,7 @@ export default function App() {
                 path="/owner/*"
                 element={
                   <ProtectedRoute role="owner">
-                    <OwnerDashboard />
+                    <AppLockGate><OwnerDashboard /></AppLockGate>
                   </ProtectedRoute>
                 }
               />
@@ -48,7 +49,7 @@ export default function App() {
                 path="/tenant/*"
                 element={
                   <ProtectedRoute role="tenant">
-                    <TenantDashboard />
+                    <AppLockGate><TenantDashboard /></AppLockGate>
                   </ProtectedRoute>
                 }
               />

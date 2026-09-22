@@ -29,6 +29,7 @@ import IndiaCalendar from '../shared/IndiaCalendar'
 import NewsHub from '../shared/NewsHub'
 import WifiShareBoard from '../shared/WifiShareBoard'
 import ApartmentOperations from './ApartmentOperations'
+import FutureOperationsHub from './FutureOperationsHub'
 import { useAuth } from '../../context/AuthContext'
 
 const SECTIONS = [
@@ -44,6 +45,7 @@ const SECTIONS = [
     { id: 'blueprints', label: 'Blueprints', icon: Map, desc: 'Create house and apartment floor plans' },
     { id: 'assets', label: 'House Assets & Inspection', icon: ClipboardCheck, desc: 'Track fixtures, condition and move-in/vacate checks' },
     { id: 'apartmentOps', label: 'Apartment Operations', icon: Droplets, desc: 'Separate apartments, motors, tanks, problems and CCTV' },
+    { id: 'enterpriseOps', label: 'Advanced Operations ERP', icon: BriefcaseBusiness, desc: 'Accounting, maintenance, inventory, security, leases, analytics and integrations' },
   ]},
   { label: 'Tenant Services', items: [
     { id: 'maintenance', label: 'Maintenance Requests', icon: Wrench, desc: 'Track repairs and requests' },
@@ -82,7 +84,7 @@ export default function MoreMenu() {
       profile: <OwnerProfile />, rentRevision: <RentRevision />, setup: <PropertySetup />, settings: <AppSettings />,
       activity: <ActivityLog />, yearEnd: <YearEndSummary />, emailReport: <EmailReport />, dataBackup: <DataBackup />,
       googleSheets: <GoogleSheetsExport />, tally: <TallyExport />, maintenance: <MaintenanceManager />, visitors: <VisitorOverview />,
-      parking: <ParkingManager />, blueprints: <BlueprintManager />, assets: <HouseAssetInspection />, apartmentOps: <ApartmentOperations />, wifi: <WifiShareBoard ownerOnly />, news: <NewsHub />, bookings: <BookingApprovals />, vacancy: <VacancyListing />, festivals: <FestivalGreetings />, calendarHub: <IndiaCalendar />,
+      parking: <ParkingManager />, blueprints: <BlueprintManager />, assets: <HouseAssetInspection />, apartmentOps: <ApartmentOperations />, enterpriseOps: <FutureOperationsHub />, wifi: <WifiShareBoard ownerOnly />, news: <NewsHub />, bookings: <BookingApprovals />, vacancy: <VacancyListing />, festivals: <FestivalGreetings />, calendarHub: <IndiaCalendar />,
       owners: isAdmin ? <OwnerManager /> : null,
       security: <SecurityDataCenter />,
     }

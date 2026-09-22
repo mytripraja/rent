@@ -12,6 +12,7 @@ import {
 import { db } from './firebase'
 import { uploadUnsigned } from './cloudinaryService'
 import { createNotification } from './notificationService'
+import { createAccountingJournal } from './enterpriseService'
 
 const paymentsRef = collection(db, 'rentPayments')
 
@@ -89,6 +90,8 @@ export async function approvePayment(paymentId, { neighborCollectedBy, actionedB
   const paymentRef = doc(db, 'rentPayments', paymentId)
   const snap = await getDoc(paymentRef)
   const paymentData = snap.data()
+  const houseSnap = paymentData?.houseId ? await getDoc(doc(db, 'houses', paymentData.houseId)) : null
+  const houseData = houseSnap?.exists() ? houseSnap.data() : null
 
   await updateDoc(paymentRef, {
     status: 'approved',
@@ -107,6 +110,20 @@ export async function approvePayment(paymentId, { neighborCollectedBy, actionedB
     })
   }
 
+  if (houseData?.propertyId) {
+    await createAccountingJournal({
+      propertyId: houseData.propertyId,
+      createdBy: actionedBy?.uid || null,
+      date: paymentData.month ? `${paymentData.month}-01` : new Date().toISOString().slice(0, 10),
+      description: `Approved rent ${paymentData.month || ''} for ${houseData.internalDoorNumber || paymentData.houseId}`,
+      amount: Number(paymentData.amount || 0),
+      debitAccount: paymentData.mode === 'cash' ? 'Cash / Bank' : 'Cash / Bank',
+      creditAccount: 'Rental Income',
+      category: 'Rent',
+      houseId: paymentData.houseId,
+    }).catch(() => {})
+  }
+
   // Task 2: Log activity
   const { logActivity } = await import('./activityLogService')
   await logActivity({
@@ -123,6 +140,8 @@ export async function rejectPayment(paymentId, reason, actionedBy) {
   const paymentRef = doc(db, 'rentPayments', paymentId)
   const snap = await getDoc(paymentRef)
   const paymentData = snap.data()
+  const houseSnap = paymentData?.houseId ? await getDoc(doc(db, 'houses', paymentData.houseId)) : null
+  const houseData = houseSnap?.exists() ? houseSnap.data() : null
 
   await updateDoc(paymentRef, {
     status: 'rejected',
@@ -138,6 +157,20 @@ export async function rejectPayment(paymentId, reason, actionedBy) {
       title: 'Rent Rejected',
       message: `Your rent payment for ${paymentData.month} was rejected. Reason: ${reason}`
     })
+  }
+
+  if (houseData?.propertyId) {
+    await createAccountingJournal({
+      propertyId: houseData.propertyId,
+      createdBy: actionedBy?.uid || null,
+      date: paymentData.month ? `${paymentData.month}-01` : new Date().toISOString().slice(0, 10),
+      description: `Approved rent ${paymentData.month || ''} for ${houseData.internalDoorNumber || paymentData.houseId}`,
+      amount: Number(paymentData.amount || 0),
+      debitAccount: paymentData.mode === 'cash' ? 'Cash / Bank' : 'Cash / Bank',
+      creditAccount: 'Rental Income',
+      category: 'Rent',
+      houseId: paymentData.houseId,
+    }).catch(() => {})
   }
 
   // Task 2: Log activity

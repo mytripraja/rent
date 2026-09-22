@@ -15,3 +15,16 @@ jobs:
         run: |
           curl -sf -X POST "https://${{ vars.VERCEL_APP_DOMAIN }}/api/revoke-vacated-access" \
             -H "x-cron-secret: ${{ secrets.REVOKE_CRON_SECRET }}"
+      - name: Run scheduled rent reminders
+        run: |
+          curl -sf -X POST "https://${{ vars.VERCEL_APP_DOMAIN }}/api/revoke-vacated-access?job=rent-reminders" \
+            -H "x-cron-secret: ${{ secrets.REVOKE_CRON_SECRET }}"
+      - name: Run operations notifications
+        run: |
+          curl -sf -X POST "https://${{ vars.VERCEL_APP_DOMAIN }}/api/revoke-vacated-access?job=operations" \
+            -H "x-cron-secret: ${{ secrets.REVOKE_CRON_SECRET }}"
+
+      - name: Run preventive maintenance scheduler
+        run: |
+          curl -sf -X POST "https://${{ vars.VERCEL_APP_DOMAIN }}/api/revoke-vacated-access?job=maintenance" \
+            -H "x-cron-secret: ${{ secrets.REVOKE_CRON_SECRET }}"

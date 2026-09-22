@@ -3,18 +3,21 @@ import { listOwners, createOwnerAccountAdmin, deleteOwnerAccount, setOwnerAppMod
 import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../shared/ui/ConfirmDialog'
 import { useToast } from '../shared/ui/Toast'
+import { getProperties } from '../../services/configService'
 
 export default function OwnerManager() {
   const { user } = useAuth()
   const { showToast } = useToast()
   const [owners, setOwners] = useState([])
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', appMode: null })
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', appMode: null, propertyAccess: ['*'] })
+  const [properties, setProperties] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [deletingOwner, setDeletingOwner] = useState(null)
 
   useEffect(() => {
     refresh()
+    getProperties().then(setProperties).catch(() => {})
   }, [])
 
   async function refresh() {
@@ -33,7 +36,7 @@ export default function OwnerManager() {
     setSaving(true)
     try {
       await createOwnerAccountAdmin(form)
-      setForm({ name: '', email: '', phone: '', password: '', appMode: null })
+      setForm({ name: '', email: '', phone: '', password: '', appMode: null, propertyAccess: ['*'] })
       showToast({ message: 'Owner added successfully', type: 'success' })
       refresh()
     } catch (err) {
@@ -77,6 +80,11 @@ export default function OwnerManager() {
           <input type="checkbox" checked={form.appMode === 'dad-lite'} onChange={(e) => setForm({ ...form, appMode: e.target.checked ? 'dad-lite' : null })} className="mt-1" />
           <span><span className="block text-sm font-semibold text-ink">Simple rent screen</span><span className="block text-xs text-ink-soft mt-0.5">Shows only tenant names, houses and a simple “Paid Rent” button.</span></span>
         </label>
+        <div className="rounded-xl border border-brass/20 bg-paper p-3 space-y-3">
+          <div><p className="text-sm font-semibold text-ink">Apartment access</p><p className="text-xs text-ink-soft mt-0.5">Choose whether this owner can switch between all apartments or only selected ones.</p></div>
+          <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={form.propertyAccess.includes('*')} onChange={e => setForm({ ...form, propertyAccess: e.target.checked ? ['*'] : [] })}/><span>All apartments</span></label>
+          {!form.propertyAccess.includes('*') && <div className="space-y-2 max-h-40 overflow-auto">{properties.map(p => <label key={p.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.propertyAccess.includes(p.id)} onChange={e => { const next = e.target.checked ? [...form.propertyAccess, p.id] : form.propertyAccess.filter(x => x !== p.id); setForm({ ...form, propertyAccess: next }) }}/><span>{p.name}</span></label>)}</div>}
+        </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button disabled={saving} className="w-full bg-brand text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
           {saving ? 'Adding…' : 'Add Owner'}

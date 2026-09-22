@@ -189,8 +189,8 @@ export async function createOwnerAccount({ email, password, name }) {
 // Adds a co-owner (dad, brother, mom, etc). They get the same day-to-day
 // access as you except managing other owner accounts. Runs server-side so
 // creating their login doesn't hijack your own session.
-export async function createOwnerAccountAdmin({ email, password, name, phone, appMode = null }) {
-  return authedFetch('/api/create-owner', { email, password, name, phone, appMode })
+export async function createOwnerAccountAdmin({ email, password, name, phone, appMode = null, propertyAccess = ['*'] }) {
+  return authedFetch('/api/create-owner', { email, password, name, phone, appMode, propertyAccess })
 }
 
 export async function setOwnerAppMode(uid, appMode) {

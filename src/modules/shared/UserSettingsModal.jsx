@@ -6,8 +6,12 @@ import { useAuth } from '../../context/AuthContext'
 import NotificationBell from './ui/NotificationBell'
 import { updateOwnProfile } from '../../services/authService'
 import { createGoogleCalendarLink } from '../../utils/calendarLinks'
+import DeviceSecurityPanel from './DeviceSecurityPanel'
+import MfaSecurityPanel from './MfaSecurityPanel'
+import { requestNotificationPermission } from '../../services/pushService'
 
 const A11Y_KEY = 'rm_accessibility_preferences'
+const NOTIF_KEY = 'rm_notification_preferences_v1'
 
 function readPrefs() {
   try { return JSON.parse(localStorage.getItem(A11Y_KEY) || '{}') } catch { return {} }
@@ -34,6 +38,7 @@ export default function UserSettingsModal({ open, onClose }) {
   const [voiceMessage, setVoiceMessage] = useState('Voice controls are ready.')
   const [listening, setListening] = useState(false)
   const [reading, setReading] = useState(false)
+  const [notifPrefs, setNotifPrefs] = useState(() => { try { return JSON.parse(localStorage.getItem(NOTIF_KEY) || '{"inApp":true,"browser":true,"rent":true,"messages":true,"maintenance":true,"general":true}') } catch { return { inApp:true,browser:true,rent:true,messages:true,maintenance:true,general:true } } })
   const recognitionRef = useRef(null)
   const speechRef = useRef(null)
 
@@ -63,6 +68,8 @@ export default function UserSettingsModal({ open, onClose }) {
       console.warn('Could not save language preference', e)
     } finally { setSavingLang(false) }
   }
+
+  function updateNotif(key, value) { const next={...notifPrefs,[key]:value}; setNotifPrefs(next); localStorage.setItem(NOTIF_KEY, JSON.stringify(next)); if(key==='browser' && value) requestNotificationPermission() }
 
   function updatePref(key, value) {
     const next = { ...prefs, [key]: value }
@@ -193,6 +200,23 @@ export default function UserSettingsModal({ open, onClose }) {
           <div className="flex items-center gap-2"><span className="rm-feature-icon"><Bell size={17}/></span><div><h3 className="font-bold text-ink">Notifications</h3><p className="text-xs text-ink-soft">Manage your notification center.</p></div></div>
           <div className="mt-3 flex items-center justify-between rounded-xl bg-paper-raised border border-[var(--rm-border)] px-3 py-2"><span className="text-sm font-semibold">Notification center</span><NotificationBell userId={user?.uid} /></div>
         </div>
+      </section>
+
+      <section className="mt-3 rounded-2xl border border-[var(--rm-border)] bg-paper p-4" aria-labelledby="notification-preferences-heading">
+        <div className="flex items-center gap-2"><span className="rm-feature-icon"><Bell size={17}/></span><div><h3 id="notification-preferences-heading" className="font-bold text-ink">Notification preferences</h3><p className="text-xs text-ink-soft">Choose which normal app notifications you want. Admin-controlled rent reminders still follow the property's schedule.</p></div></div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-4">
+          <Toggle label="In-app notifications" description="Show messages in Notification Center" checked={notifPrefs.inApp} onChange={v=>updateNotif('inApp',v)} />
+          <Toggle label="Browser notifications" description="Allow device notifications" checked={notifPrefs.browser} onChange={v=>updateNotif('browser',v)} />
+          <Toggle label="Rent reminders" description="Due/unpaid rent alerts" checked={notifPrefs.rent} onChange={v=>updateNotif('rent',v)} />
+          <Toggle label="Messages" description="Notices and received messages" checked={notifPrefs.messages} onChange={v=>updateNotif('messages',v)} />
+          <Toggle label="Maintenance" description="Repair and complaint updates" checked={notifPrefs.maintenance} onChange={v=>updateNotif('maintenance',v)} />
+          <Toggle label="Other basics" description="Bookings, bills and general alerts" checked={notifPrefs.general} onChange={v=>updateNotif('general',v)} />
+        </div>
+      </section>
+
+      <section className="mt-3 grid lg:grid-cols-2 gap-3">
+        <DeviceSecurityPanel />
+        <MfaSecurityPanel />
       </section>
 
       <section className="mt-3 rounded-2xl border border-[var(--rm-border)] bg-paper p-4" aria-labelledby="accessibility-heading">

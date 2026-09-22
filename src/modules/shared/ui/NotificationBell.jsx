@@ -14,7 +14,7 @@ export default function NotificationBell({ userId, darkHeader = false }) {
     const unsubscribe = subscribeToNotifications(userId, (notifs) => {
       setNotifications(prev => {
         if (prev.length > 0 && notifs.length > 0 && notifs[0].id !== prev[0].id && !notifs[0].read) {
-          showBrowserNotification(notifs[0].title, notifs[0].message)
+          (() => { try { const p = JSON.parse(localStorage.getItem('rm_notification_preferences_v1') || '{}'); if (p.browser !== false) showBrowserNotification(notifs[0].title, notifs[0].message) } catch { showBrowserNotification(notifs[0].title, notifs[0].message) } })()
         }
         return notifs
       })
@@ -34,7 +34,9 @@ export default function NotificationBell({ userId, darkHeader = false }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const prefs = (() => { try { return JSON.parse(localStorage.getItem('rm_notification_preferences_v1') || '{}') } catch { return {} } })();
+  const visibleNotifications = notifications.filter(n => prefs.inApp !== false && (n.type === 'payment_reminder' ? prefs.rent !== false : ['notice_posted','message_received','message'].includes(n.type) ? prefs.messages !== false : ['maintenance','complaint_received'].includes(n.type) ? prefs.maintenance !== false : prefs.general !== false));
+  const unreadCount = visibleNotifications.filter(n => !n.read).length;
 
   const handleMarkAllAsRead = async (e) => {
     e.stopPropagation();
@@ -123,14 +125,14 @@ export default function NotificationBell({ userId, darkHeader = false }) {
             </div>
 
             <div className="max-h-[400px] overflow-y-auto overscroll-contain">
-              {notifications.length === 0 ? (
+              {visibleNotifications.length === 0 ? (
                 <div className="px-4 py-8 text-center text-ink-soft">
                   <Bell className="w-8 h-8 mx-auto mb-2 opacity-20" />
                   <p className="text-sm">No notifications yet.</p>
                 </div>
               ) : (
                 <div className="divide-y divide-brass/10">
-                  {notifications.map((notification) => (
+                  {visibleNotifications.map((notification) => (
                     <div
                       key={notification.id}
                       onClick={() => handleNotificationClick(notification)}

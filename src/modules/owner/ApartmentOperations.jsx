@@ -22,6 +22,7 @@ export default function ApartmentOperations() {
   const [properties, setProperties] = useState([])
   const [activeId, setActiveId] = useState('')
   const [newProperty, setNewProperty] = useState({ name:'', address:'' })
+  const [showCreate, setShowCreate] = useState(false)
   const [houses, setHouses] = useState([])
   const [allHouses, setAllHouses] = useState([])
   const [ops, setOps] = useState(null)
@@ -44,8 +45,10 @@ export default function ApartmentOperations() {
   const settings = ops?.settings || { targetReading:15, targetUnit:'kW', tolerance:0, retryMin:5, retryMax:10 }
 
   async function loadProperties() {
-    const list = await getProperties(); setProperties(list)
-    const saved = getActivePropertyId(); const id = saved && list.some(p=>p.id===saved) ? saved : list[0]?.id || 'default'
+    const all = await getProperties()
+    const list = user?.role === 'admin' || !Array.isArray(user?.propertyAccess) || user.propertyAccess.includes('*') ? all : all.filter(p => user.propertyAccess.includes(p.id))
+    setProperties(list)
+    const saved = getActivePropertyId(); const id = saved && list.some(p=>p.id===saved) ? saved : list[0]?.id || ''
     setActiveId(id); if (id) setActivePropertyId(id)
   }
 
@@ -53,12 +56,12 @@ export default function ApartmentOperations() {
     if (!id) return
     setError('')
     try {
-      const [o,h,all,i,c,f] = await Promise.all([getApartmentOperations(id), listHouses(), listAllHouses(), listApartmentIssues(id), listCctvCameras(id), listCctvFootageRequests(id)])
-      setOps(o); setHouses(h); setAllHouses(all); setIssues(i); setCameras(c); setFootage(f)
+      const [o,h,allRaw,i,c,f] = await Promise.all([getApartmentOperations(id), listHouses(id), listAllHouses(), listApartmentIssues(id), listCctvCameras(id), listCctvFootageRequests(id)])
+      const all = allRaw.filter(x => !Array.isArray(user?.propertyAccess) || user?.role === 'admin' || user.propertyAccess.includes('*') || user.propertyAccess.includes(x.propertyId || 'default')); setOps(o); setHouses(h); setAllHouses(all); setIssues(i); setCameras(c); setFootage(f)
     } catch (e) { setError(e?.message || 'Could not load apartment operations.') }
   }
 
-  useEffect(() => { loadProperties().catch(e=>setError(e.message)) }, [])
+  useEffect(() => { loadProperties().catch(e=>setError(e.message)) }, [user?.uid, JSON.stringify(user?.propertyAccess)])
   useEffect(() => { loadData(activeId) }, [activeId])
 
   async function createApartment() {
@@ -128,11 +131,11 @@ export default function ApartmentOperations() {
     <div className="rm-card p-4 sm:p-5">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div><div className="rm-kicker">Multi-apartment control</div><h2 className="font-display text-2xl sm:text-3xl font-extrabold mt-1">Apartment Operations</h2><p className="text-sm text-ink-soft mt-1 max-w-3xl">Every apartment has its own motors, tanks, cameras, warranty records and problem history. Switching apartments never merges their operational records.</p></div>
-        <div className="flex flex-col sm:flex-row gap-2"><select value={activeId} onChange={e=>{setActiveId(e.target.value);setActivePropertyId(e.target.value)}} className="min-w-56"><option value="">Select apartment</option>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+        <div className="flex flex-col sm:flex-row gap-2"><select aria-label="Change apartment" value={activeId} onChange={e=>{setActiveId(e.target.value);setActivePropertyId(e.target.value)}} className="min-w-56"><option value="">Select apartment</option>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><button type="button" onClick={()=>setShowCreate(v=>!v)} className="rounded-xl border border-brand/30 text-brand px-4 py-2.5 font-bold"><Plus size={16} className="inline mr-1"/>{showCreate?'Close':'New apartment'}</button></div>
       </div>
       {error && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-      <div className="mt-4 grid sm:grid-cols-[1fr_1fr_auto] gap-2"><input placeholder="New apartment name" value={newProperty.name} onChange={e=>setNewProperty(v=>({...v,name:e.target.value}))}/><input placeholder="Address" value={newProperty.address} onChange={e=>setNewProperty(v=>({...v,address:e.target.value}))}/><button onClick={createApartment} disabled={saving||!newProperty.name.trim()} className="rounded-xl bg-brand text-white px-4 py-2.5 font-bold"><Plus size={16} className="inline mr-1"/> Add apartment</button></div>
-      {active && <div className="mt-3 text-xs text-ink-soft">Active: <b className="text-ink">{active.name}</b>{active.address ? ` · ${active.address}` : ''}</div>}
+      {showCreate && <div className="mt-4 rounded-2xl border border-brand/20 bg-brand/5 p-4"><p className="text-sm font-bold text-ink">Create a separate apartment</p><p className="text-xs text-ink-soft mt-1">This creates a separate operational workspace. Nothing is merged with the current apartment.</p><div className="mt-3 grid sm:grid-cols-[1fr_1fr_auto] gap-2"><input aria-label="New apartment name" placeholder="Apartment name" value={newProperty.name} onChange={e=>setNewProperty(v=>({...v,name:e.target.value}))}/><input aria-label="Apartment address" placeholder="Address" value={newProperty.address} onChange={e=>setNewProperty(v=>({...v,address:e.target.value}))}/><button onClick={createApartment} disabled={saving||!newProperty.name.trim()} className="rounded-xl bg-brand text-white px-4 py-2.5 font-bold">Create</button></div></div>}
+      {active && <div className="mt-3 rounded-xl bg-paper-raised border border-[var(--rm-border)] p-3 text-sm"><span className="text-ink-soft">Currently managing:</span> <b className="text-ink">{active.name}</b>{active.address ? <span className="text-ink-soft"> · {active.address}</span> : null}</div>}
       <div className="mt-4 border-t border-[var(--rm-border)] pt-4"><div className="flex items-center justify-between gap-2"><div><p className="font-bold text-ink text-sm">Assign existing houses to an apartment</p><p className="text-xs text-ink-soft">Use this once to move older houses into Apartment A, B or C. Records are then filtered by the selected property.</p></div><Building2 size={18} className="text-brand"/></div><div className="mt-3 grid gap-2">{allHouses.map(h=><div key={h.id} className="grid sm:grid-cols-[1fr_180px] gap-2 items-center rounded-xl border border-[var(--rm-border)] p-3"><div><p className="font-semibold text-ink">{h.internalDoorNumber}</p><p className="text-xs text-ink-soft">Current apartment: {properties.find(p=>p.id===(h.propertyId||'default'))?.name || (h.propertyId||'default')}</p></div><select value={h.propertyId||'default'} onChange={async e=>{try{await setHouseProperty(h.id,e.target.value);setAllHouses(await listAllHouses());setHouses(await listHouses())}catch(err){setError(err.message)}}}>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>)}{allHouses.length===0&&<p className="text-sm text-ink-soft">No houses created yet.</p>}</div></div>
     </div>
 

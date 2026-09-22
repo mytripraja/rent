@@ -1,4 +1,4 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, query, where, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from './firebase'
 import { getActivePropertyId } from './configService'
 
@@ -39,7 +39,7 @@ export async function recordMotorCommand(propertyId, motorId, command, details =
 
 export async function listApartmentIssues(propertyId, houseId = '') {
   const id = currentPropertyId(propertyId)
-  const snap = await getDocs(collection(db, 'propertyIssues'))
+  const snap = await getDocs(query(collection(db, 'propertyIssues'), where('propertyId', '==', id)))
   return snap.docs.map(d => ({ id: d.id, ...d.data() }))
     .filter(item => (item.propertyId || 'default') === id && (!houseId || item.houseId === houseId))
     .sort((a,b) => String(b.occurredAt || '').localeCompare(String(a.occurredAt || '')))
@@ -79,7 +79,7 @@ export async function deleteApartmentIssue(id) {
 
 export async function listCctvCameras(propertyId) {
   const id = currentPropertyId(propertyId)
-  const snap = await getDocs(collection(db, 'cctvCameras'))
+  const snap = await getDocs(query(collection(db, 'cctvCameras'), where('propertyId', '==', id)))
   return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(item => (item.propertyId || 'default') === id).sort((a,b) => String(a.name||'').localeCompare(String(b.name||'')))
 }
 
@@ -114,7 +114,7 @@ export async function deleteCctvCamera(id) {
 
 export async function listCctvFootageRequests(propertyId) {
   const id = currentPropertyId(propertyId)
-  const snap = await getDocs(collection(db, 'cctvFootageRequests'))
+  const snap = await getDocs(query(collection(db, 'cctvFootageRequests'), where('propertyId', '==', id)))
   return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(item => (item.propertyId || 'default') === id).sort((a,b) => String(b.requestedAt || '').localeCompare(String(a.requestedAt || '')))
 }
 

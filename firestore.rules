@@ -33,6 +33,21 @@ service cloud.firestore {
       return isSignedIn() && userDoc().data.role == 'tenant';
     }
 
+    // Server-enforced property workspace access. Missing propertyAccess keeps
+    // legacy owner accounts working as all-properties admins; new restricted
+    // accounts must contain '*' or the requested property id.
+    function canAccessProperty(propertyId) {
+      return isOwner() && (
+        isAdmin()
+        || !userDoc().data.keys().hasAny(['propertyAccess'])
+        || userDoc().data.propertyAccess.hasAny(['*', propertyId])
+      );
+    }
+
+    function recordPropertyId(data) {
+      return data.keys().hasAny(['propertyId']) ? data.propertyId : 'default';
+    }
+
     // A tenant account is either the main household account (legacy tenant
     // profiles without accountType are treated as primary) or a controlled
     // family sub-account. Sub-accounts can be limited feature-by-feature by
@@ -219,6 +234,12 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
+    // Admin-only monthly rent reminder schedules. Tenants never need to read
+    // these schedules; their generated notifications are delivered separately.
+    match /rentReminderRules/{ruleId} {
+      allow read, write: if isOwner();
+    }
+
     // ---- customers (bank-style unique Customer ID per real person) ----
     // Full profile: owner can read/write anyone; a customer can read their own
     // record (matched via linkedUids, since one customer can hold several house logins).
@@ -377,20 +398,125 @@ service cloud.firestore {
     // apartment's motors, tanks, problem history and CCTV records are not mixed
     // with another apartment in the management UI.
     match /apartmentOperations/{propertyId} {
-      allow read, write: if isOwner();
+      allow read, write: if canAccessProperty(propertyId);
     }
     match /motorCommands/{commandId} {
-      allow read, create: if isOwner();
-      allow update, delete: if isOwner();
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
     }
     match /propertyIssues/{issueId} {
-      allow read, write: if isOwner();
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
     }
     match /cctvCameras/{cameraId} {
-      allow read, write: if isOwner();
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
     }
     match /cctvFootageRequests/{requestId} {
-      allow read, write: if isOwner();
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+
+    // ---- advanced operations ERP ----
+    // Every new operational record is property-scoped and access is enforced here,
+    // not only by the React apartment selector.
+    match /accountingTransactions/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /maintenanceWorkOrders/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /preventiveMaintenance/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /purchaseOrders/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /inventoryItems/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /securityEvents/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /parcels/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /leaseRecords/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /utilityBills/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /ownerInvestments/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /communicationMessages/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /societyHierarchy/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /documentRegistry/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /backupPlans/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
+    }
+    match /apiIntegrations/{id} {
+      allow read: if canAccessProperty(recordPropertyId(resource.data));
+      allow create: if canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if canAccessProperty(recordPropertyId(request.resource.data)) && recordPropertyId(resource.data) == recordPropertyId(request.resource.data);
+      allow delete: if canAccessProperty(recordPropertyId(resource.data));
     }
 
     // ---- areaBookings ----

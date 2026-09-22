@@ -12,7 +12,7 @@ export default async function handler(req, res) {
     const callerDoc = await db.collection('users').doc(decoded.uid).get()
     const createdBy = { uid: decoded.uid, name: callerDoc.data()?.name || 'Admin' }
 
-    const { email, password, name, phone, appMode } = req.body || {}
+    const { email, password, name, phone, appMode, propertyAccess } = req.body || {}
     if (!email || !password || !name) {
       return res.status(400).json({ error: 'Missing required fields' })
     }
@@ -28,6 +28,7 @@ export default async function handler(req, res) {
       createdAt: Date.now(),
       createdBy,
       appMode: appMode === 'dad-lite' ? 'dad-lite' : null,
+      propertyAccess: Array.isArray(propertyAccess) && propertyAccess.length ? propertyAccess : ['*'],
     })
 
     res.status(200).json({ uid: userRecord.uid })

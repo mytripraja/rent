@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { getCashReceivers, updateCashReceivers } from '../../services/configService'
+import { getCashReceivers, updateCashReceivers, getRentReminderRules, updateRentReminderRules } from '../../services/configService'
+import { listHouses } from '../../services/houseService'
 
 export default function AppSettings() {
   const [receivers, setReceivers] = useState([])
@@ -14,6 +15,9 @@ export default function AppSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [houses, setHouses] = useState([])
+  const [reminderRules, setReminderRules] = useState([])
+  const [reminderForm, setReminderForm] = useState({ houseId:'', dayOfMonth:5, time:'09:00', enabled:true })
 
   useEffect(() => {
     load()
@@ -31,6 +35,10 @@ export default function AppSettings() {
       setLateFeeGraceDays(config.lateFeeGraceDays || 5)
       setUpiId(config.upiId || '')
       setOwnerName(config.ownerName || '')
+      const loadedHouses = await listHouses().catch(() => [])
+      setHouses(loadedHouses)
+      const rules = await getRentReminderRules().catch(() => [])
+      setReminderRules(rules)
     } catch (err) {
       console.error(err)
       setError('Failed to load settings.')
@@ -79,6 +87,20 @@ export default function AppSettings() {
 
   async function handleSaveDetails() {
     await save(receivers)
+  }
+
+  async function saveReminderRule(e) {
+    e.preventDefault()
+    if (!reminderForm.houseId) return
+    const house = houses.find(h => h.id === reminderForm.houseId)
+    const next = [...reminderRules.filter(r => r.houseId !== reminderForm.houseId), { ...reminderForm, id: `rent-${reminderForm.houseId}`, propertyId: house?.propertyId || 'default', dayOfMonth: Math.min(31, Math.max(1, Number(reminderForm.dayOfMonth))), time: reminderForm.time || '09:00', enabled: !!reminderForm.enabled, updatedAt: Date.now() }]
+    setReminderRules(next)
+    await updateRentReminderRules(next)
+  }
+
+  async function removeReminderRule(id) {
+    const next = reminderRules.filter(r => r.id !== id)
+    setReminderRules(next); await updateRentReminderRules(next)
   }
 
   if (loading) {
@@ -209,6 +231,18 @@ export default function AppSettings() {
             Save Rules
           </button>
         </div>
+      </div>
+
+      <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 space-y-4 max-w-2xl">
+        <div><h3 className="font-medium text-ink">Rent reminder schedule</h3><p className="text-xs text-ink-soft">Set a separate monthly unpaid-rent reminder for each house. The tenant receives it only when the current month's rent is still unpaid.</p></div>
+        <form onSubmit={saveReminderRule} className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+          <div><label className="block text-xs font-medium text-ink mb-1">House</label><select value={reminderForm.houseId} onChange={e=>setReminderForm({...reminderForm,houseId:e.target.value})} className="w-full"><option value="">Choose house</option>{houses.filter(h=>h.status==='occupied').map(h=><option key={h.id} value={h.id}>{h.internalDoorNumber} · {h.tenantName || 'Tenant'}</option>)}</select></div>
+          <div><label className="block text-xs font-medium text-ink mb-1">Every month, day</label><input type="number" min="1" max="31" value={reminderForm.dayOfMonth} onChange={e=>setReminderForm({...reminderForm,dayOfMonth:e.target.value})} className="w-full"/></div>
+          <div><label className="block text-xs font-medium text-ink mb-1">Time (India)</label><input type="time" value={reminderForm.time} onChange={e=>setReminderForm({...reminderForm,time:e.target.value})} className="w-full"/></div>
+          <button disabled={saving || !reminderForm.houseId} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60">Save reminder</button>
+        </form>
+        <div className="space-y-2">{reminderRules.map(r=>{const h=houses.find(x=>x.id===r.houseId); return <div key={r.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-brass/10 bg-paper p-3"><div className="flex-1 min-w-48"><p className="text-sm font-semibold text-ink">{h?.internalDoorNumber || r.houseId}</p><p className="text-xs text-ink-soft">Every month on day {r.dayOfMonth} at {r.time} · {h?.tenantName || 'Tenant'}</p></div><button type="button" onClick={()=>setReminderForm({houseId:r.houseId,dayOfMonth:r.dayOfMonth,time:r.time,enabled:r.enabled!==false})} className="text-xs font-semibold text-brand">Edit</button><button type="button" onClick={()=>removeReminderRule(r.id)} className="text-xs text-stamp-red">Remove</button></div>})}{reminderRules.length===0&&<p className="text-xs text-ink-soft">No scheduled rent reminders yet.</p>}</div>
+        <p className="text-[11px] text-ink-soft">The scheduler checks every 15 minutes through the existing GitHub Actions job, so the notification may arrive a few minutes after the selected time. No reminder is sent after an approved payment for that month.</p>
       </div>
 
       <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 space-y-4 max-w-md">
