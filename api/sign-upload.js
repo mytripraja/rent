@@ -34,7 +34,7 @@ export default async function handler(req, res) {
       if (!isFullOwner && !(isTenant && profile.houseId === privateDocMatch[1])) {
         return res.status(403).json({ error: 'Not allowed to upload to this house' })
       }
-    } else if (requestedFolder === 'agreements') {
+    } else if (requestedFolder === 'agreements' || requestedFolder === 'cctv-footage') {
       if (!isFullOwner) return res.status(403).json({ error: 'Owner access required' })
     } else {
       return res.status(400).json({ error: 'Unsupported private upload folder' })

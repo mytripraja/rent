@@ -3,6 +3,7 @@ import { listHouses, createHouse, updateHouse, deleteHouse } from '../../service
 import ConfirmDialog from '../shared/ui/ConfirmDialog'
 import { useToast } from '../shared/ui/Toast'
 import { uploadUnsigned } from '../../services/cloudinaryService'
+import { getActivePropertyId, getProperties } from '../../services/configService'
 
 const EMPTY_FORM = { govtDoorNumber: '', internalDoorNumber: '', floor: '', ebNumber: '', photos: [] }
 
@@ -14,9 +15,11 @@ export default function PropertySetup() {
   const [editingHouse, setEditingHouse] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [activeProperty, setActiveProperty] = useState(null)
 
   useEffect(() => {
     refresh()
+    getProperties().then(list => { const id = getActivePropertyId() || 'default'; setActiveProperty(list.find(p => p.id === id) || list[0] || null) }).catch(() => {})
   }, [])
 
   async function refresh() {
@@ -63,10 +66,10 @@ export default function PropertySetup() {
     setSaving(true)
     try {
       if (editingHouse) {
-        await updateHouse(editingHouse.id, form)
+        await updateHouse(editingHouse.id, { ...form, propertyId: editingHouse.propertyId || getActivePropertyId() || 'default' })
         showToast({ message: 'House updated successfully', type: 'success' })
       } else {
-        await createHouse(form)
+        await createHouse({ ...form, propertyId: getActivePropertyId() || 'default' })
         showToast({ message: 'House added successfully', type: 'success' })
       }
       setForm({ ...EMPTY_FORM, photos: [] })

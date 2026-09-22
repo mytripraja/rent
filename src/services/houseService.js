@@ -12,6 +12,7 @@ import {
   orderBy,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { getActivePropertyId } from './configService'
 
 const housesRef = collection(db, 'houses')
 
@@ -20,6 +21,7 @@ const housesRef = collection(db, 'houses')
 // (rules can't redact individual fields on a single doc read).
 async function syncDirectoryEntry(houseId, house) {
   await setDoc(doc(db, 'directory', houseId), {
+    propertyId: house.propertyId || 'default',
     internalDoorNumber: house.internalDoorNumber,
     govtDoorNumber: house.govtDoorNumber || null,
     floor: house.floor || null,
@@ -32,9 +34,24 @@ async function syncDirectoryEntry(houseId, house) {
   })
 }
 
-export async function listHouses() {
+export async function listHouses(propertyId) {
+  const activePropertyId = propertyId || getActivePropertyId() || 'default'
+  const snap = await getDocs(query(housesRef, orderBy('internalDoorNumber')))
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((house) => (house.propertyId || 'default') === activePropertyId)
+}
+
+
+export async function listAllHouses() {
   const snap = await getDocs(query(housesRef, orderBy('internalDoorNumber')))
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
+export async function setHouseProperty(houseId, propertyId) {
+  await updateDoc(doc(db, 'houses', houseId), { propertyId: propertyId || 'default', propertyUpdatedAt: Date.now() })
+  const house = await getHouse(houseId)
+  if (house) await syncDirectoryEntry(houseId, house)
 }
 
 export async function getHouse(houseId) {
@@ -43,7 +60,7 @@ export async function getHouse(houseId) {
 }
 
 // Create a brand new physical house record (done once per unit, not per tenant)
-export async function createHouse({ govtDoorNumber, internalDoorNumber, floor, ebNumber, photos = [] }) {
+export async function createHouse({ govtDoorNumber, internalDoorNumber, floor, ebNumber, photos = [], propertyId }) {
   const ref = await addDoc(housesRef, {
     govtDoorNumber,
     internalDoorNumber,
@@ -65,8 +82,9 @@ export async function createHouse({ govtDoorNumber, internalDoorNumber, floor, e
   return ref
 }
 
-export async function updateHouse(houseId, { govtDoorNumber, internalDoorNumber, floor, ebNumber, photos = [] }) {
+export async function updateHouse(houseId, { govtDoorNumber, internalDoorNumber, floor, ebNumber, photos = [], propertyId }) {
   await updateDoc(doc(db, 'houses', houseId), {
+    ...(propertyId ? { propertyId } : {}),
     govtDoorNumber,
     internalDoorNumber,
     floor,
@@ -263,9 +281,10 @@ export async function setPhoneVisibility(houseId, visible) {
 }
 
 // Safe-fields-only list for the tenant-facing neighbor directory / vacant house browser.
-export async function listDirectory() {
+export async function listDirectory(propertyId) {
+  const activePropertyId = propertyId || getActivePropertyId() || 'default'
   const snap = await getDocs(query(collection(db, 'directory'), orderBy('internalDoorNumber')))
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((entry) => (entry.propertyId || 'default') === activePropertyId)
 }
 
 export async function updateHouseDetails(houseId, { colors, fixtures, notes }) {

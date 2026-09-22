@@ -1,10 +1,12 @@
 import { collection, addDoc, getDocs, query, orderBy, updateDoc, doc } from 'firebase/firestore'
 import { db } from './firebase'
+import { getActivePropertyId } from './configService'
 
 const parkingRef = collection(db, 'parkingSlots')
 
-export async function createSlot({ slotNumber, type, floor = 'Ground', x = null, y = null }) {
+export async function createSlot({ slotNumber, type, floor = 'Ground', x = null, y = null, propertyId }) {
   await addDoc(parkingRef, {
+    propertyId: propertyId || getActivePropertyId() || 'default',
     slotNumber, type, floor, x, y,
     assignedHouseId: null,
     assignedTenantName: null,
@@ -13,9 +15,10 @@ export async function createSlot({ slotNumber, type, floor = 'Ground', x = null,
   })
 }
 
-export async function listSlots() {
+export async function listSlots(propertyId) {
+  const activePropertyId = propertyId || getActivePropertyId() || 'default'
   const snap = await getDocs(query(parkingRef, orderBy('slotNumber', 'asc')))
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(slot => (slot.propertyId || 'default') === activePropertyId)
 }
 
 export async function assignSlot(slotId, { houseId, tenantName, vehicleNumber }) {

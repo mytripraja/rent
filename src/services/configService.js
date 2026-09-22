@@ -101,7 +101,8 @@ export async function getProperties() {
 
 export async function addProperty(property) {
   const props = await getProperties()
-  props.push(property)
+  if (props.some(p => p.id === property.id)) throw new Error('Apartment ID already exists.')
+  props.push({ ...property, createdAt: property.createdAt || Date.now() })
   await updateAppConfig({ properties: props })
 }
 

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   UserRound, Settings, KeyRound, TrendingUp, Building2, Upload, ShieldCheck, CalendarDays,
   CarFront, Wrench, Footprints, Landmark, PartyPopper, ScrollText,
-  BarChart3, Mail, DatabaseBackup, Sheet, BriefcaseBusiness, ArrowLeft, Map, ClipboardCheck, Wifi, Newspaper
+  BarChart3, Mail, DatabaseBackup, Sheet, BriefcaseBusiness, ArrowLeft, Map, ClipboardCheck, Wifi, Newspaper, Droplets
 } from 'lucide-react'
 import OwnerProfile from './OwnerProfile'
 import RentRevision from './RentRevision'
@@ -28,6 +28,7 @@ import HouseAssetInspection from './HouseAssetInspection'
 import IndiaCalendar from '../shared/IndiaCalendar'
 import NewsHub from '../shared/NewsHub'
 import WifiShareBoard from '../shared/WifiShareBoard'
+import ApartmentOperations from './ApartmentOperations'
 import { useAuth } from '../../context/AuthContext'
 
 const SECTIONS = [
@@ -42,6 +43,7 @@ const SECTIONS = [
     { id: 'parking', label: 'Parking Slots', icon: CarFront, desc: 'Visual parking map and assignments' },
     { id: 'blueprints', label: 'Blueprints', icon: Map, desc: 'Create house and apartment floor plans' },
     { id: 'assets', label: 'House Assets & Inspection', icon: ClipboardCheck, desc: 'Track fixtures, condition and move-in/vacate checks' },
+    { id: 'apartmentOps', label: 'Apartment Operations', icon: Droplets, desc: 'Separate apartments, motors, tanks, problems and CCTV' },
   ]},
   { label: 'Tenant Services', items: [
     { id: 'maintenance', label: 'Maintenance Requests', icon: Wrench, desc: 'Track repairs and requests' },
@@ -80,7 +82,7 @@ export default function MoreMenu() {
       profile: <OwnerProfile />, rentRevision: <RentRevision />, setup: <PropertySetup />, settings: <AppSettings />,
       activity: <ActivityLog />, yearEnd: <YearEndSummary />, emailReport: <EmailReport />, dataBackup: <DataBackup />,
       googleSheets: <GoogleSheetsExport />, tally: <TallyExport />, maintenance: <MaintenanceManager />, visitors: <VisitorOverview />,
-      parking: <ParkingManager />, blueprints: <BlueprintManager />, assets: <HouseAssetInspection />, wifi: <WifiShareBoard ownerOnly />, news: <NewsHub />, bookings: <BookingApprovals />, vacancy: <VacancyListing />, festivals: <FestivalGreetings />, calendarHub: <IndiaCalendar />,
+      parking: <ParkingManager />, blueprints: <BlueprintManager />, assets: <HouseAssetInspection />, apartmentOps: <ApartmentOperations />, wifi: <WifiShareBoard ownerOnly />, news: <NewsHub />, bookings: <BookingApprovals />, vacancy: <VacancyListing />, festivals: <FestivalGreetings />, calendarHub: <IndiaCalendar />,
       owners: isAdmin ? <OwnerManager /> : null,
       security: <SecurityDataCenter />,
     }

@@ -372,6 +372,27 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
+    // ---- multi-apartment operations ----
+    // Operational records are owner-only and always carry a propertyId so one
+    // apartment's motors, tanks, problem history and CCTV records are not mixed
+    // with another apartment in the management UI.
+    match /apartmentOperations/{propertyId} {
+      allow read, write: if isOwner();
+    }
+    match /motorCommands/{commandId} {
+      allow read, create: if isOwner();
+      allow update, delete: if isOwner();
+    }
+    match /propertyIssues/{issueId} {
+      allow read, write: if isOwner();
+    }
+    match /cctvCameras/{cameraId} {
+      allow read, write: if isOwner();
+    }
+    match /cctvFootageRequests/{requestId} {
+      allow read, write: if isOwner();
+    }
+
     // ---- areaBookings ----
     match /areaBookings/{bookingId} {
       allow read: if isOwner() || (tenantCan('commonArea') && resource.data.houseId == myHouseId());

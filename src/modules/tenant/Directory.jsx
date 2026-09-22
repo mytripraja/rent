@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { listDirectory, setPhoneVisibility } from '../../services/houseService'
+import { getHouse, listDirectory, setPhoneVisibility } from '../../services/houseService'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../shared/ui/Toast'
 
@@ -16,7 +16,8 @@ export default function Directory() {
 
   async function refresh() {
     try {
-      const all = await listDirectory()
+      const mineHouse = user?.houseId ? await getHouse(user.houseId) : null
+      const all = await listDirectory(mineHouse?.propertyId)
       setEntries(all)
       const mine = all.find((e) => e.id === user?.houseId)
       if (mine) setVisible(mine.phoneVisibleToNeighbors)
