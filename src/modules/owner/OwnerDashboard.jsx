@@ -125,7 +125,7 @@ export default function OwnerDashboard() {
           <div className="hidden md:flex items-center gap-2 shrink-0">
             <SearchBar onSelectHouse={handleSearchSelect} />
             <NotificationBell userId={user?.uid} darkHeader />
-            <button type="button" onClick={() => setSettingsOpen(true) className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={19}/></button>
+            <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={19}/></button>
             <ThemeToggle />
             <IconButton icon={LogOut} label="Log out" onClick={logout} />
           </div>
