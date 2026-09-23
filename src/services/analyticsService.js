@@ -7,6 +7,7 @@ import { listAllComplaints } from './complaintService'
 import { listEbBillCycles, listEbPaymentsForBill } from './ebBillService'
 import { listWaterBillCycles, listWaterPaymentsForBill } from './waterBillService'
 import { getAppConfig } from './configService'
+import { cachedRequest } from './performanceCache'
 
 function monthKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
@@ -47,6 +48,10 @@ function dueDateForMonth(month, dueDay) {
 }
 
 export async function getAnalyticsData() {
+  return cachedRequest('analytics:owner', getAnalyticsDataFresh, 30000)
+}
+
+async function getAnalyticsDataFresh() {
   const [houses, complaints, config] = await Promise.all([
     listHouses(),
     listAllComplaints(),

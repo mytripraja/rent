@@ -8,6 +8,7 @@ import { updateOwnProfile } from '../../services/authService'
 import { createGoogleCalendarLink } from '../../utils/calendarLinks'
 import DeviceSecurityPanel from './DeviceSecurityPanel'
 import MfaSecurityPanel from './MfaSecurityPanel'
+import EmailChangePanel from './EmailChangePanel'
 import { requestNotificationPermission } from '../../services/pushService'
 
 const A11Y_KEY = 'rm_accessibility_preferences'
@@ -38,6 +39,7 @@ export default function UserSettingsModal({ open, onClose }) {
   const [voiceMessage, setVoiceMessage] = useState('Voice controls are ready.')
   const [listening, setListening] = useState(false)
   const [reading, setReading] = useState(false)
+  const [settingsTab, setSettingsTab] = useState('general')
   const [notifPrefs, setNotifPrefs] = useState(() => { try { return JSON.parse(localStorage.getItem(NOTIF_KEY) || '{"inApp":true,"browser":true,"rent":true,"messages":true,"maintenance":true,"general":true}') } catch { return { inApp:true,browser:true,rent:true,messages:true,maintenance:true,general:true } } })
   const recognitionRef = useRef(null)
   const speechRef = useRef(null)
@@ -182,14 +184,15 @@ export default function UserSettingsModal({ open, onClose }) {
   const googleLink = createGoogleCalendarLink({ title: eventTitle, date: eventDate, time: eventTime, allDay: false })
   const dialogText = 'Rental Manager accessibility and voice settings.'
 
-  return <div className="fixed inset-0 z-[120] bg-black/60 p-2 sm:p-6 grid place-items-center" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-describedby="settings-description">
-    <div id="settings-dialog" className="w-full max-w-4xl max-h-[94dvh] overflow-y-auto rm-card p-4 sm:p-6">
-      <div className="flex items-start justify-between gap-3 sticky top-0 bg-paper-raised/95 backdrop-blur-md pb-3 z-10">
+  return <div className="fixed inset-0 z-[120] bg-black/60 p-0 sm:p-6 grid place-items-center" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-describedby="settings-description">
+    <div id="settings-dialog" className="w-full max-w-4xl h-[100dvh] sm:h-auto sm:max-h-[94dvh] overflow-hidden rm-card rounded-none sm:rounded-2xl p-0 flex flex-col">
+      <div className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6 bg-paper-raised/95 backdrop-blur-md border-b border-[var(--rm-border)]"><div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3"><span className="rm-icon-button" aria-hidden="true"><Settings size={19}/></span><div><p className="rm-kicker">Preferences & accessibility</p><h2 id="settings-title" className="font-display text-2xl font-extrabold">Settings</h2><p id="settings-description" className="text-sm text-ink-soft mt-1">{dialogText} Choose visual, reading and voice controls without needing a mouse.</p></div></div>
         <button onClick={onClose} className="rm-icon-button" aria-label="Close settings"><X size={19}/></button>
-      </div>
+      </div><div className="mt-4 flex gap-1.5 overflow-x-auto pb-3" role="tablist" aria-label="Settings sections">{[['general','General'],['account','Account & Email'],['notifications','Notifications'],['security','Security'],['accessibility','Accessibility'],['voice','Voice'],['calendar','Calendar']].map(([id,label])=><button key={id} type="button" role="tab" aria-selected={settingsTab===id} onClick={()=>setSettingsTab(id)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold ${settingsTab===id?'bg-brand text-white':'bg-paper border border-[var(--rm-border)] text-ink'}`}>{label}</button>)}</div></div>
 
-      <section className="mt-4 grid lg:grid-cols-2 gap-3">
+      <div className="flex-1 overflow-y-auto px-4 pb-6 sm:px-6">
+      {settingsTab === 'general' && <section className="mt-4 grid lg:grid-cols-2 gap-3">
         <div className="rounded-2xl border border-[var(--rm-border)] bg-paper p-4">
           <div className="flex items-center gap-2"><span className="rm-feature-icon"><Eye size={17}/></span><div><h3 className="font-bold text-ink">Language</h3><p className="text-xs text-ink-soft">Choose English or Tamil.</p></div></div>
           <div className="mt-4 flex gap-2"><button disabled={savingLang} onClick={() => chooseLanguage('en')} className={`flex-1 rounded-xl py-3 text-sm font-bold border ${lang === 'en' ? 'bg-brand text-white border-brand' : 'bg-paper-raised text-ink border-[var(--rm-border)]'}`} aria-pressed={lang === 'en'}>English</button><button disabled={savingLang} onClick={() => chooseLanguage('ta')} className={`flex-1 rounded-xl py-3 text-sm font-bold border ${lang === 'ta' ? 'bg-brand text-white border-brand' : 'bg-paper-raised text-ink border-[var(--rm-border)]'}`} aria-pressed={lang === 'ta'}>தமிழ்</button></div>
@@ -202,7 +205,14 @@ export default function UserSettingsModal({ open, onClose }) {
         </div>
       </section>
 
-      <section className="mt-3 rounded-2xl border border-[var(--rm-border)] bg-paper p-4" aria-labelledby="notification-preferences-heading">
+      </section>}
+
+      {settingsTab === 'account' && <section className="mt-4 space-y-3">
+        <EmailChangePanel />
+        <div className="rounded-2xl border border-[var(--rm-border)] bg-paper p-4 text-xs text-ink-soft"><strong className="text-ink">Email security:</strong> If you can access your current email, both the old and new email addresses must verify separate OTPs. If you cannot access the old email, submit a reason and the administrator can review the request manually.</div>
+      </section>}
+
+      {settingsTab === 'notifications' && <section className="mt-4 rounded-2xl border border-[var(--rm-border)] bg-paper p-4" aria-labelledby="notification-preferences-heading">
         <div className="flex items-center gap-2"><span className="rm-feature-icon"><Bell size={17}/></span><div><h3 id="notification-preferences-heading" className="font-bold text-ink">Notification preferences</h3><p className="text-xs text-ink-soft">Choose which normal app notifications you want. Admin-controlled rent reminders still follow the property's schedule.</p></div></div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-4">
           <Toggle label="In-app notifications" description="Show messages in Notification Center" checked={notifPrefs.inApp} onChange={v=>updateNotif('inApp',v)} />
@@ -214,12 +224,14 @@ export default function UserSettingsModal({ open, onClose }) {
         </div>
       </section>
 
-      <section className="mt-3 grid lg:grid-cols-2 gap-3">
+      </section>}
+
+      {settingsTab === 'security' && <section className="mt-4 grid lg:grid-cols-2 gap-3">
         <DeviceSecurityPanel />
         <MfaSecurityPanel />
-      </section>
+      </section>}
 
-      <section className="mt-3 rounded-2xl border border-[var(--rm-border)] bg-paper p-4" aria-labelledby="accessibility-heading">
+      {settingsTab === 'accessibility' && <section className="mt-4 rounded-2xl border border-[var(--rm-border)] bg-paper p-4" aria-labelledby="accessibility-heading">
         <div className="flex items-center gap-2"><span className="rm-feature-icon"><Accessibility size={17}/></span><div><h3 id="accessibility-heading" className="font-bold text-ink">Accessibility</h3><p className="text-xs text-ink-soft">Controls for low vision, blind users, motor access and motion sensitivity.</p></div></div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-4">
           <Toggle label="Larger text" description="Increase readable text" checked={!!prefs.largeText} onChange={v => updatePref('largeText', v)} />
@@ -234,7 +246,9 @@ export default function UserSettingsModal({ open, onClose }) {
         <div className="mt-3 rounded-xl bg-paper-raised border border-[var(--rm-border)] p-3 text-xs text-ink-soft" aria-live="polite">{voiceMessage}</div>
       </section>
 
-      <section className="mt-3 rounded-2xl border border-[var(--rm-border)] bg-paper p-4" aria-labelledby="voice-heading">
+      </section>}
+
+      {settingsTab === 'voice' && <section className="mt-4 rounded-2xl border border-[var(--rm-border)] bg-paper p-4" aria-labelledby="voice-heading">
         <div className="flex items-center gap-2"><span className="rm-feature-icon"><Mic size={17}/></span><div><h3 id="voice-heading" className="font-bold text-ink">Voice Assistant</h3><p className="text-xs text-ink-soft">Voice control is separated from text-to-speech so blind and low-vision users can navigate the app hands-free.</p></div></div>
         <div className="mt-4 grid lg:grid-cols-3 gap-3">
           <div className="rounded-2xl border border-[var(--rm-border)] bg-paper-raised p-4">
@@ -259,7 +273,9 @@ export default function UserSettingsModal({ open, onClose }) {
         <div className="mt-3 flex items-start gap-2 rounded-xl border border-brand/20 bg-brand/5 p-3 text-xs text-ink-soft"><ShieldCheck size={16} className="text-brand mt-0.5 shrink-0"/><span>Voice actions must use the signed-in Firebase identity and the same tenant permissions as the normal UI. Never expose rent, bills, payment or tenant information to an unlinked voice account.</span></div>
       </section>
 
-      <section className="mt-3 grid lg:grid-cols-2 gap-3">
+      </section>}
+
+      {settingsTab === 'calendar' && <section className="mt-4 grid lg:grid-cols-2 gap-3">
         <div className="rounded-2xl border border-[var(--rm-border)] bg-paper p-4">
           <div className="flex items-center gap-2"><span className="rm-feature-icon"><Keyboard size={17}/></span><div><h3 className="font-bold text-ink">Keyboard & screen-reader help</h3><p className="text-xs text-ink-soft">Everything important can be reached without a mouse.</p></div></div>
           <ul className="mt-3 space-y-2 text-xs text-ink-soft leading-5"><li><strong className="text-ink">Tab / Shift + Tab:</strong> move through controls.</li><li><strong className="text-ink">Enter / Space:</strong> activate buttons and switches.</li><li><strong className="text-ink">Escape:</strong> close dialogs when supported.</li><li><strong className="text-ink">Skip to main content:</strong> available at the top of each page.</li></ul>
@@ -271,9 +287,10 @@ export default function UserSettingsModal({ open, onClose }) {
           <a href={googleLink} target="_blank" rel="noreferrer" className="rm-hero-button mt-3 w-full justify-center"><CalendarDays size={16}/> Add to Google Calendar</a>
           <p className="text-[11px] text-ink-soft mt-2">This is a one-way calendar event link. Full two-way sync needs Google OAuth + Calendar API.</p>
         </div>
-      </section>
+      </section>}
+      </div>
 
-      <button onClick={onClose} className="w-full mt-5 rounded-xl bg-cover text-white py-3 font-bold" aria-label="Close Settings">Done</button>
+      <button onClick={onClose} className="shrink-0 mx-4 mb-4 sm:mx-6 sm:mb-6 rounded-xl bg-cover text-white py-3 font-bold" aria-label="Close Settings">Done</button>
     </div>
   </div>
 }

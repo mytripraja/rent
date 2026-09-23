@@ -201,6 +201,22 @@ export async function deleteOwnerAccount(uid) {
   return authedFetch('/api/delete-owner', { uid })
 }
 
+export async function listAdminUsers() {
+  return authedFetch('/api/update-tenant-contact', { action: 'admin-list-users' })
+}
+
+export async function setAdminUserDisabled(uid, disabled) {
+  return authedFetch('/api/update-tenant-contact', { action: 'admin-set-disabled', uid, disabled })
+}
+
+export async function revokeAdminUserSessions(uid) {
+  return authedFetch('/api/update-tenant-contact', { action: 'admin-revoke-sessions', uid })
+}
+
+export async function sendAdminPasswordReset(uid) {
+  return authedFetch('/api/update-tenant-contact', { action: 'admin-send-password-reset', uid })
+}
+
 export async function listOwners() {
   const snap = await getDocs(
     query(collection(db, 'users'), where('role', 'in', ['owner', 'admin']))

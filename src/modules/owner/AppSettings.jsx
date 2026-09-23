@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getCashReceivers, updateCashReceivers, getRentReminderRules, updateRentReminderRules } from '../../services/configService'
+import { getCashReceivers, updateCashReceivers, getRentReminderRules, updateRentReminderRules, getActivePropertyId, getProperties, updateProperty } from '../../services/configService'
 import { listHouses } from '../../services/houseService'
 
 export default function AppSettings() {
@@ -18,6 +18,8 @@ export default function AppSettings() {
   const [houses, setHouses] = useState([])
   const [reminderRules, setReminderRules] = useState([])
   const [reminderForm, setReminderForm] = useState({ houseId:'', dayOfMonth:5, time:'09:00', enabled:true })
+  const [activePropertyId, setActivePropertyIdState] = useState('')
+  const [properties, setProperties] = useState([])
 
   useEffect(() => {
     load()
@@ -27,18 +29,23 @@ export default function AppSettings() {
     try {
       const { getAppConfig } = await import('../../services/configService')
       const config = await getAppConfig()
+      const props = await getProperties().catch(() => [])
+      const currentId = getActivePropertyId() || props[0]?.id || 'default'
+      const current = props.find(p => p.id === currentId) || props[0] || { name: config.apartmentName || 'My Apartment', address: config.apartmentAddress || '' }
+      setProperties(props)
+      setActivePropertyIdState(currentId)
       setReceivers(config.cashReceivers || [])
-      setApartmentName(config.apartmentName || '')
-      setApartmentAddress(config.apartmentAddress || '')
+      setApartmentName(current.name || config.apartmentName || '')
+      setApartmentAddress(current.address || config.apartmentAddress || '')
       setLateFeeType(config.lateFeeType || 'flat')
       setLateFeeAmount(config.lateFeeAmount || 500)
       setLateFeeGraceDays(config.lateFeeGraceDays || 5)
       setUpiId(config.upiId || '')
       setOwnerName(config.ownerName || '')
-      const loadedHouses = await listHouses().catch(() => [])
+      const loadedHouses = await listHouses(currentId).catch(() => [])
       setHouses(loadedHouses)
       const rules = await getRentReminderRules().catch(() => [])
-      setReminderRules(rules)
+      setReminderRules(rules.filter(r => !r.propertyId || r.propertyId === currentId))
     } catch (err) {
       console.error(err)
       setError('Failed to load settings.')
@@ -86,7 +93,17 @@ export default function AppSettings() {
   }
 
   async function handleSaveDetails() {
-    await save(receivers)
+    setSaving(true)
+    setError('')
+    try {
+      await updateProperty(activePropertyId || 'default', { name: apartmentName.trim() || 'My Apartment', address: apartmentAddress.trim() })
+      window.dispatchEvent(new CustomEvent('rm:property-changed', { detail: { id: activePropertyId || 'default' } }))
+    } catch (err) {
+      console.error(err)
+      setError('Failed to save apartment details.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function saveReminderRule(e) {
@@ -119,8 +136,9 @@ export default function AppSettings() {
       <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 space-y-4 max-w-md">
         <div>
           <h3 className="font-medium text-ink">Apartment Details</h3>
-          <p className="text-xs text-ink-soft">Used in receipts and reports.</p>
+          <p className="text-xs text-ink-soft">Edit the currently selected apartment. Other apartments remain separate.</p>
         </div>
+        {properties.length > 1 && <label className="text-xs font-medium text-ink">Apartment<select value={activePropertyId} onChange={e => { const id=e.target.value; const p=properties.find(x=>x.id===id); setActivePropertyIdState(id); setApartmentName(p?.name || ''); setApartmentAddress(p?.address || '') }} className="w-full mt-1">{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
         
         <div className="space-y-3">
           <div>

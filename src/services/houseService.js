@@ -12,7 +12,7 @@ import {
   orderBy,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import { getActivePropertyId } from './configService'
+import { getActivePropertyId, getProperties } from './configService'
 
 const housesRef = collection(db, 'houses')
 
@@ -36,16 +36,22 @@ async function syncDirectoryEntry(houseId, house) {
 
 export async function listHouses(propertyId) {
   const activePropertyId = propertyId || getActivePropertyId() || 'default'
-  const snap = await getDocs(query(housesRef, orderBy('internalDoorNumber')))
-  return snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .filter((house) => (house.propertyId || 'default') === activePropertyId)
+  // Query by propertyId instead of downloading every house and filtering in the browser.
+  // This is both faster and important for restricted owner accounts because Firestore
+  // can now prove that the query is scoped to the selected property.
+  const snap = await getDocs(query(housesRef, where('propertyId', '==', activePropertyId), orderBy('internalDoorNumber')))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
-
 export async function listAllHouses() {
-  const snap = await getDocs(query(housesRef, orderBy('internalDoorNumber')))
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const properties = await getProperties()
+  const activeIds = properties.map((p) => p.id).filter(Boolean)
+  if (!activeIds.length) return []
+  const chunks = await Promise.all(activeIds.map(async (propertyId) => {
+    const snap = await getDocs(query(housesRef, where('propertyId', '==', propertyId), orderBy('internalDoorNumber')))
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  }))
+  return chunks.flat().sort((a, b) => String(a.internalDoorNumber || '').localeCompare(String(b.internalDoorNumber || ''), undefined, { numeric: true }))
 }
 
 export async function setHouseProperty(houseId, propertyId) {

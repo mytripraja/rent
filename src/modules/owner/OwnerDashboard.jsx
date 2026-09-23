@@ -1,4 +1,4 @@
-import React, { Component, useState, Suspense } from 'react'
+import React, { Component, useEffect, useState, Suspense } from 'react'
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -34,6 +34,7 @@ import SearchBar from '../shared/SearchBar'
 import IconButton from '../shared/ui/IconButton'
 import ThemeToggle from '../shared/ui/ThemeToggle'
 import UserSettingsModal from '../shared/UserSettingsModal'
+import NotificationBell from '../shared/ui/NotificationBell'
 import InstallAppPrompt from '../shared/ui/InstallAppPrompt'
 import PropertySwitcher from './PropertySwitcher'
 import { logout } from '../../services/authService'
@@ -75,6 +76,17 @@ export default function OwnerDashboard() {
   const tab = activeTabObj.id
   const [searchHouseId, setSearchHouseId] = useState(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [propertyVersion, setPropertyVersion] = useState(0)
+
+  useEffect(() => {
+    const refresh = () => setPropertyVersion(v => v + 1)
+    window.addEventListener('rm:property-changed', refresh)
+    window.addEventListener('rm:property-created', refresh)
+    return () => {
+      window.removeEventListener('rm:property-changed', refresh)
+      window.removeEventListener('rm:property-created', refresh)
+    }
+  }, [])
 
   function go(t) {
     const target = TABS.find(x => x.id === t)?.route || 'home'
@@ -92,8 +104,8 @@ export default function OwnerDashboard() {
 
       <header className="sticky top-0 z-50 bg-cover text-white border-b border-white/10 shadow-lg">
         <div className="h-[72px] px-4 lg:px-6 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="rm-owner-avatar hidden sm:flex w-10 h-10 rounded-xl bg-white/10 border border-white/15 items-center justify-center font-bold overflow-hidden shrink-0">
+          <div className="hidden sm:flex items-center gap-3 min-w-0">
+            <div className="rm-owner-avatar w-10 h-10 rounded-xl bg-white/10 border border-white/15 items-center justify-center font-bold overflow-hidden shrink-0 flex">
               {user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} alt="" className="w-full h-full object-cover" /> : user?.name?.[0]}
             </div>
             <div className="min-w-0">
@@ -104,15 +116,21 @@ export default function OwnerDashboard() {
               <p className="text-xs text-white/65 truncate">{user?.name}{user?.role === 'admin' ? ' · Super Admin' : ' · Owner'}</p>
             </div>
           </div>
+          <div className="sm:hidden flex items-center min-w-0 flex-1 gap-2">
+            <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 grid place-items-center font-bold shrink-0 overflow-hidden">{user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} alt="" className="w-full h-full object-cover" /> : user?.name?.[0]}</div>
+            <span className="text-xs font-semibold text-white/75 truncate max-w-20">{user?.name || 'Owner'}</span>
+            <div className="min-w-0 flex-1"><PropertySwitcher /></div>
+          </div>
 
           <div className="hidden md:flex items-center gap-2 shrink-0">
             <SearchBar onSelectHouse={handleSearchSelect} />
-            <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={19}/></button>
+            <NotificationBell userId={user?.uid} darkHeader />
+            <button type="button" onClick={() => setSettingsOpen(true) className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={19}/></button>
             <ThemeToggle />
             <IconButton icon={LogOut} label="Log out" onClick={logout} />
           </div>
-          <div className="md:hidden flex items-center gap-1">
-            <PropertySwitcher />
+          <div className="md:hidden flex items-center gap-1 shrink-0">
+            <NotificationBell userId={user?.uid} darkHeader />
             <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={18}/></button>
             <ThemeToggle />
           </div>
@@ -155,7 +173,7 @@ export default function OwnerDashboard() {
           <div className="max-w-[1400px] mx-auto">
             <div className="md:hidden mb-4"><SearchBar onSelectHouse={handleSearchSelect} /></div>
             <AnimatePresence mode="wait">
-              <motion.div key={location.pathname} role="tabpanel" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: .16 }}>
+              <motion.div key={`${location.pathname}:${propertyVersion}`} role="tabpanel" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: .16 }}>
                 <Suspense fallback={<LoadingScreen />}>
                   <RouteErrorBoundary>
                     <Routes>
@@ -224,7 +242,7 @@ class RouteErrorBoundary extends Component {
         <div className="text-sm font-bold text-red-700">This screen could not be loaded</div>
         <p className="mt-1 text-sm text-ink-soft">Your saved property data is still safe. Refresh the page or go back to Overview.</p>
         <div className="mt-4 flex gap-2">
-          <button type="button" onClick={() => window.location.reload()} className="rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white">Refresh</button>
+          <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('rm:app-refresh'))} className="rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white">Refresh</button>
           <button type="button" onClick={() => this.setState({ error: null })} className="rounded-xl border border-[var(--rm-border)] px-4 py-2.5 text-sm font-bold text-ink">Try again</button>
         </div>
       </div>

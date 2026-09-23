@@ -29,6 +29,7 @@ import IconButton from '../shared/ui/IconButton'
 import ThemeToggle from '../shared/ui/ThemeToggle'
 import InstallAppPrompt from '../shared/ui/InstallAppPrompt'
 import UserSettingsModal from '../shared/UserSettingsModal'
+import NotificationBell from '../shared/ui/NotificationBell'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 import { tenantCan } from '../../services/tenantAccountService'
@@ -55,6 +56,7 @@ export default function TenantDashboard() {
         <div className="min-w-0"><h1 className="font-display text-base sm:text-lg leading-tight truncate">Welcome, {user?.name}</h1><p className="text-[11px] sm:text-xs text-brass-light truncate">Customer ID {user?.customerId}</p></div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
+        <NotificationBell userId={user?.uid} darkHeader />
         <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={19}/></button>
         <ThemeToggle />
         <IconButton icon={LogOut} label="Log out" onClick={logout} />
@@ -105,15 +107,15 @@ function MobileTenantContent({ user, refreshKey, setRefreshKey }) {
         {tenantCan(user, 'rent') && <TenantRentHero key={`mhero-${refreshKey}`} onPayNow={() => go('rent')} />}
         {tenantCan(user, 'rent') && <RentRevisionBanner />}
         {tenantCan(user, 'notices') && <NoticeFeed />}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2" aria-label="Quick tools">
           {tenantCan(user, 'calendar') && <QuickTile icon={CalendarDays} label="Calendar" onClick={() => go('tools','calendar')} />}
           {tenantCan(user, 'blueprint') && <QuickTile icon={Map} label="Blueprint" onClick={() => go('tools','blueprint')} />}
           {tenantCan(user, 'news') && <QuickTile icon={Newspaper} label="News" onClick={() => go('tools','news')} />}
         </div>
-        <div className="rm-card p-4"><div className="flex items-center gap-2"><UsersRound size={18} className="text-brand"/><div><h2 className="font-bold text-ink">Your home dashboard</h2><p className="text-xs text-ink-soft mt-0.5">Use the bottom navigation instead of scrolling through one long page.</p></div></div></div>
+        <div className="rm-card p-4 border-brand/10"><div className="flex items-center gap-2"><UsersRound size={18} className="text-brand"/><div><h2 className="font-bold text-ink">Your home dashboard</h2><p className="text-xs text-ink-soft mt-0.5">Use the bottom navigation instead of scrolling through one long page.</p></div></div></div>
       </>}
 
-      {section === 'rent' && tenantCan(user, 'rent') && <section className="space-y-3"><SectionTitle title="Rent & payment" icon={IndianRupee} /><RentSubmission onSubmitted={() => setRefreshKey(k => k + 1)} /><RentHistory key={`mrent-${refreshKey}`} />{tenantCan(user, 'rent') && <RentAgreementView />}</section>}
+      {section === 'rent' && tenantCan(user, 'rent') && <section className="space-y-3"><SectionTitle title="Rent & payment" icon={IndianRupee} /><p className="text-xs text-ink-soft px-1">Check this month, submit your payment, then keep the receipt here.</p><RentSubmission onSubmitted={() => setRefreshKey(k => k + 1)} /><RentHistory key={`mrent-${refreshKey}`} />{tenantCan(user, 'rent') && <RentAgreementView />}</section>}
       {section === 'bills' && tenantCan(user, 'bills') && <section className="space-y-3"><SectionTitle title="Bills" icon={ReceiptText} /><EBBillShare key={`meb-${refreshKey}`} /><WaterBillShare key={`mwater-${refreshKey}`} /></section>}
       {section === 'tools' && <section className="space-y-3" id={`tenant-${tool}`}><SectionTitle title="Tools" icon={Settings} /><div className="flex gap-2 overflow-x-auto pb-1"><ToolTab active={tool==='calendar'} onClick={()=>setTool('calendar')} icon={CalendarDays} label="Calendar" />{tenantCan(user,'blueprint')&&<ToolTab active={tool==='blueprint'} onClick={()=>setTool('blueprint')} icon={Map} label="Blueprint"/>}{tenantCan(user,'news')&&<ToolTab active={tool==='news'} onClick={()=>setTool('news')} icon={Newspaper} label="News"/>}</div><div className="min-w-0">{tool==='calendar' && tenantCan(user,'calendar') && <><IndiaCalendar compact /><WasteSchedule /></>}{tool==='blueprint' && tenantCan(user,'blueprint') && <BlueprintManager />}{tool==='news' && tenantCan(user,'news') && <NewsHub />}</div></section>}
       {section === 'more' && <section className="space-y-3"><SectionTitle title="More services" icon={FileText} /><div className="space-y-3">{tenantCan(user,'complaints')&&<RaiseComplaint/>}{tenantCan(user,'directory')&&<Directory/>}{tenantCan(user,'serviceContacts')&&<ServiceContacts/>}{tenantCan(user,'documents')&&<DocumentUpload/>}{tenantCan(user,'maintenance')&&<div className="rm-card p-4"><MaintenanceRequest/></div>}{tenantCan(user,'visitors')&&<div className="rm-card p-4"><VisitorLog/></div>}{tenantCan(user,'commonArea')&&<div className="rm-card p-4"><BookCommonArea/></div>}{tenantCan(user,'community')&&<CommunityBoard user={user}/>} {tenantCan(user,'community')&&<WifiShareBoard/>}{isPrimary(user)&&tenantCan(user,'family')&&<FamilyAccounts/>}{isSubAccount(user)&&<FamilyAccessNotice/>}</div></section>}

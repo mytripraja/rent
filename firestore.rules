@@ -64,6 +64,19 @@ service cloud.firestore {
       return userDoc().data.houseId;
     }
 
+    // ---- email change requests ----
+    // These contain verification metadata and are accessed only through the
+    // server-side Admin SDK workflow. Never expose OTP hashes to the browser.
+    match /emailChangeRequests/{requestId} {
+      allow read, write: if false;
+    }
+
+    // ---- server audit logs ----
+    match /auditLogs/{logId} {
+      allow read: if isOwner();
+      allow write: if false;
+    }
+
     // ---- users ----
     // Anyone can read their own profile; owner-level accounts can read anyone's.
     // A signed-in user can update their OWN name/phone/profile photo (self-service
@@ -90,25 +103,30 @@ service cloud.firestore {
     // in the directory query — see note below) since Firestore rules can't do
     // per-field redaction on a single read.
     match /houses/{houseId} {
-      allow read: if isOwner() || (isTenant() && myHouseId() == houseId);
+      // Owner reads/writes are property-scoped. The query path in houseService
+      // always supplies propertyId so restricted co-owners cannot enumerate houses
+      // outside their assigned apartments. Legacy records without propertyId are
+      // treated as belonging to the default property.
+      allow read: if (isOwner() && canAccessProperty(recordPropertyId(resource.data))) || (isTenant() && myHouseId() == houseId);
       // Tenants may only self-update their own phone-visibility toggle — everything
       // else about a house (rent, advance, status, etc.) stays owner-only.
-      allow update: if isOwner()
+      allow update: if (isOwner() && canAccessProperty(recordPropertyId(resource.data)) && canAccessProperty(recordPropertyId(request.resource.data)))
         || (isTenant() && myHouseId() == houseId
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phoneVisibleToNeighbors']));
-      allow create, delete: if isOwner();
+      allow create: if isOwner() && canAccessProperty(recordPropertyId(request.resource.data));
+      allow delete: if isOwner() && canAccessProperty(recordPropertyId(resource.data));
 
       match /assets/{assetId} {
-        allow read: if isOwner();
-        allow write: if isOwner();
+        allow read: if isOwner() && canAccessProperty(recordPropertyId(get(/databases/$(database)/documents/houses/$(houseId)).data));
+        allow write: if isOwner() && canAccessProperty(recordPropertyId(get(/databases/$(database)/documents/houses/$(houseId)).data));
       }
       match /inspections/{inspectionId} {
-        allow read: if isOwner();
-        allow write: if isOwner();
+        allow read: if isOwner() && canAccessProperty(recordPropertyId(get(/databases/$(database)/documents/houses/$(houseId)).data));
+        allow write: if isOwner() && canAccessProperty(recordPropertyId(get(/databases/$(database)/documents/houses/$(houseId)).data));
       }
 
       match /history/{entryId} {
-        allow read, write: if isOwner();
+        allow read, write: if isOwner() && canAccessProperty(recordPropertyId(get(/databases/$(database)/documents/houses/$(houseId)).data));
       }
     }
 
@@ -365,7 +383,10 @@ service cloud.firestore {
     // ---- parkingSlots ----
     // Vehicle numbers and house assignments are private property-management data.
     match /parkingSlots/{slotId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner() && canAccessProperty(recordPropertyId(resource.data));
+      allow create: if isOwner() && canAccessProperty(recordPropertyId(request.resource.data));
+      allow update: if isOwner() && canAccessProperty(recordPropertyId(resource.data)) && canAccessProperty(recordPropertyId(request.resource.data));
+      allow delete: if isOwner() && canAccessProperty(recordPropertyId(resource.data));
     }
 
 

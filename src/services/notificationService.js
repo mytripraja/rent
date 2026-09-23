@@ -31,14 +31,9 @@ export async function createBulkNotifications(notifications) {
 }
 
 export async function listNotifications(userId, limitCount = 50) {
-  const q = query(
-    notificationsRef,
-    where('recipientId', '==', userId),
-    orderBy('createdAt', 'desc'),
-    fsLimit(limitCount)
-  );
+  const q = query(notificationsRef, where('recipientId', '==', userId), fsLimit(limitCount));
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
 }
 
 export async function getUnreadCount(userId) {
@@ -74,14 +69,9 @@ export async function markAllAsRead(userId) {
 }
 
 export function subscribeToNotifications(userId, callback, limitCount = 50) {
-  const q = query(
-    notificationsRef,
-    where('recipientId', '==', userId),
-    orderBy('createdAt', 'desc'),
-    fsLimit(limitCount)
-  );
+  const q = query(notificationsRef, where('recipientId', '==', userId), fsLimit(limitCount));
   return onSnapshot(q, (snap) => {
-    const notifs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const notifs = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
     callback(notifs);
   });
 }

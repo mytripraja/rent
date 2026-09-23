@@ -12,6 +12,8 @@ import LegalPage from './modules/public/LegalPage'
 import NotFoundPage from './modules/public/NotFoundPage'
 import LanguagePreferenceGate from './modules/shared/LanguagePreferenceGate'
 import AppLockGate from './modules/shared/AppLockGate'
+import { GlobalErrorBoundary, OfflineStatus } from './modules/shared/AppResilience'
+import AppUpdateBanner from './modules/shared/AppUpdateBanner'
 
 function RootRedirect() {
   const { user, loading } = useAuth()
@@ -25,7 +27,8 @@ function RootRedirect() {
 
 export default function App() {
   return (
-    <AuthProvider>
+    <GlobalErrorBoundary>
+      <AuthProvider>
       <LanguageProvider>
         <ToastProvider>
           <BrowserRouter>
@@ -59,6 +62,9 @@ export default function App() {
           </BrowserRouter>
         </ToastProvider>
       </LanguageProvider>
-    </AuthProvider>
+      <OfflineStatus />
+      <AppUpdateBanner />
+      </AuthProvider>
+    </GlobalErrorBoundary>
   )
 }

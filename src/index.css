@@ -273,3 +273,19 @@ label { font-weight: 500; }
 .rm-a11y-contrast .text-ink-soft{color:#344054!important}
 .rm-a11y-contrast button,.rm-a11y-contrast input,.rm-a11y-contrast select,.rm-a11y-contrast textarea{border-color:#475467!important}
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{scroll-behavior:auto!important}}
+
+
+/* V8.12 notification center: use the viewport on small phones so the bell never clips. */
+@media (max-width: 640px) {
+  .rm-notification-panel {
+    position: fixed !important;
+    top: 4.25rem;
+    left: .75rem;
+    right: .75rem;
+    width: auto !important;
+    max-width: none !important;
+    margin-top: 0 !important;
+    max-height: calc(100dvh - 5rem);
+  }
+  .rm-notification-panel > div:last-child { max-height: calc(100dvh - 9rem); }
+}

@@ -1,27 +1,50 @@
 import { useEffect, useState } from 'react'
-import { listOwners, createOwnerAccountAdmin, deleteOwnerAccount, setOwnerAppMode } from '../../services/authService'
+import { listOwners, createOwnerAccountAdmin, deleteOwnerAccount, setOwnerAppMode, listAdminUsers, setAdminUserDisabled, revokeAdminUserSessions, sendAdminPasswordReset } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../shared/ui/ConfirmDialog'
 import { useToast } from '../shared/ui/Toast'
 import { getProperties } from '../../services/configService'
+import { listEmailChangeRequests, approveEmailChange, rejectEmailChange } from '../../services/emailChangeService'
 
 export default function OwnerManager() {
   const { user } = useAuth()
   const { showToast } = useToast()
   const [owners, setOwners] = useState([])
+  const [accountUsers, setAccountUsers] = useState([])
+  const [securityBusy, setSecurityBusy] = useState('')
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', appMode: null, propertyAccess: ['*'] })
   const [properties, setProperties] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [deletingOwner, setDeletingOwner] = useState(null)
+  const [emailRequests, setEmailRequests] = useState([])
+  const [emailBusy, setEmailBusy] = useState('')
 
   useEffect(() => {
     refresh()
     getProperties().then(setProperties).catch(() => {})
+    loadEmailRequests()
   }, [])
 
   async function refresh() {
-    setOwners(await listOwners())
+    const [ownerRows, allUsers] = await Promise.all([listOwners(), listAdminUsers()])
+    setOwners(ownerRows)
+    setAccountUsers((allUsers.users || []).filter(x => x.role === 'owner' || x.role === 'admin'))
+  }
+
+  async function loadEmailRequests() {
+    try { const result = await listEmailChangeRequests(); setEmailRequests(result.requests || []) } catch { setEmailRequests([]) }
+  }
+
+  async function decideEmailRequest(id, approve) {
+    setEmailBusy(id)
+    try {
+      if (approve) await approveEmailChange(id)
+      else await rejectEmailChange(id, 'Rejected by administrator')
+      showToast({ message: approve ? 'Email change approved' : 'Email change request rejected', type: approve ? 'success' : 'info' })
+      await loadEmailRequests(); await refresh()
+    } catch (err) { showToast({ message: err.message || 'Could not update email request', type: 'error' }) }
+    finally { setEmailBusy('') }
   }
 
   async function submit(e) {
@@ -90,6 +113,29 @@ export default function OwnerManager() {
           {saving ? 'Adding…' : 'Add Owner'}
         </button>
       </form>
+
+      <div className="rounded-2xl border border-brand/15 bg-brand/5 p-4 space-y-3">
+        <div><h3 className="font-bold text-ink">Email change requests</h3><p className="text-xs text-ink-soft mt-1">Review requests from users who cannot access their old email. Approval changes the Firebase login email and the app profile together.</p></div>
+        {emailRequests.length === 0 ? <p className="text-sm text-ink-soft">No pending email-change requests.</p> : <div className="space-y-2">{emailRequests.map(r => <div key={r.id} className="rounded-xl border border-[var(--rm-border)] bg-paper-raised p-3">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"><div className="min-w-0"><p className="text-sm font-bold text-ink">{r.oldEmail} → {r.newEmail}</p><p className="text-xs text-ink-soft mt-1">{r.role || 'account'} · {r.oldEmailUnavailable ? 'Old email unavailable' : 'OTP verification pending'}</p>{r.reason && <p className="text-xs text-ink-soft mt-2">Reason: {r.reason}</p>}</div><div className="flex gap-2 shrink-0"><button disabled={emailBusy===r.id} onClick={()=>decideEmailRequest(r.id,true)} className="rm-hero-button px-3 py-2 text-xs">{emailBusy===r.id?'…':'Approve'}</button><button disabled={emailBusy===r.id} onClick={()=>decideEmailRequest(r.id,false)} className="rm-secondary-button px-3 py-2 text-xs">Reject</button></div></div>
+        </div>)}</div>}
+      </div>
+
+      <div className="rounded-2xl border border-[var(--rm-border)] bg-paper-raised p-4 space-y-3">
+        <div><h3 className="font-bold text-ink">Admin account security</h3><p className="text-xs text-ink-soft mt-1">Suspend an owner account, revoke all existing sessions, or send a secure password-reset email.</p></div>
+        <div className="space-y-2">
+          {accountUsers.map((a) => <div key={a.uid} className="rounded-xl border border-[var(--rm-border)] bg-paper p-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-ink truncate">{a.name || a.email} {a.role === 'admin' && <span className="text-xs text-brand">(Admin)</span>}</p><p className="text-xs text-ink-soft truncate">{a.email || 'No email'} · {a.disabled ? 'Suspended' : 'Active'}</p></div>
+              <div className="flex flex-wrap gap-2">
+                {a.uid !== user?.uid && <button disabled={securityBusy===a.uid} onClick={async()=>{setSecurityBusy(a.uid); try { await setAdminUserDisabled(a.uid,!a.disabled); showToast({message:a.disabled?'Account re-enabled':'Account suspended',type:'success'}); await refresh()} catch(e){showToast({message:e.message||'Could not update account',type:'error'})} finally{setSecurityBusy('')}} className="rm-secondary-button px-3 py-2 text-xs">{a.disabled?'Enable':'Suspend'}</button>}
+                <button disabled={securityBusy===a.uid} onClick={async()=>{setSecurityBusy(a.uid); try { await revokeAdminUserSessions(a.uid); showToast({message:'All sessions revoked',type:'success'})} catch(e){showToast({message:e.message||'Could not revoke sessions',type:'error'})} finally{setSecurityBusy('')}} className="rm-secondary-button px-3 py-2 text-xs">Revoke sessions</button>
+                <button disabled={securityBusy===a.uid} onClick={async()=>{setSecurityBusy(a.uid); try { await sendAdminPasswordReset(a.uid); showToast({message:'Password reset email sent',type:'success'})} catch(e){showToast({message:e.message||'Could not send reset email',type:'error'})} finally{setSecurityBusy('')}} className="rm-secondary-button px-3 py-2 text-xs">Reset password</button>
+              </div>
+            </div>
+          </div>)}
+        </div>
+      </div>
 
       <div className="space-y-2 max-w-md">
         {owners.map((o) => (

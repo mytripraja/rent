@@ -2,6 +2,9 @@ import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore'
 import { db } from './firebase'
 
 const configDocRef = doc(db, 'appConfig', 'general')
+let appConfigCache = null
+let appConfigCacheAt = 0
+const APP_CONFIG_CACHE_MS = 10000
 const DEFAULT_RECEIVERS = ['Deepu', 'Rajavel', 'Siva', 'Hemalathe']
 
 const DEFAULTS = {
@@ -29,6 +32,7 @@ const DEFAULTS = {
 }
 
 export async function getAppConfig() {
+  if (appConfigCache && Date.now() - appConfigCacheAt < APP_CONFIG_CACHE_MS) return { ...appConfigCache, wasteSchedule: appConfigCache.wasteSchedule ? { ...appConfigCache.wasteSchedule } : appConfigCache.wasteSchedule }
   // Every cashReceivers/templates/properties/wasteSchedule lookup in the app
   // funnels through this one function, so a single network hiccup here used
   // to break all of them at once (the Firestore read had no error handling —
@@ -41,12 +45,13 @@ export async function getAppConfig() {
     snap = await getDoc(configDocRef)
   } catch (err) {
     console.warn('appConfig unreachable, using defaults:', err.message)
+    appConfigCache = { ...DEFAULTS }; appConfigCacheAt = Date.now()
     return { ...DEFAULTS }
   }
 
   if (snap.exists()) {
     const data = snap.data()
-    return {
+    const result = {
       cashReceivers: data.cashReceivers || DEFAULT_RECEIVERS,
       apartmentName: data.apartmentName || DEFAULTS.apartmentName,
       apartmentAddress: data.apartmentAddress || DEFAULTS.apartmentAddress,
@@ -60,12 +65,23 @@ export async function getAppConfig() {
       lateFeeAmount: data.lateFeeAmount || DEFAULTS.lateFeeAmount,
       lateFeeGraceDays: data.lateFeeGraceDays || DEFAULTS.lateFeeGraceDays,
       wasteSchedule: data.wasteSchedule || DEFAULTS.wasteSchedule,
+      // Keep the multi-apartment list in the cached config. Without this field
+      // getProperties() fell back to the default apartment after every read,
+      // making newly-created apartments appear to disappear on mobile.
+      properties: Array.isArray(data.properties) && data.properties.length
+        ? data.properties
+        : [{ id: 'default', name: data.apartmentName || DEFAULTS.apartmentName, address: data.apartmentAddress || DEFAULTS.apartmentAddress }],
     }
+    appConfigCache = result
+    appConfigCacheAt = Date.now()
+    return result
   }
   return { ...DEFAULTS }
 }
 
 export async function updateAppConfig(fields) {
+  appConfigCache = null
+  appConfigCacheAt = 0
   await setDoc(configDocRef, { ...fields, updatedAt: Date.now() }, { merge: true })
 }
 
@@ -96,22 +112,31 @@ export async function updateTemplates(templates) {
 
 export async function getProperties() {
   const config = await getAppConfig()
-  return config.properties || [{ id: 'default', name: config.apartmentName || 'My Apartment', address: config.apartmentAddress || '' }]
+  return Array.isArray(config.properties) && config.properties.length
+    ? config.properties
+    : [{ id: 'default', name: config.apartmentName || 'My Apartment', address: config.apartmentAddress || '' }]
 }
 
 export async function addProperty(property) {
   const props = await getProperties()
   if (props.some(p => p.id === property.id)) throw new Error('Apartment ID already exists.')
-  props.push({ ...property, createdAt: property.createdAt || Date.now() })
-  await updateAppConfig({ properties: props })
+  const next = [...props, { ...property, createdAt: property.createdAt || Date.now() }]
+  await updateAppConfig({ properties: next })
+  // Keep the in-memory config coherent immediately so the header, More page
+  // and Apartment Operations all see the new apartment without another read.
+  appConfigCache = { ...(appConfigCache || DEFAULTS), properties: next }
+  appConfigCacheAt = Date.now()
+  return next[next.length - 1]
 }
 
 export async function updateProperty(id, fields) {
   const props = await getProperties()
   const idx = props.findIndex(p => p.id === id)
   if (idx !== -1) {
-    props[idx] = { ...props[idx], ...fields }
-    await updateAppConfig({ properties: props })
+    const next = props.map((item, i) => i === idx ? { ...item, ...fields } : item)
+    await updateAppConfig({ properties: next })
+    appConfigCache = { ...(appConfigCache || DEFAULTS), properties: next }
+    appConfigCacheAt = Date.now()
   }
 }
 
@@ -124,10 +149,15 @@ export function setActivePropertyId(id) {
 }
 
 const rentReminderRulesRef = collection(db, 'rentReminderRules')
+let rentReminderRulesCache = null
+let rentReminderRulesCacheAt = 0
 
 export async function getRentReminderRules() {
+  if (rentReminderRulesCache && Date.now() - rentReminderRulesCacheAt < 15000) return rentReminderRulesCache
   const snap = await getDocs(rentReminderRulesRef)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  rentReminderRulesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  rentReminderRulesCacheAt = Date.now()
+  return rentReminderRulesCache
 }
 
 export async function updateRentReminderRules(rules) {
@@ -137,4 +167,6 @@ export async function updateRentReminderRules(rules) {
   snap.docs.forEach(d => batch.delete(d.ref))
   rules.forEach(rule => batch.set(doc(rentReminderRulesRef, rule.id || `rent-${rule.houseId}`), rule))
   await batch.commit()
+  rentReminderRulesCache = rules
+  rentReminderRulesCacheAt = Date.now()
 }

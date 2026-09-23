@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { listRentHistory } from '../../services/rentService'
+import { getHouse } from '../../services/houseService'
 import ApprovalStatusBadge from '../shared/ApprovalStatusBadge'
 import { useAuth } from '../../context/AuthContext'
 import RentReceipt from '../shared/RentReceipt'
@@ -8,10 +9,11 @@ export default function RentHistory() {
   const { user } = useAuth()
   const [payments, setPayments] = useState([])
   const [receiptPayment, setReceiptPayment] = useState(null)
+  const [house, setHouse] = useState(null)
 
   useEffect(() => {
     if (user?.houseId) {
-      listRentHistory(user.houseId).then(setPayments)
+      Promise.all([listRentHistory(user.houseId), getHouse(user.houseId)]).then(([rows, h]) => { setPayments(rows || []); setHouse(h || null) })
     }
   }, [user])
 
@@ -23,8 +25,8 @@ export default function RentHistory() {
   }, {})
 
   return (
-    <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-4">
-      <h3 className="font-semibold text-ink">Rent History</h3>
+    <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 sm:p-5 space-y-4">
+      <div className="flex items-center justify-between gap-3"><div><h3 className="font-semibold text-ink">Rent History</h3><p className="text-xs text-ink-soft mt-0.5">Approved payments are counted toward the monthly total.</p></div><span className="text-xs font-semibold text-ink-soft">{payments.length} entries</span></div>
       {payments.length === 0 && <p className="text-sm text-ink-soft">No submissions yet.</p>}
       
       {Object.entries(grouped).map(([month, monthPayments]) => {
@@ -35,7 +37,7 @@ export default function RentHistory() {
         
         // Expected rent is whatever rentAmount they are currently on.
         // It's just a UI guide, so we use their current context.
-        const expectedRent = user?.rentAmount || 0
+        const expectedRent = Number(house?.rentAmount || user?.rentAmount || 0)
         const progress = expectedRent > 0 ? Math.min(100, (totalPaid / expectedRent) * 100) : 0
         const isFullyPaid = totalPaid >= expectedRent && expectedRent > 0
 
@@ -79,7 +81,7 @@ export default function RentHistory() {
       {receiptPayment && (
         <RentReceipt 
           payment={receiptPayment} 
-          house={{ internalDoorNumber: user.houseId }} 
+          house={{ internalDoorNumber: house?.internalDoorNumber || user.houseId, rentAmount: house?.rentAmount || user?.rentAmount }} 
           onClose={() => setReceiptPayment(null)} 
         />
       )}
