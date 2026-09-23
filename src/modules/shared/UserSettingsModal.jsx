@@ -224,7 +224,7 @@ export default function UserSettingsModal({ open, onClose }) {
         </div>
       </section>
 
-      </section>}
+      </section>
 
       {settingsTab === 'security' && <section className="mt-4 grid lg:grid-cols-2 gap-3">
         <DeviceSecurityPanel />
@@ -246,7 +246,7 @@ export default function UserSettingsModal({ open, onClose }) {
         <div className="mt-3 rounded-xl bg-paper-raised border border-[var(--rm-border)] p-3 text-xs text-ink-soft" aria-live="polite">{voiceMessage}</div>
       </section>
 
-      </section>}
+      </section>
 
       {settingsTab === 'voice' && <section className="mt-4 rounded-2xl border border-[var(--rm-border)] bg-paper p-4" aria-labelledby="voice-heading">
         <div className="flex items-center gap-2"><span className="rm-feature-icon"><Mic size={17}/></span><div><h3 id="voice-heading" className="font-bold text-ink">Voice Assistant</h3><p className="text-xs text-ink-soft">Voice control is separated from text-to-speech so blind and low-vision users can navigate the app hands-free.</p></div></div>
@@ -273,7 +273,7 @@ export default function UserSettingsModal({ open, onClose }) {
         <div className="mt-3 flex items-start gap-2 rounded-xl border border-brand/20 bg-brand/5 p-3 text-xs text-ink-soft"><ShieldCheck size={16} className="text-brand mt-0.5 shrink-0"/><span>Voice actions must use the signed-in Firebase identity and the same tenant permissions as the normal UI. Never expose rent, bills, payment or tenant information to an unlinked voice account.</span></div>
       </section>
 
-      </section>}
+      </section>
 
       {settingsTab === 'calendar' && <section className="mt-4 grid lg:grid-cols-2 gap-3">
         <div className="rounded-2xl border border-[var(--rm-border)] bg-paper p-4">
