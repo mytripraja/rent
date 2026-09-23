@@ -205,7 +205,7 @@ export default function UserSettingsModal({ open, onClose }) {
         </div>
       </section>
 
-      </section>}
+      }
 
       {settingsTab === 'account' && <section className="mt-4 space-y-3">
         <EmailChangePanel />
