@@ -11,7 +11,7 @@ import {
   where,
   orderBy,
 } from 'firebase/firestore'
-import { db } from './firebase'
+import { db, auth } from './firebase'
 import { getActivePropertyId, getProperties } from './configService'
 
 const housesRef = collection(db, 'houses')
@@ -34,13 +34,51 @@ async function syncDirectoryEntry(houseId, house) {
   })
 }
 
+let ownerHouseAccessCache = null
+let ownerHouseAccessCacheAt = 0
+
+async function canReadLegacyHouseRecords() {
+  const now = Date.now()
+  if (ownerHouseAccessCache && now - ownerHouseAccessCacheAt < 15000) return ownerHouseAccessCache
+  const uid = auth.currentUser?.uid
+  if (!uid) return false
+  try {
+    const snap = await getDoc(doc(db, 'users', uid))
+    const profile = snap.exists() ? snap.data() : {}
+    // Admins and legacy owners without propertyAccess are allowed to read all
+    // properties by firestore.rules. This lets us safely include older house
+    // records that pre-date the propertyId field and are therefore logically
+    // assigned to the default apartment. Restricted co-owners must stay on the
+    // propertyId query so the database remains the security boundary.
+    const allowed = profile.role === 'admin' || (profile.role === 'owner' && !Object.prototype.hasOwnProperty.call(profile, 'propertyAccess'))
+    ownerHouseAccessCache = allowed
+    ownerHouseAccessCacheAt = now
+    return allowed
+  } catch {
+    return false
+  }
+}
+
+function sortHouses(houses) {
+  return houses.sort((a, b) => String(a.internalDoorNumber || '').localeCompare(String(b.internalDoorNumber || ''), undefined, { numeric: true }))
+}
+
 export async function listHouses(propertyId) {
   const activePropertyId = propertyId || getActivePropertyId() || 'default'
-  // Query by propertyId instead of downloading every house and filtering in the browser.
-  // This is both faster and important for restricted owner accounts because Firestore
-  // can now prove that the query is scoped to the selected property.
+  // Primary path stays property-scoped for performance and restricted-owner security.
   const snap = await getDocs(query(housesRef, where('propertyId', '==', activePropertyId)))
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(a.internalDoorNumber || '').localeCompare(String(b.internalDoorNumber || ''), undefined, { numeric: true }))
+  const houses = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+
+  // Backward compatibility: V8.10 introduced propertyId, but existing houses
+  // created before that release have no propertyId field. Firestore cannot query
+  // for a missing field. For admin/legacy all-property owners, read the collection
+  // only when viewing the default apartment and merge those legacy records.
+  if (activePropertyId === 'default' && houses.length === 0 && await canReadLegacyHouseRecords()) {
+    const legacySnap = await getDocs(housesRef)
+    return sortHouses(legacySnap.docs.map((d) => ({ id: d.id, ...d.data(), propertyId: d.data().propertyId || 'default' })))
+  }
+
+  return sortHouses(houses)
 }
 
 export async function listAllHouses() {
@@ -51,7 +89,15 @@ export async function listAllHouses() {
     const snap = await getDocs(query(housesRef, where('propertyId', '==', propertyId)))
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
   }))
-  return chunks.flat().sort((a, b) => String(a.internalDoorNumber || '').localeCompare(String(b.internalDoorNumber || ''), undefined, { numeric: true }))
+  let houses = chunks.flat()
+  if (activeIds.includes('default') && await canReadLegacyHouseRecords()) {
+    const knownIds = new Set(houses.map((h) => h.id))
+    const legacySnap = await getDocs(housesRef)
+    houses = houses.concat(legacySnap.docs
+      .filter((d) => !d.data().propertyId && !knownIds.has(d.id))
+      .map((d) => ({ id: d.id, ...d.data(), propertyId: 'default' })))
+  }
+  return sortHouses(houses)
 }
 
 export async function setHouseProperty(houseId, propertyId) {
