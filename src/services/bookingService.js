@@ -12,12 +12,18 @@ export async function requestBooking({ area, houseId, tenantId, tenantName, date
 }
 
 export async function listBookings(dateFilter = null, houseId = null) {
-  let q = query(bookingsRef, orderBy('createdAt', 'desc'))
-  if (dateFilter && houseId) q = query(bookingsRef, where('date', '==', dateFilter), where('houseId', '==', houseId))
+  // Avoid a composite date+house index. Query the more security-specific field
+  // and apply the second filter/sort locally.
+  let q
+  if (dateFilter && houseId) q = query(bookingsRef, where('houseId', '==', houseId))
   else if (dateFilter) q = query(bookingsRef, where('date', '==', dateFilter))
   else if (houseId) q = query(bookingsRef, where('houseId', '==', houseId))
+  else q = query(bookingsRef, orderBy('createdAt', 'desc'))
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(item => !dateFilter || item.date === dateFilter)
+    .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
 }
 
 export async function approveBooking(id) {
@@ -29,6 +35,8 @@ export async function rejectBooking(id, reason) {
 }
 
 export async function getAvailability(area, date) {
-  const snap = await getDocs(query(bookingsRef, where('area', '==', area), where('date', '==', date)))
-  return snap.docs.map(d => d.data())
+  // The area+date combination can require a composite index. Query by area
+  // and filter the date in memory instead.
+  const snap = await getDocs(query(bookingsRef, where('area', '==', area)))
+  return snap.docs.map(d => d.data()).filter(item => item.date === date)
 }

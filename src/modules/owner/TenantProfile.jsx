@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getHouse, getHouseHistory } from '../../services/houseService'
 import { listRentHistory } from '../../services/rentService'
 import { listAdvanceLedger, addAdvancePayment, getAdvanceCollected } from '../../services/advanceLedgerService'
-import { updateTenantContact, getUserProfile } from '../../services/authService'
+import { updateTenantContact, getUserProfile, sendTenantLoginSetup } from '../../services/authService'
 import { ALL_TENANT_PERMISSIONS, TENANT_PERMISSION_LABELS, updateTenantPermissions } from '../../services/tenantAccountService'
 import { uploadAgreement, getAgreementForHouse, getAgreementViewUrl } from '../../services/agreementService'
 import ApprovalStatusBadge from '../shared/ApprovalStatusBadge'
@@ -10,10 +10,12 @@ import TextField from '../shared/ui/TextField'
 import SelectField from '../shared/ui/SelectField'
 import Button from '../shared/ui/Button'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../shared/ui/Toast'
 import FamilyAccounts from '../tenant/FamilyAccounts'
 
 export default function TenantProfile({ houseId, onBack }) {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [house, setHouse] = useState(null)
   const [rentHistory, setRentHistory] = useState([])
   const [pastOccupants, setPastOccupants] = useState([])
@@ -21,6 +23,7 @@ export default function TenantProfile({ houseId, onBack }) {
   const [collected, setCollected] = useState(0)
   const [agreement, setAgreement] = useState(null)
   const [editingContact, setEditingContact] = useState(false)
+  const [sendingLogin, setSendingLogin] = useState(false)
   const [addingAdvance, setAddingAdvance] = useState(false)
   const [uploadingAgreement, setUploadingAgreement] = useState(false)
   const [tenantPermissions, setTenantPermissions] = useState({})
@@ -88,16 +91,22 @@ export default function TenantProfile({ houseId, onBack }) {
       )}
 
       {!isVacant && (
-        <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-ink text-sm">Contact Info</h3>
-            <button onClick={() => setEditingContact(true)} className="text-xs text-brand hover:underline">Edit</button>
+        <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold text-ink text-sm">Contact & login</h3>
+              <p className="text-sm text-ink-soft">Phone: {house.tenantPhone || 'Not provided'}</p>
+              <p className="text-sm text-ink-soft truncate">Email: {house.tenantEmail || 'Not linked yet'}</p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <button onClick={() => setEditingContact(true)} className="rm-secondary-button px-3 py-2 text-xs">Edit</button>
+              {house.currentTenantId && house.tenantEmail && <button type="button" disabled={sendingLogin} onClick={async () => { setSendingLogin(true); try { await sendTenantLoginSetup({ tenantUid: house.currentTenantId, houseId: house.id }); showToast({ message: 'Login setup email sent', type: 'success' }) } catch (e) { showToast({ message: e.message || 'Could not send login setup', type: 'error' }) } finally { setSendingLogin(false) } }} className="rm-hero-button px-3 py-2 text-xs">{sendingLogin ? 'Sending…' : 'Send login setup'}</button>}
+            </div>
           </div>
-          <p className="text-sm text-ink-soft">Phone: {house.tenantPhone}</p>
-          <p className="text-sm text-ink-soft">Email: {house.tenantEmail}</p>
-          <p className="text-sm text-ink-soft">Move-in date: {house.moveInDate || '—'}</p>
-          <p className="text-sm text-ink-soft">EB Number: {house.ebNumber || '—'}</p>
-          <p className="text-sm text-ink-soft">Rent: ₹{house.rentAmount}</p>
+          <div className="grid sm:grid-cols-3 gap-2 text-sm text-ink-soft">
+            <p>Move-in: {house.moveInDate || '—'}</p><p>EB: {house.ebNumber || '—'}</p><p>Rent: ₹{house.rentAmount || 0}</p>
+          </div>
+          {!house.tenantEmail && <p className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">Email is optional when creating the tenant. Add it when you are ready to give this tenant login access.</p>}
         </div>
       )}
 
@@ -439,7 +448,7 @@ function EditContactModal({ house, onClose, onSaved }) {
           label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
           onBlur={() => setTouched((t) => ({ ...t, email: true }))}
           error={emailError}
-          hint={email !== house.tenantEmail && !emailError ? 'Changing the email also changes their login.' : undefined}
+          hint={email !== house.tenantEmail && !emailError ? 'This email becomes their login address. You can link it later when you give them login access.' : 'Optional until login access is needed.'}
         />
         <TextField
           label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)}

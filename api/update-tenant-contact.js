@@ -278,6 +278,30 @@ async function adminRevokeSessions(req, res) {
   return res.status(200).json({ ok: true, revokedAt: Date.now() })
 }
 
+async function tenantSendLoginSetup(req, res) {
+  const decoded = await requireOwnerLevel(req)
+  const tenantUid = String(req.body?.tenantUid || '')
+  const houseId = String(req.body?.houseId || '')
+  if (!tenantUid || !houseId) return res.status(400).json({ error: 'Missing tenant or house.' })
+
+  const target = await auth.getUser(tenantUid)
+  if (!target.email) return res.status(400).json({ error: 'Link an email address to this tenant before sending login access.' })
+  const houseSnap = await db.collection('houses').doc(houseId).get()
+  if (!houseSnap.exists || houseSnap.data()?.currentTenantId !== tenantUid) return res.status(403).json({ error: 'This tenant is not linked to the selected house.' })
+
+  const link = await auth.generatePasswordResetLink(target.email, { url: process.env.PASSWORD_RESET_CONTINUE_URL || undefined, handleCodeInApp: false })
+  const apiKey = process.env.RESEND_API_KEY
+  const from = process.env.EMAIL_FROM
+  if (!apiKey || !from) return res.status(503).json({ error: 'Email delivery is not configured. Ask the administrator to configure RESEND_API_KEY and EMAIL_FROM.' })
+  const response = await fetch('https://api.resend.com/emails', {
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+    body: JSON.stringify({ from, to:[target.email], subject:'Rental Manager — set up your login', text:`Your Rental Manager account is ready. Set your password using this secure link: ${link}`, html:`<p>Your Rental Manager account is ready.</p><p><a href="${link}">Set your password and sign in</a></p><p>If you did not expect this message, contact your property administrator.</p>` })
+  })
+  if (!response.ok) return res.status(502).json({ error: 'Could not send the login setup email.' })
+  await db.collection('auditLogs').add({ action:'tenant_login_setup_sent', targetUid:tenantUid, targetEmail:target.email, houseId, actorUid:decoded.uid, actorEmail:decoded.email || null, createdAt:Date.now() })
+  return res.status(200).json({ ok:true })
+}
+
 async function adminSendPasswordReset(req, res) {
   const decoded = await requireAdmin(req)
   const uid = String(req.body?.uid || '')
@@ -306,6 +330,7 @@ export default async function handler(req, res) {
     if (action === 'email-change-admin-approve') return await adminDecision(req, res, true)
     if (action === 'email-change-admin-reject') return await adminDecision(req, res, false)
     if (action === 'admin-list-users') return await adminListUsers(req, res)
+    if (action === 'tenant-send-login-setup') return await tenantSendLoginSetup(req, res)
     if (action === 'admin-set-disabled') return await adminSetDisabled(req, res)
     if (action === 'admin-revoke-sessions') return await adminRevokeSessions(req, res)
     if (action === 'admin-send-password-reset') return await adminSendPasswordReset(req, res)

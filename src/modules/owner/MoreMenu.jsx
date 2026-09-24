@@ -32,7 +32,7 @@ const WifiShareBoard = lazy(() => import('../shared/WifiShareBoard'))
 const ApartmentOperations = lazy(() => import('./ApartmentOperations'))
 const FutureOperationsHub = lazy(() => import('./FutureOperationsHub'))
 import { useAuth } from '../../context/AuthContext'
-import { getActivePropertyId, getProperties } from '../../services/configService'
+import { getActivePropertyId, getProperties, updateProperty } from '../../services/configService'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 const SECTIONS = [
@@ -48,7 +48,6 @@ const SECTIONS = [
     { id: 'blueprints', label: 'Blueprints', icon: Map, desc: 'Create house and apartment floor plans' },
     { id: 'assets', label: 'House Assets & Inspection', icon: ClipboardCheck, desc: 'Track fixtures, condition and move-in/vacate checks' },
     { id: 'apartmentOps', label: 'Apartment Operations', icon: Droplets, desc: 'Separate apartments, motors, tanks, problems and CCTV' },
-    { id: 'newApartment', label: 'Create New Apartment', icon: Plus, desc: 'Create a separate apartment workspace' },
     { id: 'enterpriseOps', label: 'Advanced Operations ERP', icon: BriefcaseBusiness, desc: 'Accounting, maintenance, inventory, security, leases, analytics and integrations' },
   ]},
   { label: 'Tenant Services', items: [
@@ -79,6 +78,9 @@ export default function MoreMenu() {
   const { user } = useAuth()
   const [view, setView] = useState(null)
   const [activeProperty, setActiveProperty] = useState(null)
+  const [editingApartment, setEditingApartment] = useState(false)
+  const [apartmentForm, setApartmentForm] = useState({ name: '', address: '' })
+  const [apartmentSaving, setApartmentSaving] = useState(false)
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   useEffect(() => {
@@ -101,6 +103,24 @@ export default function MoreMenu() {
     window.addEventListener('rm:property-created', refresh)
     return () => { alive = false; window.removeEventListener('rm:property-changed', refresh); window.removeEventListener('rm:property-created', refresh) }
   }, [])
+  useEffect(() => {
+    if (activeProperty) setApartmentForm({ name: activeProperty.name || '', address: activeProperty.address || '' })
+  }, [activeProperty?.id, activeProperty?.name, activeProperty?.address])
+
+  async function saveApartmentDetails() {
+    if (!activeProperty?.id || !apartmentForm.name.trim()) return
+    setApartmentSaving(true)
+    try {
+      await updateProperty(activeProperty.id, { name: apartmentForm.name.trim(), address: apartmentForm.address.trim() })
+      const next = { ...activeProperty, name: apartmentForm.name.trim(), address: apartmentForm.address.trim() }
+      setActiveProperty(next)
+      setEditingApartment(false)
+      window.dispatchEvent(new CustomEvent('rm:property-created', { detail: next }))
+    } finally {
+      setApartmentSaving(false)
+    }
+  }
+
   const isAdmin = user?.role === 'admin'
   const sections = isAdmin
     ? [{ ...SECTIONS[0], items: [...SECTIONS[0].items, { id: 'owners', label: 'Owner Management', icon: KeyRound, desc: 'Manage co-owner access' }] }, ...SECTIONS.slice(1)]
@@ -129,14 +149,20 @@ export default function MoreMenu() {
         ) : (
           <motion.div key="menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
             <div className="rounded-2xl border border-brand/15 bg-brand/5 p-3 sm:p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="min-w-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <Building2 size={20} className="text-brand shrink-0"/>
+                <div className="min-w-0 flex-1">
                   <div className="text-[11px] font-bold uppercase tracking-[.14em] text-brand">Current apartment</div>
-                  <div className="mt-1 flex items-center gap-2 min-w-0"><Building2 size={18} className="text-brand shrink-0"/><strong className="truncate">{activeProperty?.name || 'My Apartment'}</strong></div>
+                  <strong className="block truncate mt-1">{activeProperty?.name || 'My Apartment'}</strong>
                   {activeProperty?.address && <p className="text-xs text-ink-soft mt-1 truncate">{activeProperty.address}</p>}
                 </div>
-                <button type="button" onClick={() => setView('newApartment')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white shrink-0"><Plus size={16}/> New apartment</button>
+                <button type="button" onClick={() => setEditingApartment(v => !v)} className="rm-secondary-button px-3 py-2 text-xs shrink-0">Edit</button>
               </div>
+              {editingApartment && <div className="mt-4 grid sm:grid-cols-2 gap-3">
+                <label className="text-xs font-semibold text-ink-soft">Apartment name<input value={apartmentForm.name} onChange={e=>setApartmentForm(v=>({...v,name:e.target.value}))} className="mt-1 w-full" /></label>
+                <label className="text-xs font-semibold text-ink-soft">Address<input value={apartmentForm.address} onChange={e=>setApartmentForm(v=>({...v,address:e.target.value}))} className="mt-1 w-full" /></label>
+                <div className="sm:col-span-2 flex gap-2"><button type="button" disabled={apartmentSaving || !apartmentForm.name.trim()} onClick={saveApartmentDetails} className="rm-hero-button px-4 py-2 text-sm">{apartmentSaving?'Saving…':'Save apartment details'}</button><button type="button" onClick={()=>setEditingApartment(false)} className="rm-secondary-button px-4 py-2 text-sm">Cancel</button></div>
+              </div>}
             </div>
             <div>
               <div className="rm-kicker">Workspace</div>
@@ -157,6 +183,13 @@ export default function MoreMenu() {
                 </div>
               </section>
             ))}
+            <section className="pt-2 border-t border-[var(--rm-border)]">
+              <h3 className="text-xs font-bold uppercase tracking-[.14em] text-ink-soft mb-3">Apartment management</h3>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <button type="button" onClick={() => setEditingApartment(true)} className="rm-card rm-card-hover p-4 text-left flex items-center gap-4"><span className="w-11 h-11 rounded-xl bg-brand/10 text-brand flex items-center justify-center"><Building2 size={20}/></span><span><span className="block text-sm font-bold">Rename current apartment</span><span className="block text-xs text-ink-soft mt-0.5">Change the apartment name whenever needed.</span></span></button>
+                <button type="button" onClick={() => setView('newApartment')} className="rm-card rm-card-hover p-4 text-left flex items-center gap-4"><span className="w-11 h-11 rounded-xl bg-brand/10 text-brand flex items-center justify-center"><Plus size={20}/></span><span><span className="block text-sm font-bold">Create another apartment</span><span className="block text-xs text-ink-soft mt-0.5">Available here when you need it in the future.</span></span></button>
+              </div>
+            </section>
           </motion.div>
         )}
       </AnimatePresence>

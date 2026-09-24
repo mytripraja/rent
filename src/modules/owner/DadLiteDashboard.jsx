@@ -149,8 +149,8 @@ export default function DadLiteDashboard() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-5 pb-10">
-        <div className="bg-white rounded-2xl border border-black/5 shadow-sm p-4 mb-4">
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 py-4 pb-10">
+        <div className="bg-white rounded-2xl border border-black/5 shadow-sm p-4 mb-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-full bg-brand/10 text-brand flex items-center justify-center shrink-0">
               <UserRound size={21} />
@@ -160,21 +160,21 @@ export default function DadLiteDashboard() {
               <p className="font-bold truncate">{user?.name || 'Rent collection'}</p>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <div className="rounded-xl bg-green-50 px-3 py-2.5"><p className="text-[11px] text-green-700">Paid</p><p className="text-xl font-extrabold text-green-800">{counts.paid}</p></div>
-            <div className="rounded-xl bg-amber-50 px-3 py-2.5"><p className="text-[11px] text-amber-700">Waiting</p><p className="text-xl font-extrabold text-amber-800">{counts.waiting}</p></div>
-            <div className="rounded-xl bg-slate-100 px-3 py-2.5"><p className="text-[11px] text-slate-600">Not marked</p><p className="text-xl font-extrabold text-slate-800">{counts.due}</p></div>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-green-50 px-2.5 py-2.5"><p className="text-[10px] text-green-700">Paid</p><p className="text-xl font-extrabold text-green-800">{counts.paid}</p></div>
+            <div className="rounded-xl bg-amber-50 px-2.5 py-2.5"><p className="text-[10px] text-amber-700">Waiting</p><p className="text-xl font-extrabold text-amber-800">{counts.waiting}</p></div>
+            <div className="rounded-xl bg-slate-100 px-2.5 py-2.5"><p className="text-[10px] text-slate-600">Not marked</p><p className="text-xl font-extrabold text-slate-800">{counts.due}</p></div>
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="sticky top-[62px] z-30 -mx-3 sm:mx-0 px-3 sm:px-0 py-2 bg-[#f6f7f4]/95 backdrop-blur mb-2"><div className="flex items-center justify-between gap-3">
           <button onClick={() => setMonth(m => shiftMonth(m, -1))} className="w-10 h-10 rounded-xl bg-white border border-black/5 shadow-sm flex items-center justify-center" aria-label="Previous month"><ChevronLeft size={19} /></button>
           <div className="text-center">
             <p className="text-xs text-ink-soft">Rent for</p>
             <p className="font-bold">{monthLabel(month)}</p>
           </div>
           <button onClick={() => setMonth(m => shiftMonth(m, 1))} className="w-10 h-10 rounded-xl bg-white border border-black/5 shadow-sm flex items-center justify-center" aria-label="Next month"><ChevronRight size={19} /></button>
-        </div>
+        </div></div>
 
         {loading ? (
           <div className="bg-white rounded-2xl p-8 text-center text-sm text-ink-soft">Loading tenants…</div>
@@ -209,7 +209,7 @@ export default function DadLiteDashboard() {
                       Submitted on {payment.dateSent || '—'} · Waiting for Deepu to verify and approve.
                     </div>
                   ) : (
-                    <button onClick={() => openPayment(house)} className="mt-3 w-full min-h-12 rounded-xl bg-brand text-white font-bold flex items-center justify-center gap-2 active:scale-[.99] transition">
+                    <button onClick={() => openPayment(house)} className="mt-3 w-full min-h-12 rounded-xl bg-brand text-white font-bold flex items-center justify-center gap-2 active:scale-[.99] transition shadow-sm">
                       <CircleDollarSign size={19} /> Paid Rent
                     </button>
                   )}

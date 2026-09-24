@@ -382,7 +382,7 @@ function BookHouseModal({ house, user, onClose, onDone }) {
         photoUrl = uploaded.url
       }
       const tenant = await createTenantAccount({
-        email: form.email,
+        email: form.email || undefined,
         password: form.password,
         name: form.name,
         phone: form.phone,
@@ -393,7 +393,7 @@ function BookHouseModal({ house, user, onClose, onDone }) {
         tenantId: tenant.uid,
         name: form.name,
         phone: form.phone,
-        email: form.email,
+        email: form.email || '',
         rentAmount: Number(form.rentAmount),
         advanceAmount: Number(form.advanceAmount),
         phoneVisibleToNeighbors: form.phoneVisibleToNeighbors,
@@ -433,7 +433,7 @@ function BookHouseModal({ house, user, onClose, onDone }) {
         <div className="text-center space-y-2 py-2">
           <p className="text-sm text-ink-soft">Tenant login created. Share this Customer ID with them —</p>
           <p className="text-2xl font-semibold text-brand">{customerId}</p>
-          <p className="text-xs text-ink-soft">They can sign in with this ID + the password you set, with their email + password, or with Google.</p>
+          <p className="text-xs text-ink-soft">If an email was not entered, link their email later from the tenant profile before login is given.</p>
           <Button onClick={onClose} fullWidth className="mt-4">Done</Button>
         </div>
       </Modal>
@@ -450,7 +450,7 @@ function BookHouseModal({ house, user, onClose, onDone }) {
           error={errors.phone}
         />
         <TextField
-          label="Email" hint="Used as their login" type="email" required value={form.email}
+          label="Email" hint="Optional now. You can link their email later when you give them login access." type="email" value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })} onBlur={() => touch('email')}
           error={errors.email}
         />

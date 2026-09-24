@@ -32,7 +32,7 @@ export default function PropertySwitcher() {
     load().catch(() => {})
     const close = event => { if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setIsOpen(false) }
     const changed = event => { if (event.detail?.id) setActiveId(event.detail.id) }
-    const created = event => { if (event.detail?.id) setProperties(prev => prev.some(p => p.id === event.detail.id) ? prev : [...prev, event.detail]); if (event.detail?.id) setActiveId(event.detail.id) }
+    const created = event => { if (!event.detail?.id) return; setProperties(prev => prev.some(p => p.id === event.detail.id) ? prev.map(p => p.id === event.detail.id ? { ...p, ...event.detail } : p) : [...prev, event.detail]); setActiveId(event.detail.id) }
     document.addEventListener('mousedown', close)
     window.addEventListener('rm:property-changed', changed)
     window.addEventListener('rm:property-created', created)
@@ -52,17 +52,16 @@ export default function PropertySwitcher() {
     // Vite/Firebase boot/loading screen seen on mobile.
   }
 
-  return <div className="relative" ref={dropdownRef}>
-    <button onClick={() => canSwitch && setIsOpen(v => !v)} disabled={!canSwitch} className={`flex items-center gap-2 bg-paper/10 px-2.5 py-2 rounded-xl text-sm font-semibold ${canSwitch ? 'hover:bg-paper/20 transition' : 'cursor-default opacity-90'}`} aria-haspopup={canSwitch ? 'menu' : undefined} aria-expanded={canSwitch ? isOpen : undefined} aria-label={`Current apartment: ${active.name}`}>
+  return <div className="relative min-w-0" ref={dropdownRef}>
+    <button onClick={() => canSwitch && setIsOpen(v => !v)} disabled={!canSwitch} className={`flex min-w-0 max-w-[clamp(8rem,38vw,16rem)] items-center gap-2 bg-paper/10 px-2.5 py-2 rounded-xl text-sm font-semibold ${canSwitch ? 'hover:bg-paper/20 transition' : 'cursor-default opacity-90'}`} aria-haspopup={canSwitch ? 'menu' : undefined} aria-expanded={canSwitch ? isOpen : undefined} aria-label={`Current apartment: ${active.name}`}>
       <Building2 size={16} />
-      <span className="max-w-[10rem] sm:max-w-40 truncate">{active.name}</span>
+      <span className="min-w-0 max-w-[6.5rem] sm:max-w-40 truncate">{active.name}</span>
       {canSwitch && <ChevronDown size={14} className="opacity-70" />}
     </button>
-    {isOpen && <div role="menu" className="absolute left-0 sm:right-0 sm:left-auto mt-2 w-64 max-w-[calc(100vw-2rem)] bg-paper rounded-2xl shadow-xl border border-brass/20 overflow-hidden z-[80]">
+    {isOpen && <div role="menu" className="absolute left-0 sm:right-0 sm:left-auto mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-paper rounded-2xl shadow-xl border border-brass/20 overflow-hidden z-[80]">
       <div className="px-4 py-3 text-[11px] uppercase tracking-wider text-ink-soft border-b border-brass/10">Switch apartment</div>
       {properties.map(p => <button role="menuitem" key={p.id} onClick={() => switchProperty(p.id)} className={`w-full flex items-center gap-3 text-left px-4 py-3 text-sm ${activeId === p.id ? 'bg-brand/10 text-brand font-bold' : 'text-ink hover:bg-paper-raised'}`}><Building2 size={16}/><span className="flex-1 truncate">{p.name}</span>{activeId === p.id && <Check size={16}/>}</button>)}
       {properties.length === 0 && <p className="p-4 text-sm text-ink-soft">No apartment access has been assigned.</p>}
-      <div className="border-t border-brass/10 p-2"><button onClick={() => { setIsOpen(false); navigate('/owner/more?tool=apartmentOps&create=1') }} className="w-full rounded-xl bg-brand text-white px-3 py-2.5 text-sm font-bold">＋ New apartment</button></div>
     </div>}
   </div>
 }

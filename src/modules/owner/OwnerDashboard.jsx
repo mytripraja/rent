@@ -116,9 +116,8 @@ export default function OwnerDashboard() {
               <p className="text-xs text-white/65 truncate">{user?.name}{user?.role === 'admin' ? ' · Super Admin' : ' · Owner'}</p>
             </div>
           </div>
-          <div className="sm:hidden flex items-center min-w-0 flex-1 gap-2">
+          <div className="sm:hidden flex items-center min-w-0 flex-1 gap-1.5">
             <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 grid place-items-center font-bold shrink-0 overflow-hidden">{user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} alt="" className="w-full h-full object-cover" /> : user?.name?.[0]}</div>
-            <span className="text-xs font-semibold text-white/75 truncate max-w-20">{user?.name || 'Owner'}</span>
             <div className="min-w-0 flex-1"><PropertySwitcher /></div>
           </div>
 
@@ -132,7 +131,6 @@ export default function OwnerDashboard() {
           <div className="md:hidden flex items-center gap-1 shrink-0">
             <NotificationBell userId={user?.uid} darkHeader />
             <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={18}/></button>
-            <ThemeToggle />
           </div>
         </div>
       </header>
@@ -210,7 +208,7 @@ export default function OwnerDashboard() {
       <nav className="rm-mobile-nav lg:hidden fixed bottom-0 inset-x-0 bg-paper-raised/95 backdrop-blur-xl border-t border-[var(--rm-border)] flex items-stretch z-40 shadow-[0_-8px_24px_rgba(23,32,51,.08)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} aria-label="Primary">
         {TABS.filter(t => MOBILE_PRIMARY.includes(t.id)).map(t => {
           const active = tab === t.id
-          return <button key={t.id} onClick={() => go(t.id)} className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 py-2 px-1 text-[10px] leading-none ${active ? 'text-brand font-bold' : 'text-ink-soft'}`} aria-current={active ? 'page' : undefined}><span className={`w-9 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-brand/10' : ''}`}><t.icon size={18} /></span><span className="whitespace-nowrap max-w-full overflow-hidden text-ellipsis">{t.mobileLabel || t.label}</span></button>
+          return <button key={t.id} onClick={() => go(t.id)} title={t.mobileLabel || t.label} aria-label={t.mobileLabel || t.label} className={`flex-1 min-w-0 flex items-center justify-center py-2 px-1 ${active ? 'text-brand' : 'text-ink-soft'}`} aria-current={active ? 'page' : undefined}><span className={`w-11 h-10 rounded-xl flex items-center justify-center ${active ? 'bg-brand/10' : ''}`}><t.icon size={21} /></span></button>
         })}
       </nav>
 

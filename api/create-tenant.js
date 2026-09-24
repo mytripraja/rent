@@ -15,11 +15,11 @@ export default async function handler(req, res) {
     const recordedBy = { uid: decoded.uid, name: callerDoc.data()?.name || 'Owner' }
 
     const { email, password, name, phone, houseId, aadhaarNumber } = req.body || {}
-    if (!email || !password || !name || !houseId) {
-      return res.status(400).json({ error: 'Missing required fields' })
+    if (!password || !name || !houseId) {
+      return res.status(400).json({ error: 'Name, password and house are required.' })
     }
-
-    const userRecord = await auth.createUser({ email, password, displayName: name })
+    const normalizedEmail = String(email || '').trim().toLowerCase()
+    const userRecord = await auth.createUser({ ...(normalizedEmail ? { email: normalizedEmail } : {}), password, displayName: name })
 
     // Reuse an existing Customer ID if this Aadhaar number already has one.
     let customerId
@@ -50,13 +50,13 @@ export default async function handler(req, res) {
           customerId: id,
           name,
           phone,
-          email,
+          email: normalizedEmail || null,
           aadhaarNumber: aadhaarNumber || null,
           linkedUids: [userRecord.uid],
           linkedHouseIds: [houseId],
           createdAt: Date.now(),
         })
-        tx.set(db.collection('customerLookup').doc(id), { email })
+        tx.set(db.collection('customerLookup').doc(id), { email: normalizedEmail || null })
         return id
       })
     }
@@ -65,7 +65,7 @@ export default async function handler(req, res) {
       role: 'tenant',
       accountType: 'primary',
       name,
-      email,
+      email: normalizedEmail || null,
       phone,
       houseId,
       customerId,

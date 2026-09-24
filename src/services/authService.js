@@ -244,6 +244,10 @@ export async function updateTenantContact({ tenantUid, houseId, newEmail, newPho
   return authedFetch('/api/update-tenant-contact', { tenantUid, houseId, newEmail, newPhone })
 }
 
+export async function sendTenantLoginSetup({ tenantUid, houseId }) {
+  return authedFetch('/api/update-tenant-contact', { action: 'tenant-send-login-setup', tenantUid, houseId })
+}
+
 export async function resetPassword(email) {
   await sendPasswordResetEmail(auth, email)
 }
