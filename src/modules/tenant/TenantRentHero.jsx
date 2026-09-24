@@ -41,6 +41,7 @@ export default function TenantRentHero({ onPayNow }) {
           {status === 'waiting_approval' ? 'View Status' : 'Pay Now'}
         </button>
       )}
+      </div>
     </div>
   )
 }

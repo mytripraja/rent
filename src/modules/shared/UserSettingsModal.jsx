@@ -203,9 +203,7 @@ export default function UserSettingsModal({ open, onClose }) {
           <div className="flex items-center gap-2"><span className="rm-feature-icon"><Bell size={17}/></span><div><h3 className="font-bold text-ink">Notifications</h3><p className="text-xs text-ink-soft">Manage your notification center.</p></div></div>
           <div className="mt-3 flex items-center justify-between rounded-xl bg-paper-raised border border-[var(--rm-border)] px-3 py-2"><span className="text-sm font-semibold">Notification center</span><NotificationBell userId={user?.uid} /></div>
         </div>
-      </section>
-
-      }
+      </section>}
 
       {settingsTab === 'account' && <section className="mt-4 space-y-3">
         <EmailChangePanel />
@@ -222,9 +220,7 @@ export default function UserSettingsModal({ open, onClose }) {
           <Toggle label="Maintenance" description="Repair and complaint updates" checked={notifPrefs.maintenance} onChange={v=>updateNotif('maintenance',v)} />
           <Toggle label="Other basics" description="Bookings, bills and general alerts" checked={notifPrefs.general} onChange={v=>updateNotif('general',v)} />
         </div>
-      </section>
-
-      </section>
+      </section>}
 
       {settingsTab === 'security' && <section className="mt-4 grid lg:grid-cols-2 gap-3">
         <DeviceSecurityPanel />
@@ -244,9 +240,7 @@ export default function UserSettingsModal({ open, onClose }) {
           <div className="flex gap-2"><button onClick={() => speak('Rental Manager. You are in Accessibility Settings. Use Tab to move between controls and Enter or Space to activate a focused control.')} className="rm-secondary-button flex-1 justify-center"><Play size={15}/> Read help</button><button onClick={stopReading} className="rm-secondary-button" aria-label="Stop voice reading"><Pause size={15}/></button></div>
         </div>
         <div className="mt-3 rounded-xl bg-paper-raised border border-[var(--rm-border)] p-3 text-xs text-ink-soft" aria-live="polite">{voiceMessage}</div>
-      </section>
-
-      </section>
+      </section>}
 
       {settingsTab === 'voice' && <section className="mt-4 rounded-2xl border border-[var(--rm-border)] bg-paper p-4" aria-labelledby="voice-heading">
         <div className="flex items-center gap-2"><span className="rm-feature-icon"><Mic size={17}/></span><div><h3 id="voice-heading" className="font-bold text-ink">Voice Assistant</h3><p className="text-xs text-ink-soft">Voice control is separated from text-to-speech so blind and low-vision users can navigate the app hands-free.</p></div></div>
@@ -271,9 +265,7 @@ export default function UserSettingsModal({ open, onClose }) {
           </div>
         </div>
         <div className="mt-3 flex items-start gap-2 rounded-xl border border-brand/20 bg-brand/5 p-3 text-xs text-ink-soft"><ShieldCheck size={16} className="text-brand mt-0.5 shrink-0"/><span>Voice actions must use the signed-in Firebase identity and the same tenant permissions as the normal UI. Never expose rent, bills, payment or tenant information to an unlinked voice account.</span></div>
-      </section>
-
-      </section>
+      </section>}
 
       {settingsTab === 'calendar' && <section className="mt-4 grid lg:grid-cols-2 gap-3">
         <div className="rounded-2xl border border-[var(--rm-border)] bg-paper p-4">
