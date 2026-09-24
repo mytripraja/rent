@@ -80,10 +80,8 @@ export async function listPendingApprovals() {
 }
 
 export async function listRentHistory(houseId) {
-  const snap = await getDocs(
-    query(paymentsRef, where('houseId', '==', houseId), orderBy('submittedAt', 'desc'))
-  )
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const snap = await getDocs(query(paymentsRef, where('houseId', '==', houseId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0))
 }
 
 export async function approvePayment(paymentId, { neighborCollectedBy, actionedBy } = {}) {

@@ -84,9 +84,9 @@ export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonth
 }
 
 export async function listWaterBillCycles(houseId = null) {
-  const base = houseId ? query(billsRef, where('houseIds', 'array-contains', houseId), orderBy('createdAt', 'desc')) : query(billsRef, orderBy('createdAt', 'desc'))
+  const base = houseId ? query(billsRef, where('houseIds', 'array-contains', houseId)) : query(billsRef, orderBy('createdAt', 'desc'))
   const snap = await getDocs(base)
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
 }
 
 export function houseShareFromWaterBill(bill, houseId) {
@@ -151,10 +151,8 @@ export async function listPendingWaterApprovals() {
 }
 
 export async function listWaterPaymentsForHouse(houseId) {
-  const snap = await getDocs(
-    query(waterPaymentsRef, where('houseId', '==', houseId), orderBy('submittedAt', 'desc'))
-  )
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const snap = await getDocs(query(waterPaymentsRef, where('houseId', '==', houseId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0))
 }
 
 export async function listWaterPaymentsForBill(billId) {

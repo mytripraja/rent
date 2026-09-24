@@ -42,8 +42,8 @@ export async function listRecords(collectionName, propertyId = null) {
 }
 
 export async function listRecordsByField(collectionName, field, value) {
-  const snap = await getDocs(query(collection(db, collectionName), where(field, '==', value), orderBy('createdAt', 'desc')))
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  const snap = await getDocs(query(collection(db, collectionName), where(field, '==', value)))
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
 }
 
 export async function createRecord(collectionName, data) {

@@ -18,9 +18,9 @@ export async function addCommLog({ houseId, tenantName, type, summary, loggedBy,
 
 export async function listCommLogs(houseId) {
   const snap = await getDocs(
-    query(commLogsRef, where('houseId', '==', houseId), orderBy('date', 'desc'), orderBy('createdAt', 'desc'))
+    query(commLogsRef, where('houseId', '==', houseId))
   )
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || Number(b.createdAt || 0) - Number(a.createdAt || 0))
 }
 
 export async function deleteCommLog(id) {

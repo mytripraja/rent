@@ -18,8 +18,8 @@ export async function addAdvancePayment({ houseId, tenantId, amount, date, mode,
 }
 
 export async function listAdvanceLedger(houseId) {
-  const snap = await getDocs(query(ledgerRef, where('houseId', '==', houseId), orderBy('createdAt', 'desc')))
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const snap = await getDocs(query(ledgerRef, where('houseId', '==', houseId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
 }
 
 export async function getAdvanceCollected(houseId) {

@@ -25,8 +25,8 @@ export async function uploadResidentDocument({ houseId, tenantId, docType, resid
 }
 
 export async function listDocumentsForHouse(houseId) {
-  const snap = await getDocs(query(documentsRef, where('houseId', '==', houseId), orderBy('uploadedAt', 'desc')))
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const snap = await getDocs(query(documentsRef, where('houseId', '==', houseId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.uploadedAt || 0) - Number(a.uploadedAt || 0))
 }
 
 export async function listAllDocuments() {

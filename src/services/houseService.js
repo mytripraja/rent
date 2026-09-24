@@ -39,8 +39,8 @@ export async function listHouses(propertyId) {
   // Query by propertyId instead of downloading every house and filtering in the browser.
   // This is both faster and important for restricted owner accounts because Firestore
   // can now prove that the query is scoped to the selected property.
-  const snap = await getDocs(query(housesRef, where('propertyId', '==', activePropertyId), orderBy('internalDoorNumber')))
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const snap = await getDocs(query(housesRef, where('propertyId', '==', activePropertyId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(a.internalDoorNumber || '').localeCompare(String(b.internalDoorNumber || ''), undefined, { numeric: true }))
 }
 
 export async function listAllHouses() {
@@ -48,7 +48,7 @@ export async function listAllHouses() {
   const activeIds = properties.map((p) => p.id).filter(Boolean)
   if (!activeIds.length) return []
   const chunks = await Promise.all(activeIds.map(async (propertyId) => {
-    const snap = await getDocs(query(housesRef, where('propertyId', '==', propertyId), orderBy('internalDoorNumber')))
+    const snap = await getDocs(query(housesRef, where('propertyId', '==', propertyId)))
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
   }))
   return chunks.flat().sort((a, b) => String(a.internalDoorNumber || '').localeCompare(String(b.internalDoorNumber || ''), undefined, { numeric: true }))

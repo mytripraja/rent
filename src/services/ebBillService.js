@@ -101,9 +101,9 @@ export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, 
 }
 
 export async function listEbBillCycles(houseId = null) {
-  const base = houseId ? query(billsRef, where('houseIds', 'array-contains', houseId), orderBy('createdAt', 'desc')) : query(billsRef, orderBy('createdAt', 'desc'))
+  const base = houseId ? query(billsRef, where('houseIds', 'array-contains', houseId)) : query(billsRef, orderBy('createdAt', 'desc'))
   const snap = await getDocs(base)
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
 }
 
 export function houseShareFromBill(bill, houseId) {
@@ -170,10 +170,8 @@ export async function listPendingEbApprovals() {
 }
 
 export async function listEbPaymentsForHouse(houseId) {
-  const snap = await getDocs(
-    query(ebPaymentsRef, where('houseId', '==', houseId), orderBy('submittedAt', 'desc'))
-  )
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const snap = await getDocs(query(ebPaymentsRef, where('houseId', '==', houseId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0))
 }
 
 export async function listEbPaymentsForBill(billId) {
