@@ -3,6 +3,7 @@ import { listHouses, setEbOverride } from '../../services/houseService'
 import { calculateEbSplit, createEbBillCycle, listEbBillCycles, listEbMeterReadingsForHouses, recordEbMeterReadingsBulk } from '../../services/ebBillService'
 import { useToast } from '../shared/ui/Toast'
 import { createGoogleCalendarLink } from '../../utils/calendarLinks'
+import { getActivePropertyId } from '../../services/configService'
 import { CalendarPlus } from 'lucide-react'
 
 export default function EBBillCreator() {
@@ -17,25 +18,79 @@ export default function EBBillCreator() {
   const [createdCycle, setCreatedCycle] = useState(null)
   const [meterRows, setMeterRows] = useState([])
   const [savingReadings, setSavingReadings] = useState(false)
+  const [meterLoadError, setMeterLoadError] = useState('')
+  const [billLoadError, setBillLoadError] = useState('')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     refresh()
   }, [])
 
+  function localDate() {
+    const d = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  }
+
+  function localTime() {
+    const d = new Date()
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  }
+
   async function refresh() {
+    setLoading(true)
+    setMeterLoadError('')
+    setBillLoadError('')
     try {
       const houseRows = await listHouses()
       setHouses(houseRows)
-      setCycles(await listEbBillCycles())
       const occupied = houseRows.filter(h => h.status === 'occupied')
-      const readingRows = await listEbMeterReadingsForHouses(occupied.map(h => h.id))
+
+      // Load the bill list independently. A temporary bill-query failure must
+      // not blank the physical meter register or the house adjustment screen.
+      try {
+        setCycles(await listEbBillCycles())
+      } catch (err) {
+        console.error('EB bill cycle load failed:', err)
+        setCycles([])
+        setBillLoadError('Previous EB bill cycles could not be loaded. You can still record meter readings.')
+      }
+
+      // The meter register must render even when there are no previous readings.
+      // Give every occupied house an editable row immediately, with the current
+      // date/time prefilled so a physical reading can be entered quickly.
+      let readingRows = []
+      try {
+        readingRows = await listEbMeterReadingsForHouses(occupied.map(h => h.id), getActivePropertyId() || occupied[0]?.propertyId)
+      } catch (err) {
+        console.error('EB meter history load failed:', err)
+        setMeterLoadError('Meter history could not be loaded. New readings can still be entered and saved after retrying.')
+      }
       setMeterRows(occupied.map((h) => {
         const latest = readingRows.find(r => r.houseId === h.id)
-        return { houseId: h.id, door: h.internalDoorNumber || h.govtDoorNumber || h.id, tenantName: h.tenantName || 'Vacant', reading: latest?.reading ?? '', readingDate: latest?.readingDate || '', readingTime: latest?.readingTime || '', note: '' }
+        return {
+          houseId: h.id,
+          propertyId: h.propertyId,
+          door: h.internalDoorNumber || h.govtDoorNumber || h.id,
+          tenantName: h.tenantName || 'Vacant',
+          // Keep the new-reading field blank. The previous value is shown
+          // separately so an owner cannot accidentally resave an old reading.
+          reading: '',
+          readingDate: localDate(),
+          readingTime: localTime(),
+          note: '',
+          lastReading: latest?.reading ?? null,
+          lastReadingDate: latest?.readingDate || null,
+          lastReadingTime: latest?.readingTime || null,
+          lastRecordedAt: latest?.recordedAt || null,
+        }
       }))
     } catch (err) {
       console.error(err)
-      showToast({ message: "Failed to load EB bill data", type: "error" })
+      setMeterRows([])
+      showToast({ message: err.message || 'Failed to load EB houses', type: 'error' })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -50,7 +105,7 @@ export default function EBBillCreator() {
   }
 
   async function saveMeterReadings() {
-    const rows = meterRows.filter(row => row.reading !== '' || row.readingDate)
+    const rows = meterRows.filter(row => row.reading !== '')
     if (!rows.length) { showToast({ message: 'Enter at least one meter reading.', type: 'error' }); return }
     const invalid = rows.find(row => row.reading === '' || !row.readingDate || !Number.isFinite(Number(row.reading)) || Number(row.reading) < 0)
     if (invalid) { showToast({ message: `Complete the reading and date for ${invalid.door}.`, type: 'error' }); return }
@@ -134,19 +189,25 @@ export default function EBBillCreator() {
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
           <div>
             <h3 className="text-sm font-semibold text-ink">EB meter reading register</h3>
-            <p className="text-xs text-ink-soft mt-1">Record the reading when you physically see the meter. Tenants can use this history to compare it with the government bill.</p>
+            <p className="text-xs text-ink-soft mt-1">Enter only the reading you physically see now. Previous readings stay visible for verification. Date and time are prefilled and can be changed.</p>
           </div>
-          <button type="button" onClick={saveMeterReadings} disabled={savingReadings || !meterRows.length} className="bg-brand text-white px-3 py-2 rounded-lg text-xs font-medium disabled:opacity-50">{savingReadings ? 'Saving…' : 'Save readings'}</button>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={refresh} disabled={loading} className="border border-brass/30 text-ink px-3 py-2 rounded-lg text-xs font-medium disabled:opacity-50">{loading ? 'Loading…' : 'Refresh'}</button>
+            <button type="button" onClick={saveMeterReadings} disabled={savingReadings || !meterRows.length} className="bg-brand text-white px-3 py-2 rounded-lg text-xs font-medium disabled:opacity-50">{savingReadings ? 'Saving…' : 'Save readings'}</button>
+          </div>
         </div>
+        {meterLoadError && <div className="mb-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900">{meterLoadError}</div>}
+        {billLoadError && <div className="mb-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900">{billLoadError}</div>}
+        {!loading && !meterRows.length && <div className="rounded-lg border border-brass/15 bg-paper px-3 py-3 text-xs text-ink-soft">No occupied houses are available in this apartment yet.</div>}
         <div className="overflow-x-auto">
-          <table className="w-full text-xs min-w-[760px]">
-            <thead><tr className="text-left text-ink-soft border-b border-brass/15"><th className="py-2 pr-2">House / tenant</th><th className="py-2 pr-2">Reading (kWh)</th><th className="py-2 pr-2">Date</th><th className="py-2 pr-2">Time</th><th className="py-2">Note</th></tr></thead>
+          <table className="w-full text-xs min-w-[900px]">
+            <thead><tr className="text-left text-ink-soft border-b border-brass/15"><th className="py-2 pr-2">House / tenant</th><th className="py-2 pr-2">New reading (kWh)</th><th className="py-2 pr-2">Date</th><th className="py-2 pr-2">Time</th><th className="py-2 pr-2">Previous reading</th><th className="py-2">Note</th></tr></thead>
             <tbody>{meterRows.map(row => <tr key={row.houseId} className="border-b border-brass/10">
               <td className="py-2 pr-2"><span className="font-medium text-ink">{row.door}</span><span className="block text-ink-soft">{row.tenantName}</span></td>
               <td className="py-2 pr-2"><input inputMode="decimal" type="number" min="0" step="0.01" value={row.reading} onChange={e => updateMeterRow(row.houseId, 'reading', e.target.value)} onWheel={e => e.currentTarget.blur()} className="w-28 border border-brass/30 rounded px-2 py-1.5" placeholder="e.g. 10579" /></td>
               <td className="py-2 pr-2"><input type="date" value={row.readingDate} onChange={e => updateMeterRow(row.houseId, 'readingDate', e.target.value)} className="border border-brass/30 rounded px-2 py-1.5" /></td>
               <td className="py-2 pr-2"><input type="time" value={row.readingTime} onChange={e => updateMeterRow(row.houseId, 'readingTime', e.target.value)} className="border border-brass/30 rounded px-2 py-1.5" /></td>
-              <td><input value={row.note} onChange={e => updateMeterRow(row.houseId, 'note', e.target.value)} className="w-40 border border-brass/30 rounded px-2 py-1.5" placeholder="Optional note" /></td>
+              <td className="py-2 pr-2 text-ink-soft whitespace-nowrap">{row.lastReading != null ? <><span className="font-medium text-ink">{row.lastReading} kWh</span><span className="block">{row.lastReadingDate || ''}{row.lastReadingTime ? ` · ${row.lastReadingTime}` : ''}</span></> : 'No reading yet'}</td><td><input value={row.note} onChange={e => updateMeterRow(row.houseId, 'note', e.target.value)} className="w-40 border border-brass/30 rounded px-2 py-1.5" placeholder="Optional note" /></td>
             </tr>)}</tbody>
           </table>
         </div>

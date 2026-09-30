@@ -136,14 +136,32 @@ export async function listEbMeterReadings(houseId) {
     .sort((a, b) => Number(b.recordedAt || 0) - Number(a.recordedAt || 0))
 }
 
-export async function listEbMeterReadingsForHouses(houseIds = []) {
+export async function listEbMeterReadingsForHouses(houseIds = [], propertyId = null) {
   const ids = [...new Set(houseIds.filter(Boolean))]
   if (!ids.length) return []
-  const chunks = []
-  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30))
-  const snapshots = await Promise.all(chunks.map((chunk) => getDocs(query(ebMeterReadingsRef, where('houseId', 'in', chunk)))))
-  const rows = snapshots.flatMap((snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-  return rows.sort((a, b) => Number(b.recordedAt || 0) - Number(a.recordedAt || 0))
+
+  // Owner register queries are property-scoped instead of using a large
+  // `where houseId in [...]` query. This is both faster for an apartment
+  // workspace and more reliable with the property-scoped Firestore rules.
+  // Keep the houseIds filter in memory so no composite index is required.
+  const activePropertyId = propertyId || getActivePropertyId() || 'default'
+  try {
+    const snap = await getDocs(query(ebMeterReadingsRef, where('propertyId', '==', activePropertyId)))
+    const allowed = new Set(ids)
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((row) => allowed.has(row.houseId))
+      .sort((a, b) => Number(b.recordedAt || 0) - Number(a.recordedAt || 0))
+  } catch (propertyQueryError) {
+    // Compatibility fallback for records created before propertyId was added.
+    // It is deliberately limited to the supplied house IDs and keeps the old
+    // single-field query path available without changing security rules.
+    const chunks = []
+    for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30))
+    const snapshots = await Promise.all(chunks.map((chunk) => getDocs(query(ebMeterReadingsRef, where('houseId', 'in', chunk)))))
+    const rows = snapshots.flatMap((snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    return rows.sort((a, b) => Number(b.recordedAt || 0) - Number(a.recordedAt || 0))
+  }
 }
 
 export async function recordEbMeterReading({ houseId, propertyId, reading, readingDate, readingTime, note = '' }) {
