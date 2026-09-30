@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Bell, Zap } from 'lucide-react'
+import { X, Bell, Zap, Share2 } from 'lucide-react'
 
 export default function BulkActions({ selectedHouses, onAction, onClear }) {
   return (
@@ -23,6 +23,9 @@ export default function BulkActions({ selectedHouses, onAction, onClear }) {
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button onClick={() => onAction('notice')} className="bg-cover text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-cover/90 transition-colors shadow-sm">
                 <Bell size={16} /> Send Notice
+              </button>
+              <button onClick={() => onAction('share')} className="bg-paper text-ink border border-brass/30 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-black/5 transition-colors shadow-sm">
+                <Share2 size={16} /> Share
               </button>
               <button onClick={() => onAction('reminder')} className="bg-cover text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-cover/90 transition-colors shadow-sm">
                 <Zap size={16} /> Send Reminder

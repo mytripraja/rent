@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Download, Info } from 'lucide-react'
-import { collection, getDocs, query, orderBy } from 'firebase/firestore'
-import { db } from '../../services/firebase'
+import { listHouses } from '../../services/houseService'
+import { listRentPaymentsForHouses } from '../../services/rentService'
 import { useToast } from '../shared/ui/Toast'
 
 export default function TallyExport() {
@@ -11,11 +11,11 @@ export default function TallyExport() {
   async function fetchRentData() {
     setLoading(true)
     try {
-      const q = query(collection(db, 'rentPayments'), orderBy('month', 'desc'))
-      const snap = await getDocs(q)
-      return snap.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
+      const houses = await listHouses()
+      const data = await listRentPaymentsForHouses(houses.map(h => h.id))
+      return data
         .filter(d => d.status === 'approved')
+        .sort((a, b) => String(b.month || '').localeCompare(String(a.month || '')))
     } catch (error) {
       console.error(error)
       toast.error('Failed to fetch data')

@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { listPendingApprovals, approvePayment, rejectPayment, calculateLateFee } from '../../services/rentService'
-import { listHouses } from '../../services/houseService'
 import { getCashReceivers } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../shared/ui/ConfirmDialog'
 import { useToast } from '../shared/ui/Toast'
 import RentReceipt from '../shared/RentReceipt'
+import { getPaymentProofUrl } from '../../services/cloudinaryService'
 
 export default function RentApprovalQueue() {
   const { user } = useAuth()
+  const [proofUrls, setProofUrls] = useState({})
   const [pending, setPending] = useState([])
+  const [loadingApprovals, setLoadingApprovals] = useState(true)
+  const [approvalError, setApprovalError] = useState('')
   const [rejectingId, setRejectingId] = useState(null)
   const [reason, setReason] = useState('')
   const [houseMap, setHouseMap] = useState({})
@@ -20,37 +23,33 @@ export default function RentApprovalQueue() {
   const [receiptPayment, setReceiptPayment] = useState(null)
   const toast = useToast()
 
-  useEffect(() => {
-    refresh()
-    loadData()
-  }, [])
-
   const [appConfig, setAppConfig] = useState(null)
-  
-  async function loadData() {
-    try {
-      const { getAppConfig } = await import('../../services/configService')
-      const [hList, config] = await Promise.all([
-        listHouses(),
-        getAppConfig()
-      ])
-      const hMap = {}
-      hList.forEach(h => hMap[h.id] = h)
-      setHouseMap(hMap)
-      setReceivers(config.cashReceivers || [])
-      setAppConfig(config)
-    } catch (error) {
-      console.error("Error loading data", error)
-      toast.error('Failed to load initial data')
-    }
-  }
+
+  useEffect(() => { refresh() }, [])
 
   async function refresh() {
+    setLoadingApprovals(true)
+    setApprovalError('')
     try {
-      setPending(await listPendingApprovals())
+      const { getAppConfig } = await import('../../services/configService')
+      // The approval API now returns the minimal house context with each waiting
+      // payment, so the page no longer waits for a separate full house query.
+      const approvalsPromise = listPendingApprovals()
+      const configPromise = getAppConfig()
+      const approvals = await approvalsPromise
+      const hMap = {}
+      approvals.forEach(p => { if (p._house) hMap[p.houseId] = p._house })
+      setHouseMap(hMap)
+      setPending(approvals)
+      // Show approvals as soon as they arrive; config is only needed for late-fee
+      // calculation and must never block the approval list.
+      configPromise.then(config => { setReceivers(config.cashReceivers || []); setAppConfig(config) }).catch(() => {})
     } catch (error) {
-      console.error("Error fetching approvals", error)
+      console.error('Error fetching approvals', error)
       toast.error('Failed to fetch pending approvals')
+      setApprovalError(error.message || 'Could not load rent approvals.')
+    } finally {
+      setLoadingApprovals(false)
     }
   }
 
@@ -107,8 +106,15 @@ export default function RentApprovalQueue() {
     }
   }
 
+  if (loadingApprovals) return <p role="status" className="text-sm text-ink-soft py-8 text-center">Loading pending rent approvals…</p>
+  if (approvalError) return <div role="alert" className="p-4 text-red-700">{approvalError} <button className="underline ml-2" onClick={refresh}>Retry</button></div>
   if (pending.length === 0) {
     return <p className="text-sm text-ink-soft py-8 text-center">No rent submissions waiting for approval.</p>
+  }
+
+  async function openProof(payment) {
+    if (proofUrls[payment.id] || payment.proofUrl) return
+    try { const url = await getPaymentProofUrl('rentPayments', payment.id); setProofUrls(v => ({ ...v, [payment.id]: url })); window.open(url, '_blank', 'noopener,noreferrer') } catch (e) { console.error(e) }
   }
 
   return (
@@ -143,8 +149,8 @@ export default function RentApprovalQueue() {
               >
                 <div>
                   <p className="text-sm font-medium text-ink">
-                    House {house?.internalDoorNumber || p.houseId} · {p.month} · ₹{p.amount}
-                    {p.uploadedByOwner && <span className="ml-2 text-xs text-blue-600">(Uploaded by Owner)</span>}
+                    {house?.tenantName || 'Tenant'} · House {house?.internalDoorNumber || p.houseId} · {p.month} · ₹{Number(p.amount || 0).toLocaleString('en-IN')}
+                    {p.entrySource === 'dad_lite' ? <span className="ml-2 text-xs font-semibold text-brand bg-brand/10 px-2 py-0.5 rounded-full">Dad Lite</span> : p.uploadedByOwner ? <span className="ml-2 text-xs text-blue-600">(Uploaded by Owner)</span> : null}
                   </p>
                   <p className="text-xs text-ink-soft">
                     Mode: {p.mode}{p.mode === 'cash' && ` · Received by ${p.cashReceivedBy}`}{p.mode === 'neighbor' && ` · Via neighbor house ${houseMap[p.neighborHouseId]?.internalDoorNumber || p.neighborHouseId}`}
@@ -153,7 +159,7 @@ export default function RentApprovalQueue() {
                   {p.recordedBy && <p className="text-xs text-ink-soft">Entered by {p.recordedBy.name}</p>}
                   {lateFee > 0 && <p className="text-xs text-stamp-red font-medium mt-1">Late fee: ₹{lateFee}</p>}
                   {p.proofUrl && (
-                    <a href={p.proofUrl} target="_blank" rel="noreferrer" className="text-xs text-brand hover:underline mt-1 inline-block">
+                    <a href={proofUrls[p.id] || p.proofUrl || '#'} target="_blank" rel="noreferrer" onClick={e => { if (!p.proofUrl && !proofUrls[p.id]) { e.preventDefault(); openProof(p) } }} className="text-xs text-brand hover:underline mt-1 inline-block">
                       View proof screenshot
                     </a>
                   )}

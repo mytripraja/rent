@@ -1,6 +1,7 @@
-import { collection, addDoc, getDocs, query, orderBy, where, updateDoc, doc } from 'firebase/firestore'
-import { db } from './firebase'
-import { uploadUnsigned } from './cloudinaryService'
+import { collection, addDoc, getDocs, query, where, updateDoc, doc, writeBatch } from 'firebase/firestore'
+import { db, auth } from './firebase'
+import { getActivePropertyId } from './configService'
+import { uploadPrivate } from './cloudinaryService'
 import { listHouses } from './houseService'
 import { createBulkNotifications } from './notificationService'
 
@@ -62,15 +63,23 @@ function round2(n) {
   return Math.round(n * 100) / 100
 }
 
-export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate }) {
+export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId, previousMeterReading, currentMeterReading, meterReadingDate, meterReadingTime }) {
   const houses = await listHouses()
   const shares = calculateEbSplit(totalAmount, cycleMonths, houses)
 
   const docRef = await addDoc(billsRef, {
     cycleLabel, // e.g. 'Jul-Aug 2026'
+    propertyId: propertyId || houses[0]?.propertyId || getActivePropertyId() || 'default',
     totalAmount,
     cycleMonths,
     dueDate,
+    previousMeterReading: previousMeterReading === '' || previousMeterReading == null ? null : Number(previousMeterReading),
+    currentMeterReading: currentMeterReading === '' || currentMeterReading == null ? null : Number(currentMeterReading),
+    meterReadingDate: meterReadingDate || null,
+    meterReadingTime: meterReadingTime || null,
+    consumptionUnits: (previousMeterReading !== '' && previousMeterReading != null && currentMeterReading !== '' && currentMeterReading != null)
+      ? (Number(currentMeterReading) >= Number(previousMeterReading) ? Number(currentMeterReading) - Number(previousMeterReading) : null)
+      : null,
     shares,
     houseIds: shares.map((share) => share.houseId),
     createdAt: Date.now(),
@@ -101,14 +110,86 @@ export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, 
 }
 
 export async function listEbBillCycles(houseId = null) {
-  const base = houseId ? query(billsRef, where('houseIds', 'array-contains', houseId), orderBy('createdAt', 'desc')) : query(billsRef, orderBy('createdAt', 'desc'))
+  const propertyId = getActivePropertyId() || 'default'
+  const base = houseId ? query(billsRef, where('houseIds', 'array-contains', houseId)) : query(billsRef, where('propertyId', '==', propertyId))
   const snap = await getDocs(base)
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
 }
 
 export function houseShareFromBill(bill, houseId) {
   return bill.shares.find((s) => s.houseId === houseId) || null
 }
+
+
+
+// ---------- EB meter reading register ----------
+// Readings are kept separately from government bill cycles so owners can record
+// a meter observation whenever they physically inspect a meter. Queries use only
+// houseId to avoid creating a composite Firestore index.
+const ebMeterReadingsRef = collection(db, 'ebMeterReadings')
+
+export async function listEbMeterReadings(houseId) {
+  if (!houseId) return []
+  const snap = await getDocs(query(ebMeterReadingsRef, where('houseId', '==', houseId)))
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => Number(b.recordedAt || 0) - Number(a.recordedAt || 0))
+}
+
+export async function listEbMeterReadingsForHouses(houseIds = []) {
+  const ids = [...new Set(houseIds.filter(Boolean))]
+  if (!ids.length) return []
+  const chunks = []
+  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30))
+  const snapshots = await Promise.all(chunks.map((chunk) => getDocs(query(ebMeterReadingsRef, where('houseId', 'in', chunk)))))
+  const rows = snapshots.flatMap((snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+  return rows.sort((a, b) => Number(b.recordedAt || 0) - Number(a.recordedAt || 0))
+}
+
+export async function recordEbMeterReading({ houseId, propertyId, reading, readingDate, readingTime, note = '' }) {
+  const numericReading = Number(reading)
+  if (!houseId || !Number.isFinite(numericReading) || numericReading < 0) {
+    throw new Error('Enter a valid non-negative EB meter reading.')
+  }
+  if (!readingDate) throw new Error('Select the meter reading date.')
+  const recordedAt = Date.now()
+  const ref = await addDoc(ebMeterReadingsRef, {
+    houseId,
+    propertyId: propertyId || getActivePropertyId() || 'default',
+    reading: numericReading,
+    readingDate,
+    readingTime: readingTime || null,
+    note: String(note || '').slice(0, 500),
+    recordedByUid: auth.currentUser?.uid || null,
+    recordedAt,
+  })
+  return { id: ref.id, houseId, reading: numericReading, readingDate, readingTime: readingTime || null, note, recordedAt }
+}
+
+export async function recordEbMeterReadingsBulk(rows = [], propertyId) {
+  const valid = rows.filter((row) => row?.houseId && row?.reading !== '' && Number.isFinite(Number(row.reading)) && Number(row.reading) >= 0 && row.readingDate)
+  if (!valid.length) return []
+  const batch = writeBatch(db)
+  const now = Date.now()
+  const refs = []
+  for (const row of valid) {
+    const ref = doc(ebMeterReadingsRef)
+    refs.push(ref)
+    batch.set(ref, {
+      houseId: row.houseId,
+      propertyId: row.propertyId || propertyId || getActivePropertyId() || 'default',
+      reading: Number(row.reading),
+      readingDate: row.readingDate,
+      readingTime: row.readingTime || null,
+      note: String(row.note || '').slice(0, 500),
+      recordedByUid: auth.currentUser?.uid || null,
+      recordedAt: now,
+    })
+  }
+  await batch.commit()
+  return valid.map((row, index) => ({ id: refs[index].id, ...row, reading: Number(row.reading), recordedAt: now }))
+}
+
 
 // ---------- EB bill payments (mirrors rentService, tagged to a billId) ----------
 
@@ -133,9 +214,13 @@ export async function submitEbPayment({
   recordedBy,
 }) {
   let proofUrl = null
+  let proofPublicId = null
+  let proofResourceType = null
   if (proofFile) {
-    const { url } = await uploadUnsigned(proofFile, `eb-proofs/${houseId}`)
-    proofUrl = url
+    const uploaded = await uploadPrivate(proofFile, `eb-proofs/${houseId}`)
+    proofUrl = null
+    proofPublicId = uploaded.publicId
+    proofResourceType = uploaded.resourceType
   }
 
   const applicationNumber = generateEbApplicationNumber()
@@ -151,6 +236,8 @@ export async function submitEbPayment({
     neighborHouseId: mode === 'neighbor' ? neighborHouseId : null,
     neighborCollectedBy: null,
     proofUrl,
+    proofPublicId: proofPublicId || null,
+    proofResourceType: proofResourceType || null,
     applicationNumber,
     status: 'waiting_approval',
     uploadedByOwner,
@@ -164,16 +251,38 @@ export async function submitEbPayment({
   return applicationNumber
 }
 
-export async function listPendingEbApprovals() {
-  const snap = await getDocs(query(ebPaymentsRef, where('status', '==', 'waiting_approval')))
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+export async function listPendingEbApprovals(houseIds = []) {
+  const ids = [...new Set(houseIds.filter(Boolean))]
+  if (!ids.length) return []
+  const chunks = []
+  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30))
+  const snapshots = await Promise.all(
+    chunks.map((chunk) => getDocs(query(ebPaymentsRef, where('houseId', 'in', chunk))))
+  )
+  const seen = new Map()
+  snapshots.forEach((snap) => snap.docs.forEach((d) => {
+    const data = d.data()
+    if (data.status === 'waiting_approval') seen.set(d.id, { id: d.id, ...data })
+  }))
+  return [...seen.values()].sort((a, b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0))
+}
+
+export async function listEbBillCyclesForHouses(houseIds = []) {
+  const ids = [...new Set(houseIds.filter(Boolean))]
+  if (!ids.length) return []
+  const chunks = []
+  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30))
+  const snapshots = await Promise.all(
+    chunks.map((chunk) => getDocs(query(billsRef, where('houseIds', 'array-contains-any', chunk))))
+  )
+  const seen = new Map()
+  snapshots.forEach((snap) => snap.docs.forEach((d) => seen.set(d.id, { id: d.id, ...d.data() })))
+  return [...seen.values()].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
 }
 
 export async function listEbPaymentsForHouse(houseId) {
-  const snap = await getDocs(
-    query(ebPaymentsRef, where('houseId', '==', houseId), orderBy('submittedAt', 'desc'))
-  )
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const snap = await getDocs(query(ebPaymentsRef, where('houseId', '==', houseId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0))
 }
 
 export async function listEbPaymentsForBill(billId) {

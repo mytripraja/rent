@@ -1,10 +1,12 @@
 export function sendWhatsAppMessage(phoneNumber, message) {
-  // Remove +91 prefix handling, ensure 10-digit number
   const cleanNumber = phoneNumber?.replace(/\D/g, '').slice(-10) || ''
-  if (!cleanNumber) return
+  const encoded = encodeURIComponent(message || '')
+  if (!cleanNumber) {
+    window.open(`https://wa.me/?text=${encoded}`, '_blank', 'noopener,noreferrer')
+    return
+  }
   const fullNumber = `91${cleanNumber}`
-  const encoded = encodeURIComponent(message)
-  window.open(`https://wa.me/${fullNumber}?text=${encoded}`, '_blank')
+  window.open(`https://wa.me/${fullNumber}?text=${encoded}`, '_blank', 'noopener,noreferrer')
 }
 
 export function generateRentReminderMessage(tenantName, doorNumber, month, amount) {

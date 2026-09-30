@@ -1,0 +1,1513 @@
+###create-owner.js
+import { auth, db, requireAdmin } from '../lib/firebaseAdmin.js'
+
+// Admin-only: adds a co-owner account (dad, brother, mom, etc). Co-owners get
+// the same day-to-day access as the admin except managing other owner accounts.
+// Runs server-side via Admin SDK for the same reason create-tenant.js does —
+// creating a Firebase Auth user client-side would hijack the caller's own session.
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  try {
+    const decoded = await requireAdmin(req)
+    const callerDoc = await db.collection('users').doc(decoded.uid).get()
+    const createdBy = { uid: decoded.uid, name: callerDoc.data()?.name || 'Admin' }
+
+    const { email, password, name, phone, appMode, propertyAccess } = req.body || {}
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'Missing required fields' })
+    }
+
+    const userRecord = await auth.createUser({ email, password, displayName: name })
+
+    await db.collection('users').doc(userRecord.uid).set({
+      role: 'owner',
+      name,
+      email,
+      phone: phone || null,
+      profilePhotoUrl: null,
+      createdAt: Date.now(),
+      createdBy,
+      appMode: appMode === 'dad-lite' ? 'dad-lite' : null,
+      propertyAccess: Array.isArray(propertyAccess) && propertyAccess.length ? propertyAccess : ['*'],
+    })
+
+    res.status(200).json({ uid: userRecord.uid })
+  } catch (err) {
+    if (err?.code === 'auth/email-already-exists') return res.status(409).json({ error: 'An account already exists for this email address.' })
+    res.status(err.statusCode || 500).json({ error: err.message })
+  }
+}
+###create-subtenant.js
+import { auth, db, requireAuth, requireOwnerLevel, ownerCanAccessProperty } from '../lib/firebaseAdmin.js'
+import { FieldValue } from 'firebase-admin/firestore'
+
+const DEFAULTS = {
+  rent: true, bills: true, notices: true, complaints: true, maintenance: true,
+  visitors: true, commonArea: true, documents: true, directory: true, community: true,
+}
+
+function cleanPermissions(input) {
+  const out = { ...DEFAULTS }
+  if (input && typeof input === 'object') {
+    Object.keys(DEFAULTS).forEach((key) => {
+      if (typeof input[key] === 'boolean') out[key] = input[key]
+    })
+  }
+  return out
+}
+
+async function getProfile(uid) {
+  const snap = await db.collection('users').doc(uid).get()
+  return snap.exists ? snap.data() : null
+}
+
+async function authorize(req, houseId) {
+  const decoded = await requireAuth(req)
+  const caller = await getProfile(decoded.uid)
+  if (!caller) throw Object.assign(new Error('Account profile not found'), { statusCode: 403 })
+  if (caller.role === 'admin' || (caller.role === 'owner' && caller.appMode !== 'dad-lite')) {
+    const houseSnap = await db.collection('houses').doc(houseId).get()
+    if (!houseSnap.exists) throw Object.assign(new Error('House not found'), { statusCode: 404 })
+    if (!ownerCanAccessProperty(caller, String(houseSnap.data()?.propertyId || 'default'))) {
+      throw Object.assign(new Error('You do not have access to this property'), { statusCode: 403 })
+    }
+    return { decoded, caller, isOwner: true }
+  }
+  if (caller.role === 'tenant' && caller.houseId === houseId && caller.accountType !== 'sub') return { decoded, caller, isOwner: false }
+  throw Object.assign(new Error('Only the main tenant or owner can create family accounts'), { statusCode: 403 })
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  try {
+    const { houseId, email, password, name, phone, relationship, permissions } = req.body || {}
+    if (!houseId || !email || !password || !name) return res.status(400).json({ error: 'House, name, email and password are required' })
+    if (password.length < 6) return res.status(400).json({ error: 'Password should be at least 6 characters' })
+
+    const { decoded, caller, isOwner } = await authorize(req, houseId)
+    const usersSnap = await db.collection('users').where('role', '==', 'tenant').where('houseId', '==', houseId).get()
+    const subCount = usersSnap.docs.filter((d) => d.data().accountType === 'sub').length
+    if (subCount >= 5) return res.status(400).json({ error: 'Maximum of 5 family accounts has been reached for this house' })
+
+    const userRecord = await auth.createUser({ email, password, displayName: name })
+    try {
+      const callerName = caller.name || 'Tenant'
+      await db.collection('users').doc(userRecord.uid).set({
+        role: 'tenant',
+        accountType: 'sub',
+        parentTenantId: isOwner ? (usersSnap.docs.find(d => d.data().accountType !== 'sub')?.id || null) : decoded.uid,
+        name,
+        email,
+        phone: phone || '',
+        houseId,
+        relationship: relationship || 'Family member',
+        tenantPermissions: cleanPermissions(permissions),
+        customerId: null,
+        createdAt: Date.now(),
+        createdBy: { uid: decoded.uid, name: callerName },
+        disabled: false,
+      })
+
+      // Keep the real person's Customer record separate from the main account.
+      // Sub-accounts are intentionally house-scoped family logins rather than a second rent identity.
+      await db.collection('houses').doc(houseId).update({
+        familyAccountCount: FieldValue.increment(1),
+      })
+    } catch (setupError) {
+      await auth.deleteUser(userRecord.uid).catch(() => {})
+      await db.collection('users').doc(userRecord.uid).delete().catch(() => {})
+      throw setupError
+    }
+
+    res.status(200).json({ uid: userRecord.uid })
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || 'Failed to create family account' })
+  }
+}
+###create-tenant.js
+import { auth, db, requireOwnerLevel, ownerCanAccessProperty } from '../lib/firebaseAdmin.js'
+import { FieldValue } from 'firebase-admin/firestore'
+
+// This is exactly what used to be the createTenantAccountAdmin Cloud Function.
+// Running it as a Vercel serverless function instead means creating a tenant's
+// login no longer touches the owner's own signed-in session (the Admin SDK
+// creates the user server-side, so the browser's active session is untouched)
+// — and it doesn't need Firebase Blaze at all.
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  try {
+    const decoded = await requireOwnerLevel(req)
+    const callerDoc = await db.collection('users').doc(decoded.uid).get()
+    const caller = callerDoc.data() || {}
+    const recordedBy = { uid: decoded.uid, name: caller.name || 'Owner' }
+
+    const { email, name, phone, houseId, aadhaarNumber } = req.body || {}
+    if (!name || !houseId) {
+      return res.status(400).json({ error: 'Name and house are required.' })
+    }
+    const normalizedEmail = String(email || '').trim().toLowerCase()
+    if (normalizedEmail && !/^\S+@\S+\.\S+$/.test(normalizedEmail)) return res.status(400).json({ error: 'Enter a valid email address.' })
+    const houseSnap = await db.collection('houses').doc(String(houseId)).get()
+    if (!houseSnap.exists) return res.status(404).json({ error: 'House not found.' })
+    const propertyId = String(houseSnap.data()?.propertyId || 'default')
+    if (!ownerCanAccessProperty(caller, propertyId)) return res.status(403).json({ error: 'You do not have access to this property.' })
+
+    const userRecord = await auth.createUser({
+      ...(normalizedEmail ? { email: normalizedEmail } : {}),
+      displayName: name
+    })
+
+    try {
+      // Resolve a reusable customer before the transaction, then commit every
+      // Firestore link/write atomically. If any Firestore step fails, the new
+      // Auth identity is deleted below so an orphan tenant login is not left behind.
+      let existingCustomerRef = null
+      if (aadhaarNumber) {
+        const existing = await db
+          .collection('customers')
+          .where('aadhaarNumber', '==', aadhaarNumber)
+          .limit(1)
+          .get()
+        if (!existing.empty) existingCustomerRef = existing.docs[0].ref
+      }
+
+      const customerId = await db.runTransaction(async (tx) => {
+        let resolvedCustomerId
+
+        if (existingCustomerRef) {
+          const existingCustomer = await tx.get(existingCustomerRef)
+          if (!existingCustomer.exists) throw new Error('Existing customer record was removed. Please try again.')
+          resolvedCustomerId = existingCustomer.id
+          tx.update(existingCustomerRef, {
+            linkedUids: FieldValue.arrayUnion(userRecord.uid),
+            linkedHouseIds: FieldValue.arrayUnion(houseId),
+          })
+        } else {
+          const counterRef = db.collection('counters').doc('customerId')
+          const counterSnap = await tx.get(counterRef)
+          const current = counterSnap.exists ? counterSnap.data().value : 1000
+          const next = current + 1
+          tx.set(counterRef, { value: next }, { merge: true })
+          resolvedCustomerId = `RM${next}`
+          tx.set(db.collection('customers').doc(resolvedCustomerId), {
+            customerId: resolvedCustomerId,
+            name,
+            phone,
+            email: normalizedEmail || null,
+            aadhaarNumber: aadhaarNumber || null,
+            linkedUids: [userRecord.uid],
+            linkedHouseIds: [houseId],
+            createdAt: Date.now(),
+          })
+          tx.set(db.collection('customerLookup').doc(resolvedCustomerId), { email: normalizedEmail || null })
+        }
+
+        tx.set(db.collection('users').doc(userRecord.uid), {
+          role: 'tenant',
+          accountType: 'primary',
+          name,
+          email: normalizedEmail || null,
+          phone,
+          houseId,
+          customerId: resolvedCustomerId,
+          tenantPermissions: { rent: true, rentStatus: true, rentDetails: true, rentSubmit: true, bills: true, notices: true, complaints: true, maintenance: true, visitors: true, commonArea: true, documents: true, directory: true, community: true },
+          createdAt: Date.now(),
+          createdBy: recordedBy,
+        })
+
+        return resolvedCustomerId
+      })
+
+      res.status(200).json({ uid: userRecord.uid, customerId })
+      return
+    } catch (firestoreErr) {
+      try {
+        await auth.deleteUser(userRecord.uid)
+      } catch (cleanupErr) {
+        console.error('Tenant creation rollback failed:', cleanupErr)
+      }
+      throw firestoreErr
+    }
+
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message })
+  }
+}
+###dad-lite-roster.js
+import { db, requireDadLite } from '../lib/firebaseAdmin.js'
+
+function monthOk(month) {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(month)
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  res.setHeader('Cache-Control', 'no-store')
+  try {
+    await requireDadLite(req)
+    const body = req.body && typeof req.body === 'object' ? req.body : {}
+    const month = String(body.month || '').trim()
+    if (!monthOk(month)) return res.status(400).json({ error: 'Invalid month' })
+
+    // Keep this query deliberately simple: Dad Lite only needs the current
+    // occupied roster, and Admin SDK access bypasses client Firestore rules.
+    // We normalize the status below so older records using 'Occupied' still work.
+    const housesSnap = await db.collection('houses').get()
+    const houses = housesSnap.docs.map(d => {
+      const h = d.data()
+      const status = String(h.status || '').trim().toLowerCase()
+      if (status !== 'occupied') return null
+      return {
+        id: d.id,
+        internalDoorNumber: h.internalDoorNumber || '',
+        govtDoorNumber: h.govtDoorNumber || '',
+        tenantName: h.tenantName || 'Tenant',
+        rentAmount: Number(h.rentAmount || 0),
+        currentTenantId: h.currentTenantId || null,
+      }
+    }).filter(Boolean)
+
+    if (!houses.length) return res.status(200).json({ houses: [], payments: [] })
+
+    const paymentsSnap = await db.collection('rentPayments').where('month', '==', month).get()
+    const allowedHouseIds = new Set(houses.map(h => h.id))
+    const payments = paymentsSnap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(p => allowedHouseIds.has(p.houseId))
+      .map(p => ({
+        id: p.id,
+        houseId: p.houseId,
+        status: p.status,
+        dateSent: p.dateSent || null,
+        cashReceivedBy: p.cashReceivedBy || null,
+        submittedAt: p.submittedAt || 0,
+        entrySource: p.entrySource || null,
+      }))
+
+    return res.status(200).json({ houses, payments })
+  } catch (err) {
+    console.error('dad-lite-roster:', err)
+    const status = err.statusCode || 500
+    let message = err.message || 'Unable to load rent roster'
+    if (status === 500 && /FIREBASE_SERVICE_ACCOUNT_KEY|credential|private key/i.test(message)) {
+      message = 'Dad Lite service is not connected to Firebase Admin. Check FIREBASE_SERVICE_ACCOUNT_KEY in the Vercel Production environment.'
+    }
+    return res.status(status).json({ error: message, code: status === 401 ? 'UNAUTHENTICATED' : status === 403 ? 'FORBIDDEN' : 'ROSTER_LOAD_FAILED' })
+  }
+}
+###dad-lite-submit-rent.js
+import { db, requireDadLite } from '../lib/firebaseAdmin.js'
+
+const RECEIVERS = new Set(['Deepu', 'Rajavel', 'Dada', 'Siva', 'Brother'])
+
+function monthOk(month) { return /^\d{4}-(0[1-9]|1[0-2])$/.test(month) }
+function dateOk(date) { return /^\d{4}-\d{2}-\d{2}$/.test(date) }
+function applicationNumber() {
+  const now = Date.now().toString().slice(-8)
+  const rand = Math.floor(1000 + Math.random() * 9000)
+  return `RENT-${now}-${rand}`
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  res.setHeader('Cache-Control', 'no-store')
+  try {
+    const { decoded, profile } = await requireDadLite(req)
+    const houseId = String(req.body?.houseId || '').trim()
+    const month = String(req.body?.month || '').trim()
+    const dateSent = String(req.body?.dateSent || '').trim()
+    const receiver = String(req.body?.cashReceivedBy || '').trim()
+
+    if (!houseId || !monthOk(month) || !dateOk(dateSent) || !receiver) {
+      return res.status(400).json({ error: 'House, month, payment date and receiver are required.' })
+    }
+    if (receiver === 'Others') {
+      const other = String(req.body?.otherReceiver || '').trim()
+      if (!other || other.length > 80) return res.status(400).json({ error: 'Enter the receiver name.' })
+    } else if (!RECEIVERS.has(receiver)) {
+      return res.status(400).json({ error: 'Invalid receiver.' })
+    }
+
+    const houseSnap = await db.collection('houses').doc(houseId).get()
+    if (!houseSnap.exists) return res.status(404).json({ error: 'House not found.' })
+    const house = houseSnap.data()
+    if (house.status !== 'occupied' || !house.currentTenantId) {
+      return res.status(400).json({ error: 'This house is not currently occupied.' })
+    }
+
+    const amount = Number(house.rentAmount || 0)
+    if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: 'This house does not have a valid rent amount.' })
+
+    // Do not allow Dad Lite to create a second waiting/approved entry for the
+    // same house and month. Existing rejected entries can be resubmitted.
+    const existing = await db.collection('rentPayments')
+      .where('houseId', '==', houseId)
+      .where('month', '==', month)
+      .get()
+    if (existing.docs.some(d => ['waiting_approval', 'approved'].includes(d.data().status))) {
+      return res.status(409).json({ error: 'Rent is already marked as paid or waiting for approval.' })
+    }
+
+    const finalReceiver = receiver === 'Others'
+      ? String(req.body?.otherReceiver || '').trim().slice(0, 80)
+      : receiver
+    const appNo = applicationNumber()
+    const data = {
+      houseId,
+      tenantId: house.currentTenantId,
+      month,
+      amount,
+      dateSent,
+      mode: 'cash',
+      cashReceivedBy: finalReceiver,
+      neighborHouseId: null,
+      neighborCollectedBy: null,
+      proofUrl: null,
+      applicationNumber: appNo,
+      status: 'waiting_approval',
+      uploadedByOwner: true,
+      recordedBy: { uid: decoded.uid, name: profile.name || 'Owner' },
+      entrySource: 'dad_lite',
+      rejectionReason: null,
+      submittedAt: Date.now(),
+      approvedAt: null,
+      actionedBy: null,
+    }
+    const ref = await db.collection('rentPayments').add(data)
+    await db.collection('activityLog').add({
+      action: 'submitted',
+      entityType: 'rent',
+      entityId: ref.id,
+      performedBy: decoded.uid,
+      performedByName: profile.name || 'Dad Lite',
+      details: `Dad Lite submitted rent for ${house.internalDoorNumber || houseId} for ${month}`,
+      timestamp: Date.now(),
+    })
+    return res.status(200).json({ applicationNumber: appNo })
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ error: err.message || 'Unable to submit rent' })
+  }
+}
+###dad-lite.js
+import { roster, submitRent } from '../lib/routes/dadLiteRoutes.js'
+export default async function handler(req,res){
+  if(req.method!=='POST') return res.status(405).json({error:'Method not allowed'})
+  try { const action=String(req.body?.action||'roster'); return action==='submit-rent' ? await submitRent(req,res) : await roster(req,res) }
+  catch(err){ console.error('dad-lite:',err); const status=err.statusCode||500; let message=err.message||'Dad Lite request failed'; if(status===500&&/FIREBASE_SERVICE_ACCOUNT_KEY|credential|private key/i.test(message)) message='Dad Lite service is not connected to Firebase Admin. Check FIREBASE_SERVICE_ACCOUNT_KEY in the Vercel Production environment.'; return res.status(status).json({error:message,code:status===401?'UNAUTHENTICATED':status===403?'FORBIDDEN':'DAD_LITE_FAILED'}) }
+}
+###delete-owner.js
+import { auth, db, requireAdmin } from '../lib/firebaseAdmin.js'
+
+// Admin-only: removes a co-owner's access entirely (Auth account + Firestore doc).
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  try {
+    const decoded = await requireAdmin(req)
+    const { uid } = req.body || {}
+    if (!uid) return res.status(400).json({ error: 'Missing uid' })
+    if (uid === decoded.uid) {
+      return res.status(400).json({ error: "You can't delete your own admin account." })
+    }
+
+    const targetDoc = await db.collection('users').doc(uid).get()
+    if (targetDoc.data()?.role !== 'owner') {
+      return res.status(400).json({ error: 'Target is not a co-owner account.' })
+    }
+
+    await auth.deleteUser(uid).catch(() => {}) // already-deleted Auth user shouldn't block cleanup
+    await db.collection('users').doc(uid).delete()
+
+    res.status(200).json({ ok: true })
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message })
+  }
+}
+###delete-subtenant.js
+import { auth, db, requireAuth, ownerCanAccessProperty } from '../lib/firebaseAdmin.js'
+import { FieldValue } from 'firebase-admin/firestore'
+
+async function profile(uid) {
+  const snap = await db.collection('users').doc(uid).get()
+  return snap.exists ? snap.data() : null
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  try {
+    const decoded = await requireAuth(req)
+    const caller = await profile(decoded.uid)
+    const { uid } = req.body || {}
+    const target = await profile(uid)
+    if (!target || target.role !== 'tenant' || target.accountType !== 'sub') return res.status(404).json({ error: 'Family account not found' })
+    let allowed = caller?.role === 'admin' || (caller?.role === 'owner' && caller?.appMode !== 'dad-lite')
+    if (allowed) {
+      const houseSnap = await db.collection('houses').doc(String(target.houseId || '')).get()
+      allowed = houseSnap.exists && ownerCanAccessProperty(caller, String(houseSnap.data()?.propertyId || 'default'))
+    }
+    allowed = allowed || (caller?.role === 'tenant' && caller.accountType !== 'sub' && caller.houseId === target.houseId)
+    if (!allowed) return res.status(403).json({ error: 'Not allowed to remove this family account' })
+    await auth.deleteUser(uid)
+    try {
+      await db.collection('users').doc(uid).delete()
+      await db.collection('houses').doc(target.houseId).update({ familyAccountCount: FieldValue.increment(-1) })
+      const houseSnap = await db.collection('houses').doc(target.houseId).get()
+      if (houseSnap.exists && Number(houseSnap.data()?.familyAccountCount || 0) < 0) {
+        await houseSnap.ref.update({ familyAccountCount: 0 })
+      }
+    } catch (cleanupError) {
+      // Auth deletion succeeded. Keep the Firestore cleanup retryable and never
+      // recreate credentials silently. The caller receives a server error so the
+      // operation can be retried safely.
+      throw cleanupError
+    }
+    res.status(200).json({ uid })
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || 'Failed to remove family account' })
+  }
+}
+###get-agreement-url.js
+import { db, requireAuth, ownerCanAccessProperty } from '../lib/firebaseAdmin.js'
+import { v2 as cloudinary } from 'cloudinary'
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+})
+
+// Deliberately a SEPARATE endpoint from get-signed-url.js rather than adding
+// a branch there. That endpoint's whole job is guaranteeing Aadhaar/ration
+// card documents are owner-only, full stop — mixing in tenant-accessible
+// logic there risks weakening that guarantee by accident later. A rent
+// agreement is different: the tenant signed it, so they should be able to
+// view their own copy, just not anyone else's.
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  res.setHeader('Cache-Control', 'no-store')
+
+  try {
+    const decoded = await requireAuth(req)
+    const callerDoc = await db.collection('users').doc(decoded.uid).get()
+    const caller = callerDoc.data() || {}
+    const isOwnerLevel = caller.role === 'admin' || (caller.role === 'owner' && caller.appMode !== 'dad-lite')
+
+    const { agreementId } = req.body || {}
+    if (!agreementId) return res.status(400).json({ error: 'Missing agreementId' })
+
+    const agreementDoc = await db.collection('rentAgreements').doc(agreementId).get()
+    const agreement = agreementDoc.data()
+    if (!agreement) return res.status(404).json({ error: 'Agreement not found' })
+    if (isOwnerLevel) {
+      const houseSnap = await db.collection('houses').doc(String(agreement.houseId || '')).get()
+      if (!houseSnap.exists || !ownerCanAccessProperty(caller, String(houseSnap.data()?.propertyId || 'default'))) {
+        return res.status(403).json({ error: 'You do not have access to this property.' })
+      }
+    } else if (agreement.houseId !== caller?.houseId) {
+      return res.status(403).json({ error: "You can only view your own house's agreement." })
+    } else if (caller?.role === 'tenant' && (caller?.tenantPermissions?.rent === false || caller?.tenantPermissions?.rentDetails === false)) {
+      return res.status(403).json({ error: 'Rent agreement access is disabled for this account.' })
+    }
+
+    // Never trust publicId/resourceType supplied by the browser. They must come
+    // from the authorized Firestore agreement record, otherwise a tenant could
+    // use their own agreementId to ask for a signed URL to another asset.
+    if (!agreement.publicId) return res.status(404).json({ error: 'Agreement file not found' })
+
+    const expiresAt = Math.round(Date.now() / 1000) + 5 * 60 // 5 minutes
+    const url = cloudinary.url(agreement.publicId, {
+      resource_type: agreement.resourceType || 'image',
+      type: 'authenticated',
+      sign_url: true,
+      secure: true,
+      expires_at: expiresAt,
+    })
+
+    res.status(200).json({ url })
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message })
+  }
+}
+###get-cctv-signed-url.js
+import { db, requireOwnerLevel } from '../lib/firebaseAdmin.js'
+import { v2 as cloudinary } from 'cloudinary'
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+})
+
+function propertyAllowed(profile, propertyId) {
+  if (profile.role === 'admin') return true
+  if (profile.role !== 'owner' || profile.appMode === 'dad-lite') return false
+  if (!Object.prototype.hasOwnProperty.call(profile, 'propertyAccess')) return true
+  const access = Array.isArray(profile.propertyAccess) ? profile.propertyAccess : []
+  return access.includes('*') || access.includes(propertyId)
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  res.setHeader('Cache-Control', 'no-store')
+
+  try {
+    const decoded = await requireOwnerLevel(req)
+    const requestId = String(req.body?.requestId || '').trim()
+    if (!requestId || requestId.length > 200) {
+      return res.status(400).json({ error: 'CCTV request ID is required' })
+    }
+
+    const profileSnap = await db.collection('users').doc(decoded.uid).get()
+    const profile = profileSnap.data() || {}
+    const requestSnap = await db.collection('cctvFootageRequests').doc(requestId).get()
+    if (!requestSnap.exists) return res.status(404).json({ error: 'CCTV request not found' })
+
+    const record = requestSnap.data() || {}
+    const propertyId = String(record.propertyId || 'default')
+    if (!propertyAllowed(profile, propertyId)) {
+      return res.status(403).json({ error: 'Not allowed to view this CCTV copy' })
+    }
+
+    const publicId = String(record.copyPublicId || '').trim()
+    if (!publicId || !publicId.startsWith('cctv-footage/')) {
+      return res.status(404).json({ error: 'Private CCTV copy not found' })
+    }
+
+    const expiresAt = Math.round(Date.now() / 1000) + 5 * 60
+    const url = cloudinary.url(publicId, {
+      resource_type: record.copyResourceType || 'video',
+      type: 'authenticated',
+      sign_url: true,
+      secure: true,
+      expires_at: expiresAt,
+    })
+
+    return res.status(200).json({ url })
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ error: err.message || 'Unable to sign CCTV URL' })
+  }
+}
+###get-signed-url.js
+import { db, requireOwnerLevel } from '../lib/firebaseAdmin.js'
+import { v2 as cloudinary } from 'cloudinary'
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+})
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  res.setHeader('Cache-Control', 'no-store')
+
+  try {
+    const decoded = await requireOwnerLevel(req)
+
+    const { documentId, proofCollection, proofId } = req.body || {}
+    const profileSnap = await db.collection('users').doc(decoded.uid).get()
+    const profile = profileSnap.data() || {}
+    const isAdmin = profile.role === 'admin'
+    const unrestrictedOwner = profile.role === 'owner' && profile.appMode !== 'dad-lite' && !Object.prototype.hasOwnProperty.call(profile, 'propertyAccess')
+    const allProperties = Array.isArray(profile.propertyAccess) && profile.propertyAccess.includes('*')
+
+    if (proofCollection && proofId) {
+      if (!['rentPayments', 'ebBillPayments', 'waterBillPayments'].includes(proofCollection)) {
+        return res.status(400).json({ error: 'Unsupported proof collection' })
+      }
+      if (typeof proofId !== 'string' || proofId.length > 200) return res.status(400).json({ error: 'Invalid proof ID' })
+      const paymentSnap = await db.collection(proofCollection).doc(proofId).get()
+      if (!paymentSnap.exists) return res.status(404).json({ error: 'Payment proof not found' })
+      const payment = paymentSnap.data() || {}
+      if (!payment.proofPublicId) {
+        // Legacy payments may still contain a public proofUrl. Do not mint a
+        // new public URL here; the legacy link remains visible only where the
+        // existing record already exposes it.
+        return res.status(404).json({ error: 'Private proof not available for this payment' })
+      }
+      const houseSnap = await db.collection('houses').doc(String(payment.houseId || '')).get()
+      if (!houseSnap.exists) return res.status(404).json({ error: 'Payment house not found' })
+      const house = houseSnap.data() || {}
+      const propertyId = String(house.propertyId || 'default')
+      const propertyAllowed = isAdmin || unrestrictedOwner || allProperties
+        || (Array.isArray(profile.propertyAccess) && profile.propertyAccess.includes(propertyId))
+      if (!propertyAllowed) return res.status(403).json({ error: 'Not allowed to view this payment proof' })
+      const expectedPrefix = `${proofCollection === 'rentPayments' ? 'rent-proofs' : proofCollection === 'ebBillPayments' ? 'eb-proofs' : 'water-proofs'}/${payment.houseId}/`
+      if (!String(payment.proofPublicId).startsWith(expectedPrefix)) return res.status(403).json({ error: 'Invalid proof asset' })
+      const expiresAt = Math.round(Date.now() / 1000) + 5 * 60
+      const url = cloudinary.url(payment.proofPublicId, { resource_type: payment.proofResourceType || 'image', type: 'authenticated', sign_url: true, secure: true, expires_at: expiresAt })
+      return res.status(200).json({ url })
+    }
+
+    if (!documentId || typeof documentId !== 'string' || documentId.length > 200) {
+      return res.status(400).json({ error: 'Document ID is required' })
+    }
+
+    const documentSnap = await db.collection('documents').doc(documentId).get()
+    if (!documentSnap.exists) return res.status(404).json({ error: 'Document not found' })
+    const document = documentSnap.data() || {}
+    const houseId = String(document.houseId || '').trim()
+    if (!houseId || !document.publicId) return res.status(404).json({ error: 'Document file not found' })
+
+    const houseSnap = await db.collection('houses').doc(houseId).get()
+    if (!houseSnap.exists) return res.status(404).json({ error: 'Document house not found' })
+    const house = houseSnap.data() || {}
+    const propertyId = house.propertyId || 'default'
+    const propertyAllowed = isAdmin || unrestrictedOwner || allProperties
+      || (Array.isArray(profile.propertyAccess) && profile.propertyAccess.includes(propertyId))
+    if (!propertyAllowed) return res.status(403).json({ error: 'Not allowed to view this document' })
+
+    const expectedPrefix = `private-documents/${houseId}/`
+    if (!String(document.publicId).startsWith(expectedPrefix)) {
+      return res.status(403).json({ error: 'Invalid document asset' })
+    }
+
+    const expiresAt = Math.round(Date.now() / 1000) + 5 * 60 // 5 minutes
+    const url = cloudinary.url(document.publicId, {
+      resource_type: document.resourceType || 'image',
+      type: 'authenticated',
+      sign_url: true,
+      secure: true,
+      expires_at: expiresAt,
+    })
+
+    res.status(200).json({ url })
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message })
+  }
+}
+###list-subtenants.js
+import { db, requireAuth, ownerCanAccessProperty } from '../lib/firebaseAdmin.js'
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  try {
+    const decoded = await requireAuth(req)
+    const { houseId } = req.body || {}
+    if (!houseId) return res.status(400).json({ error: 'House id is required' })
+    const callerSnap = await db.collection('users').doc(decoded.uid).get()
+    const caller = callerSnap.data()
+    let allowed = caller?.role === 'admin' || (caller?.role === 'owner' && caller?.appMode !== 'dad-lite')
+    if (allowed) {
+      const houseSnap = await db.collection('houses').doc(String(houseId)).get()
+      allowed = houseSnap.exists && ownerCanAccessProperty(caller, String(houseSnap.data()?.propertyId || 'default'))
+    }
+    allowed = allowed || (caller?.role === 'tenant' && caller.accountType !== 'sub' && caller.houseId === houseId)
+    if (!allowed) return res.status(403).json({ error: 'Not allowed to view family accounts' })
+    const snap = await db.collection('users').where('role', '==', 'tenant').where('houseId', '==', houseId).get()
+    const rows = snap.docs.map(d => ({ uid: d.id, ...d.data() }))
+      .sort((a,b) => (a.accountType === 'primary' ? -1 : b.accountType === 'primary' ? 1 : (a.name||'').localeCompare(b.name||'')))
+    return res.status(200).json(rows)
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ error: err.message || 'Failed to load family accounts' })
+  }
+}
+###news.js
+import { XMLParser } from 'fast-xml-parser'
+
+const parser = new XMLParser({ ignoreAttributes:false, attributeNamePrefix:'@_' })
+const DEFAULT_FEEDS = [
+  { id:'pib', name:'PIB India', type:'common', url:'https://pib.gov.in/RssMain.aspx?ModId=6&Lang=1&Regid=1' },
+  { id:'google-news-india', name:'Google News India', type:'common', url:'https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en' },
+]
+
+function configuredLocalFeeds(place) {
+  try {
+    const map = JSON.parse(process.env.NEWS_LOCAL_FEEDS_JSON || '{}')
+    const key = Object.keys(map).find(k => k.toLowerCase() === place.toLowerCase())
+    const urls = Array.isArray(map[key]) ? map[key] : []
+    return urls.filter(x => typeof x === 'string' && /^https:\/\//i.test(x)).map((url,i)=>({ id:`local-${i}`, name:`${place} local source ${i+1}`, type:'local', url }))
+  } catch { return [] }
+}
+
+function clean(value='') { return String(value).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim() }
+function first(v) { return Array.isArray(v) ? v[0] : v }
+async function parseFeed(feed) {
+  const res = await fetch(feed.url, { headers:{ 'User-Agent':'RentalManager-News/1.0' }, signal:AbortSignal.timeout(7000) })
+  if (!res.ok) throw new Error(`Feed returned ${res.status}`)
+  const xml = await res.text(); const data = parser.parse(xml)
+  const channel = data?.rss?.channel || data?.feed
+  const raw = channel?.item || channel?.entry || []
+  return (Array.isArray(raw)?raw:[raw]).filter(Boolean).slice(0,12).map((x,i)=>({
+    id:`${feed.id}-${i}-${clean(x.guid?.['#text']||x.guid||x.id||x.link?.['@_href']||x.link||x.title)}`,
+    title:clean(x.title),
+    summary:clean(x.description || x.summary || x['content:encoded']).slice(0,220),
+    url:typeof x.link === 'object' ? (x.link?.['@_href'] || x.link?.href || '') : String(x.link||''),
+    published:first(x.pubDate || x.published || x.updated || ''),
+    source:feed.name,
+    type:feed.type,
+  })).filter(x=>x.title && x.url)
+}
+
+export default async function handler(req,res) {
+  if (req.method !== 'GET') return res.status(405).json({error:'Method not allowed'})
+  res.setHeader('Cache-Control','public, max-age=300, s-maxage=600, stale-while-revalidate=1800')
+  try {
+    const place = String(req.query?.place || 'Tamil Nadu').trim().slice(0,80)
+    const custom = String(process.env.NEWS_FEED_URLS || '').split(',').map(x=>x.trim()).filter(Boolean).map((url,i)=>({id:`custom-${i}`,name:`Local source ${i+1}`,type:'local',url}))
+    const feeds = [...DEFAULT_FEEDS, ...configuredLocalFeeds(place), ...custom]
+    const results = await Promise.allSettled(feeds.map(parseFeed))
+    const items = results.flatMap(x=>x.status==='fulfilled'?x.value:[]).map(x=>({...x, place}))
+    return res.status(200).json({ place, updatedAt:new Date().toISOString(), sources:feeds.map(x=>({name:x.name,type:x.type})), items:items.slice(0,30) })
+  } catch(e) { return res.status(502).json({error:'News service unavailable'}) }
+}
+###public-notice.js
+import { db } from '../lib/firebaseAdmin.js'
+
+export default async function handler(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
+  try {
+    const id = String(req.query?.id || '').trim()
+    const token = String(req.query?.token || '').trim()
+    if (!id || !token || id.length > 160 || token.length > 200) return res.status(400).json({ error: 'Invalid announcement link' })
+    const snap = await db.collection('notices').doc(id).get()
+    if (!snap.exists) return res.status(404).json({ error: 'Announcement not found' })
+    const data = snap.data() || {}
+    if (!data.publicShareEnabled || data.publicToken !== token) return res.status(404).json({ error: 'Announcement link is invalid or disabled' })
+
+    let affectedHomes = []
+    if (Array.isArray(data.targetHouseIds)) {
+      const refs = data.targetHouseIds.slice(0, 50).map(id => db.collection('houses').doc(String(id)))
+      const houseSnaps = await db.getAll(...refs)
+      affectedHomes = houseSnaps.filter(s => s.exists).map(s => String(s.data()?.internalDoorNumber || s.id)).filter(Boolean)
+    }
+    const notice = {
+      title: data.title || data.message || 'Announcement',
+      category: data.category || data.type || 'Notice',
+      message: data.message || '',
+      additionalDetails: data.additionalDetails || '',
+      reason: data.reason || '',
+      happenedAt: data.happenedAt || null,
+      expectedResolutionAt: data.expectedResolutionAt || null,
+      resolvedAt: data.resolvedAt || null,
+      status: data.status || 'active',
+      targetHouseIds: data.targetHouseIds || 'all',
+      affectedHomes: data.targetHouseIds === 'all' ? [] : affectedHomes,
+      imageUrl: data.imageUrl || null,
+    }
+    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=300')
+    return res.status(200).json({ notice })
+  } catch (err) {
+    return res.status(500).json({ error: 'Could not load announcement' })
+  }
+}
+###resolve-customer-id.js
+import crypto from 'node:crypto'
+import { auth, db, requireAppCheck } from '../lib/firebaseAdmin.js'
+
+const attempts = new Map()
+const WINDOW_MS = 60 * 1000
+const MAX_ATTEMPTS = 12
+const LOGIN_LOCK_MS = 15 * 60 * 1000
+const CONSECUTIVE_WINDOW_MS = 15 * 60 * 1000
+
+function clientIp(req) {
+  return String(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim()
+}
+
+function guardKey(identifier, ip) {
+  const secret = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || 'rental-manager-login-guard'
+  return crypto.createHash('sha256').update(`${secret}|${identifier}|${ip}`).digest('hex')
+}
+
+function normalizeIdentifier(value) {
+  return String(value || '').trim().toLowerCase().slice(0, 320)
+}
+
+async function loginGuard(req, res) {
+  const identifier = normalizeIdentifier(req.body?.identifier)
+  const mode = String(req.body?.mode || 'status')
+  if (!identifier) return res.status(400).json({ error: 'Login identifier is required.' })
+
+  const ip = clientIp(req)
+  const ref = db.collection('loginGuards').doc(guardKey(identifier, ip))
+  const now = Date.now()
+
+  if (mode === 'reset') {
+    const header = req.headers.authorization || ''
+    const token = header.startsWith('Bearer ') ? header.slice(7) : null
+    if (!token) return res.status(401).json({ error: 'Unauthenticated' })
+    const decoded = await auth.verifyIdToken(token)
+    if (decoded.email && normalizeIdentifier(decoded.email) !== identifier) {
+      return res.status(403).json({ error: 'Login guard reset is not authorised for this account.' })
+    }
+    await ref.set({ failedCount: 0, lockedUntil: 0, updatedAt: now }, { merge: true })
+    return res.status(200).json({ locked: false, remaining: 3 })
+  }
+
+  if (mode === 'failed') {
+    const result = await db.runTransaction(async tx => {
+      const snap = await tx.get(ref)
+      const data = snap.exists ? snap.data() : {}
+      const lockedUntil = Number(data.lockedUntil || 0)
+      if (lockedUntil > now) {
+        return { locked: true, lockedUntil, remaining: 0, failedCount: 3 }
+      }
+
+      const previousFailure = Number(data.lastFailureAt || 0)
+      const failedCount = previousFailure && now - previousFailure <= CONSECUTIVE_WINDOW_MS
+        ? Number(data.failedCount || 0)
+        : 0
+      const nextCount = Math.min(3, failedCount + 1)
+      const nextLockedUntil = nextCount >= 3 ? now + LOGIN_LOCK_MS : 0
+      tx.set(ref, {
+        failedCount: nextCount,
+        lastFailureAt: now,
+        lockedUntil: nextLockedUntil,
+        updatedAt: now,
+      }, { merge: true })
+      return { locked: nextCount >= 3, lockedUntil: nextLockedUntil, remaining: Math.max(0, 3 - nextCount), failedCount: nextCount }
+    })
+    return res.status(200).json(result)
+  }
+
+  const snap = await ref.get()
+  const data = snap.exists ? snap.data() : {}
+  const lockedUntil = Number(data.lockedUntil || 0)
+  if (lockedUntil > now) {
+    return res.status(200).json({ locked: true, lockedUntil, remaining: 0, failedCount: 3 })
+  }
+  return res.status(200).json({ locked: false, lockedUntil: 0, remaining: Math.max(0, 3 - Number(data.failedCount || 0)), failedCount: Number(data.failedCount || 0) })
+}
+
+// Customer IDs are intentionally resolved server-side so the browser cannot
+// enumerate customerLookup/{id} with a Firestore query. The endpoint also hosts
+// the server-side login-attempt guard so the app does not need another Vercel function.
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  res.setHeader('Cache-Control', 'no-store')
+
+  try {
+    await requireAppCheck(req)
+    if (req.body?.action === 'guard') return await loginGuard(req, res)
+
+    const customerId = String(req.body?.customerId || '').trim().toUpperCase()
+    const ip = clientIp(req)
+    const now = Date.now()
+    const recent = (attempts.get(ip) || []).filter(t => now - t < WINDOW_MS)
+    if (recent.length >= MAX_ATTEMPTS) {
+      return res.status(429).json({ error: 'Too many attempts. Please try again shortly.' })
+    }
+    recent.push(now)
+    attempts.set(ip, recent)
+    if (!/^RM\d{4,12}$/.test(customerId)) {
+      return res.status(404).json({ error: 'No account found for that Customer ID.' })
+    }
+
+    const snap = await db.collection('customerLookup').doc(customerId).get()
+    const email = snap.data()?.email
+    if (!email) return res.status(404).json({ error: 'No account found for that Customer ID.' })
+
+    return res.status(200).json({ email })
+  } catch (err) {
+    console.error('customer/login guard:', err)
+    return res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Unable to process the request.' })
+  }
+}
+###revoke-vacated-access.js
+import { auth, db, getBackupBucket } from '../lib/firebaseAdmin.js'
+
+// Sweeps for houses past their vacate-access-revoke window and disables that
+// tenant's login. Called by GitHub Actions on a schedule (see
+// .github/workflows/revoke-access.yml) since Vercel's free-tier cron only
+// runs once a day, which isn't precise enough for a 1-hour window.
+export default async function handler(req, res) {
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // Shared-secret auth, not a user token — this is called by a scheduler, not a person.
+  const providedSecret = req.headers['x-cron-secret']
+  if (!process.env.REVOKE_CRON_SECRET || providedSecret !== process.env.REVOKE_CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+
+  try {
+    if (req.query?.job === 'maintenance') {
+      const snap = await db.collection('preventiveMaintenance').where('autoCreate', '==', true).get()
+      const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+      const today = now.toISOString().slice(0, 10)
+      const created = []
+      for (const itemDoc of snap.docs) {
+        const item = itemDoc.data()
+        if (!item.nextRun || item.nextRun > today) continue
+        const dueDate = item.nextRun
+        const houseSnap = item.houseId ? await db.collection('houses').doc(item.houseId).get() : null
+        const house = houseSnap?.exists ? houseSnap.data() : null
+        const workRef = await db.collection('maintenanceWorkOrders').add({
+          propertyId: item.propertyId || 'default',
+          houseId: item.houseId || null,
+          tenantId: house?.currentTenantId || null,
+          title: item.title || `Preventive maintenance: ${item.asset || 'Scheduled service'}`,
+          asset: item.asset || null,
+          preventive: true,
+          preventiveScheduleId: itemDoc.id,
+          priority: item.priority || 'medium',
+          status: 'open',
+          dueDate,
+          vendor: item.vendor || null,
+          createdAt: Date.now(),
+          source: 'preventive-scheduler'
+        })
+        const base = new Date(`${dueDate}T00:00:00+05:30`)
+        base.setDate(base.getDate() + Math.max(1, Number(item.frequencyDays || 30)))
+        const nextRun = `${base.getFullYear()}-${String(base.getMonth()+1).padStart(2,'0')}-${String(base.getDate()).padStart(2,'0')}`
+        await itemDoc.ref.update({ lastRun: dueDate, nextRun, lastWorkOrderId: workRef.id, updatedAt: Date.now() })
+        if (house?.currentTenantId) {
+          await db.collection('notifications').add({ recipientId: house.currentTenantId, recipientType: 'tenant', type: 'maintenance', title: 'Maintenance scheduled', message: `${item.asset || 'Property maintenance'} is due on ${dueDate}.`, read: false, createdAt: Date.now(), metadata: { propertyId: item.propertyId || 'default', workOrderId: workRef.id } })
+        }
+        created.push(workRef.id)
+      }
+      return res.status(200).json({ job:'maintenance', checked:snap.size, created })
+    }
+
+    if (req.query?.job === 'backup') {
+      const collections = ['users','properties','houses','accountingTransactions','maintenanceWorkOrders','preventiveMaintenance','purchaseOrders','inventoryItems','securityEvents','parcels','documentRegistry','leaseRecords','utilityBills','ownerInvestments','communicationMessages','societyHierarchy','backupPlans','apiIntegrations','rentPayments','notifications','activityLog']
+      const data = { exportedAt: new Date().toISOString(), schemaVersion: '8.1', collections: {} }
+      for (const name of collections) {
+        const snap = await db.collection(name).get()
+        data.collections[name] = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      }
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const path = `rental-manager/backups/backup-${stamp}.json`
+      const bucket = getBackupBucket()
+      await bucket.file(path).save(JSON.stringify(data), { resumable: false, contentType: 'application/json', metadata: { cacheControl: 'private, no-store' } })
+      await db.collection('backupPlans').add({ propertyId: 'system', name: `Automated backup ${stamp}`, status: 'completed', scope: 'system', storagePath: path, createdAt: Date.now() })
+      return res.status(200).json({ job: 'backup', path, collections: collections.length })
+    }
+
+    if (req.query?.job === 'operations') {
+      const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+      const today = now.toISOString().slice(0, 10)
+      const soon = new Date(now.getTime() + 30 * 86400000).toISOString().slice(0, 10)
+      const owners = []
+      for (const role of ['owner', 'admin']) {
+        const snap = await db.collection('users').where('role', '==', role).get()
+        snap.docs.forEach(d => owners.push({ id: d.id, ...d.data() }))
+      }
+      const canReceive = (u, propertyId) => u.role === 'admin' || !Array.isArray(u.propertyAccess) || u.propertyAccess.includes('*') || u.propertyAccess.includes(propertyId)
+      const sent = []
+      const notifyOnce = async (key, recipientId, payload) => {
+        const ref = db.collection('scheduledNotificationRuns').doc(key)
+        if ((await ref.get()).exists) return false
+        await db.collection('notifications').add({ recipientId, recipientType: 'owner', read: false, createdAt: Date.now(), ...payload })
+        await ref.set({ sentAt: Date.now() })
+        return true
+      }
+      const docsSnap = await db.collection('documentRegistry').get()
+      for (const d of docsSnap.docs) {
+        const item = d.data()
+        if (!item.expiryDate || item.expiryDate < today || item.expiryDate > soon) continue
+        for (const owner of owners.filter(u => canReceive(u, item.propertyId || 'default'))) {
+          if (await notifyOnce(`doc-expiry-${d.id}-${owner.id}`, owner.id, { type: 'general', title: 'Document expiry reminder', message: `${item.name || 'A document'} expires on ${item.expiryDate}.`, metadata: { propertyId: item.propertyId || 'default', documentId: d.id } })) sent.push(d.id)
+        }
+      }
+      const leaseSnap = await db.collection('leaseRecords').get()
+      for (const d of leaseSnap.docs) {
+        const item = d.data()
+        if (!item.endDate || item.endDate < today || item.endDate > soon) continue
+        for (const owner of owners.filter(u => canReceive(u, item.propertyId || 'default'))) {
+          if (await notifyOnce(`lease-expiry-${d.id}-${owner.id}`, owner.id, { type: 'general', title: 'Lease expiry reminder', message: `Lease for ${item.tenantName || 'a tenant'} ends on ${item.endDate}.`, metadata: { propertyId: item.propertyId || 'default', leaseId: d.id } })) sent.push(d.id)
+        }
+      }
+      const stockSnap = await db.collection('inventoryItems').get()
+      for (const d of stockSnap.docs) {
+        const item = d.data()
+        if (Number(item.quantity || 0) > Number(item.reorderLevel || 0)) continue
+        for (const owner of owners.filter(u => canReceive(u, item.propertyId || 'default'))) {
+          if (await notifyOnce(`inventory-low-${d.id}-${owner.id}-${today}`, owner.id, { type: 'general', title: 'Low inventory', message: `${item.name || 'An inventory item'} is at or below its reorder level.`, metadata: { propertyId: item.propertyId || 'default', inventoryId: d.id } })) sent.push(d.id)
+        }
+      }
+      return res.status(200).json({ job: 'operations', sent })
+    }
+
+    if (req.query?.job === 'rent-reminders') {
+      const rulesSnap = await db.collection('rentReminderRules').get()
+      const rules = rulesSnap.docs.map(d => ({ id:d.id, ...d.data() }))
+      const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+      const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`
+      const day = now.getDate()
+      const hour = now.getHours()
+      const sent = []
+      for (const rule of rules.filter(r => r.enabled !== false)) {
+        const [rh, rm] = String(rule.time || '09:00').split(':').map(Number)
+        if (Number(rule.dayOfMonth) !== day || Number(rh) !== hour) continue
+        const houseSnap = await db.collection('houses').doc(rule.houseId).get()
+        if (!houseSnap.exists) continue
+        const house = houseSnap.data()
+        if (house.status !== 'occupied' || !house.currentTenantId) continue
+        const paymentSnap = await db.collection('rentPayments').where('houseId','==',rule.houseId).where('month','==',month).where('status','==','approved').limit(1).get()
+        if (!paymentSnap.empty) continue
+        const dedupeId = `${rule.id || rule.houseId}_${month}`
+        const dedupeRef = db.collection('scheduledNotificationRuns').doc(dedupeId)
+        const dedupeSnap = await dedupeRef.get()
+        if (dedupeSnap.exists) continue
+        await db.collection('notifications').add({ recipientId: house.currentTenantId, recipientType:'tenant', type:'payment_reminder', title:'Rent reminder', message:`Your rent for ${month} is still not marked as paid. Please submit your payment when ready.`, read:false, createdAt:Date.now(), metadata:{houseId:rule.houseId, month, scheduledRuleId:rule.id || rule.houseId} })
+        await dedupeRef.set({ ruleId:rule.id || rule.houseId, houseId:rule.houseId, month, sentAt:Date.now() })
+        sent.push(rule.houseId)
+      }
+      return res.status(200).json({ job:'rent-reminders', checked:rules.length, sent })
+    }
+
+    const now = Date.now()
+    const snap = await db
+      .collection('houses')
+      .where('accessRevokeScheduledAt', '<=', now)
+      .where('accessRevokeScheduledAt', '>', 0)
+      .get()
+
+    let revoked = 0
+
+    for (const houseDoc of snap.docs) {
+      const historySnap = await db
+        .collection('houses')
+        .doc(houseDoc.id)
+        .collection('history')
+        .orderBy('movedInAt', 'desc')
+        .limit(1)
+        .get()
+
+      if (!historySnap.empty) {
+        const tenantId = historySnap.docs[0].data().tenantId
+        if (tenantId) {
+          await auth.updateUser(tenantId, { disabled: true }).catch(() => {})
+          revoked++
+        }
+      }
+
+      // Family sub-accounts belong to the household, so their access is also
+      // disabled when the household moves out. Their records stay in Firestore
+      // for audit/history but they cannot log back into the old house.
+      const familySnap = await db.collection('users')
+        .where('houseId', '==', houseDoc.id)
+        .where('accountType', '==', 'sub')
+        .get()
+      for (const familyDoc of familySnap.docs) {
+        await auth.updateUser(familyDoc.id, { disabled: true }).catch(() => {})
+        await familyDoc.ref.update({ disabled: true })
+        revoked++
+      }
+
+      await houseDoc.ref.update({ accessRevokeScheduledAt: 0, familyAccountCount: 0 })
+    }
+
+    res.status(200).json({ checked: snap.size, revoked })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+###sign-upload.js
+import { db, requireAuth, ownerCanAccessProperty, tenantPermissionEnabled } from '../lib/firebaseAdmin.js'
+import { v2 as cloudinary } from 'cloudinary'
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+})
+
+async function houseAllowed(profile, houseId) {
+  const snap = await db.collection('houses').doc(String(houseId || '')).get()
+  if (!snap.exists) return false
+  return ownerCanAccessProperty(profile, String(snap.data()?.propertyId || 'default'))
+}
+
+async function allNoticeTargetsAllowed(profile, notice) {
+  const targets = notice?.targetHouseIds
+  if (targets === 'all') return profile.role === 'admin' || !Object.prototype.hasOwnProperty.call(profile, 'propertyAccess') || Array.isArray(profile.propertyAccess) && profile.propertyAccess.includes('*')
+  if (!Array.isArray(targets) || !targets.length) return false
+  const refs = targets.slice(0, 100).map(id => db.collection('houses').doc(String(id)))
+  const snaps = await db.getAll(...refs)
+  return snaps.every(s => s.exists && ownerCanAccessProperty(profile, String(s.data()?.propertyId || 'default')))
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  res.setHeader('Cache-Control', 'no-store')
+
+  try {
+    const decoded = await requireAuth(req)
+    const profileSnap = await db.collection('users').doc(decoded.uid).get()
+    const profile = profileSnap.data() || {}
+    const isFullOwner = profile.role === 'admin' || (profile.role === 'owner' && profile.appMode !== 'dad-lite')
+    const isTenant = profile.role === 'tenant'
+    const requestedFolder = String(req.body?.folder || '').trim()
+    let visibility = req.body?.visibility === 'authenticated' ? 'authenticated' : 'upload'
+    if (!requestedFolder || requestedFolder.length > 240) return res.status(400).json({ error: 'Upload folder is required' })
+
+    let allowed = false
+    const houseMatch = requestedFolder.match(/^(rent-proofs|eb-proofs|water-proofs|maintenance)\/([^/]+)$/)
+    const tenantPhotoMatch = requestedFolder.match(/^tenant-photos\/([^/]+)$/)
+    const privateDocMatch = requestedFolder.match(/^private-documents\/([^/]+)$/)
+
+    if (houseMatch) {
+      const houseId = houseMatch[2]
+      const folderKind = houseMatch[1]
+      const tenantPermission = folderKind === 'maintenance' ? 'maintenance' : folderKind === 'rent-proofs' ? 'rentSubmit' : 'bills'
+      allowed = isFullOwner ? await houseAllowed(profile, houseId) : (isTenant && profile.houseId === houseId && tenantPermissionEnabled(profile, tenantPermission))
+      visibility = 'authenticated'
+      if (!allowed) return res.status(403).json({ error: 'Not allowed to upload to this house' })
+    } else if (tenantPhotoMatch) {
+      if (!isFullOwner) return res.status(403).json({ error: 'Owner access required' })
+      allowed = await houseAllowed(profile, tenantPhotoMatch[1])
+    } else if (privateDocMatch) {
+      visibility = 'authenticated'
+      allowed = isFullOwner ? await houseAllowed(profile, privateDocMatch[1]) : (isTenant && profile.houseId === privateDocMatch[1])
+    } else if (requestedFolder === 'agreements' || requestedFolder === 'cctv-footage' || requestedFolder === 'expenses' || requestedFolder === 'houses') {
+      allowed = isFullOwner
+    } else if (requestedFolder === 'profile-photos') {
+      allowed = isFullOwner || isTenant
+    } else if (requestedFolder.startsWith('public-notices/')) {
+      if (!isFullOwner) return res.status(403).json({ error: 'Owner access required' })
+      const noticeId = requestedFolder.slice('public-notices/'.length)
+      const noticeSnap = await db.collection('notices').doc(noticeId).get()
+      if (!noticeSnap.exists) return res.status(404).json({ error: 'Announcement not found' })
+      allowed = await allNoticeTargetsAllowed(profile, noticeSnap.data() || {})
+    } else {
+      return res.status(400).json({ error: 'Unsupported upload folder' })
+    }
+
+    if (!allowed) return res.status(403).json({ error: 'Upload not allowed' })
+
+    const timestamp = Math.round(Date.now() / 1000)
+    const paramsToSign = { timestamp, folder: requestedFolder, type: visibility }
+    const signature = cloudinary.utils.api_sign_request(paramsToSign, process.env.CLOUDINARY_API_SECRET)
+    return res.status(200).json({ signature, timestamp, type: visibility, apiKey: process.env.CLOUDINARY_API_KEY, cloudName: process.env.CLOUDINARY_CLOUD_NAME })
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ error: err.message || 'Could not sign upload' })
+  }
+}
+###subtenant.js
+import { create, list, update, remove } from '../lib/routes/subtenantRoutes.js'
+export default async function handler(req,res){
+  if(req.method!=='POST') return res.status(405).json({error:'Method not allowed'})
+  try { const action=String(req.body?.action||'list'); if(action==='create') return await create(req,res); if(action==='update') return await update(req,res); if(action==='delete') return await remove(req,res); return await list(req,res) }
+  catch(err){ return res.status(err.statusCode||500).json({error:err.message||'Family account request failed'}) }
+}
+###tenant-rent-status.js
+import { db, requireAuth } from '../lib/firebaseAdmin.js'
+
+function currentMonth() {
+  return new Date().toISOString().slice(0, 7)
+}
+
+function resolveStatus(payments) {
+  if (payments.some((p) => p.status === 'approved')) return 'paid'
+  if (payments.some((p) => p.status === 'waiting_approval')) return 'waiting_approval'
+  if (payments.some((p) => p.status === 'rejected')) return 'rejected'
+  return 'not_paid'
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  try {
+    const decoded = await requireAuth(req)
+    const userSnap = await db.collection('users').doc(decoded.uid).get()
+    const user = userSnap.data() || {}
+    if (user.role !== 'tenant') return res.status(403).json({ error: 'Tenant access required' })
+
+    const houseId = String(user.houseId || '').trim()
+    if (!houseId) return res.status(404).json({ error: 'House not linked' })
+    const houseSnap = await db.collection('houses').doc(houseId).get()
+    if (!houseSnap.exists) return res.status(404).json({ error: 'House not found' })
+    const house = houseSnap.data() || {}
+
+    if (req.body?.action === 'house') {
+      // Deliberately whitelist resident-safe fields. Never return rent/advance
+      // or owner notes unless the caller has rent-details permission.
+      const canSeeRentDetails = user.tenantPermissions?.rent !== false && user.tenantPermissions?.rentDetails !== false
+      return res.status(200).json({
+        house: {
+          id: houseId,
+          propertyId: house.propertyId || 'default',
+          internalDoorNumber: house.internalDoorNumber || '',
+          govtDoorNumber: house.govtDoorNumber || '',
+          floor: house.floor || '',
+          status: house.status || '',
+          tenantName: house.tenantName || '',
+          phoneVisibleToNeighbors: !!house.phoneVisibleToNeighbors,
+          blueprintVisibleToTenants: !!house.blueprintVisibleToTenants,
+          photos: Array.isArray(house.photos) ? house.photos : [],
+          ...(canSeeRentDetails ? { rentAmount: Number(house.rentAmount || 0), pendingRentAmount: house.pendingRentAmount || null, pendingRentEffectiveMonth: house.pendingRentEffectiveMonth || null } : {}),
+        },
+      })
+    }
+
+    if (user.tenantPermissions?.rent === false || user.tenantPermissions?.rentStatus === false) {
+      return res.status(403).json({ error: 'Rent status access is disabled' })
+    }
+
+    const month = String(req.body?.month || currentMonth()).slice(0, 7)
+    const snap = await db.collection('rentPayments').where('houseId', '==', houseId).get()
+    const payments = snap.docs.map((d) => d.data()).filter((p) => p.month === month)
+    return res.status(200).json({ month, status: resolveStatus(payments) })
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || 'Could not load rent status' })
+  }
+}
+###update-subtenant.js
+import { auth, db, requireAuth, ownerCanAccessProperty } from '../lib/firebaseAdmin.js'
+
+const DEFAULTS = ['rent','rentStatus','rentDetails','rentSubmit','bills','notices','complaints','maintenance','visitors','commonArea','documents','directory','community']
+
+async function profile(uid) {
+  const snap = await db.collection('users').doc(uid).get()
+  return snap.exists ? snap.data() : null
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  try {
+    const decoded = await requireAuth(req)
+    const caller = await profile(decoded.uid)
+    const { uid, name, phone, relationship, permissions, disabled } = req.body || {}
+    if (!uid) return res.status(400).json({ error: 'Account id is required' })
+    const target = await profile(uid)
+    if (!target || target.role !== 'tenant' || target.accountType !== 'sub') return res.status(404).json({ error: 'Family account not found' })
+
+    let ownerAccess = caller?.role === 'admin' || (caller?.role === 'owner' && caller?.appMode !== 'dad-lite')
+    if (ownerAccess) {
+      const houseSnap = await db.collection('houses').doc(String(target.houseId || '')).get()
+      ownerAccess = houseSnap.exists && ownerCanAccessProperty(caller, String(houseSnap.data()?.propertyId || 'default'))
+    }
+    const primaryAccess = caller?.role === 'tenant' && caller.accountType !== 'sub' && caller.houseId === target.houseId
+    if (!ownerAccess && !primaryAccess) return res.status(403).json({ error: 'Not allowed to manage this family account' })
+
+    const updates = {}
+    if (name !== undefined) updates.name = String(name).trim()
+    if (phone !== undefined) updates.phone = String(phone).trim()
+    if (relationship !== undefined) updates.relationship = String(relationship).trim()
+    if (typeof disabled === 'boolean') updates.disabled = disabled
+    if (permissions && typeof permissions === 'object') {
+      updates.tenantPermissions = Object.fromEntries(DEFAULTS.map(k => [k, permissions[k] !== false]))
+    }
+    await db.collection('users').doc(uid).update(updates)
+    if (typeof disabled === 'boolean') await auth.updateUser(uid, { disabled })
+    res.status(200).json({ uid })
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || 'Failed to update family account' })
+  }
+}
+###update-tenant-contact.js
+import crypto from 'node:crypto'
+import { auth, db, requireAuth, requireAdmin, requireOwnerLevel, ownerCanAccessProperty } from '../lib/firebaseAdmin.js'
+
+const OTP_TTL_MS = 10 * 60 * 1000
+const MAX_OTP_ATTEMPTS = 5
+const REQUEST_TTL_MS = 24 * 60 * 60 * 1000
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function normalizeEmail(value) { return String(value || '').trim().toLowerCase() }
+function hashOtp(otp, salt) { return crypto.createHash('sha256').update(`${salt}:${otp}`).digest('hex') }
+function makeOtp() { return String(crypto.randomInt(100000, 1000000)) }
+function safeEmail(value) { const e = normalizeEmail(value); if (!EMAIL_RE.test(e) || e.length > 320) throw new Error('Enter a valid email address.') ; return e }
+
+async function sendEmail({ to, subject, text, html }) {
+  const key = process.env.RESEND_API_KEY
+  const from = process.env.EMAIL_FROM
+  if (!key || !from) {
+    const err = new Error('Email delivery is not configured. Ask the administrator to configure RESEND_API_KEY and EMAIL_FROM.')
+    err.statusCode = 503
+    throw err
+  }
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to: [to], subject, text, html }),
+  })
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    const err = new Error(`Email delivery failed${body ? `: ${body.slice(0, 180)}` : '.'}`)
+    err.statusCode = 502
+    throw err
+  }
+}
+
+async function ensureEmailAvailable(email, uid) {
+  try {
+    const existing = await auth.getUserByEmail(email)
+    if (existing.uid !== uid) {
+      const err = new Error('That email address is already used by another account.')
+      err.statusCode = 409
+      throw err
+    }
+    const err = new Error('New email must be different from the current email.')
+    err.statusCode = 400
+    throw err
+  } catch (err) {
+    if (err?.code === 'auth/user-not-found') return
+    throw err
+  }
+}
+
+async function getUserDoc(uid) {
+  const snap = await db.collection('users').doc(uid).get()
+  if (!snap.exists) { const err = new Error('Account profile not found.'); err.statusCode = 404; throw err }
+  return snap.data() || {}
+}
+
+async function updateRelatedRecords(uid, profile, oldEmail, newEmail) {
+  const updates = { email: newEmail, emailChangedAt: Date.now(), previousEmail: oldEmail }
+  await db.collection('users').doc(uid).update(updates)
+
+  const customerSnap = await db.collection('customers').where('linkedUids', 'array-contains', uid).get()
+  for (const customer of customerSnap.docs) {
+    await customer.ref.update({ email: newEmail, emailChangedAt: Date.now() })
+    await db.collection('customerLookup').doc(customer.id).set({ email: newEmail }, { merge: true })
+  }
+
+  const houseId = profile.houseId
+  if (profile.role === 'tenant' && houseId) {
+    const houseRef = db.collection('houses').doc(houseId)
+    const houseSnap = await houseRef.get()
+    if (houseSnap.exists) {
+      const house = houseSnap.data() || {}
+      await houseRef.update({ tenantEmail: newEmail, emailChangedAt: Date.now() })
+      await db.collection('directory').doc(houseId).set({
+        internalDoorNumber: house.internalDoorNumber,
+        status: house.status,
+        tenantName: house.tenantName,
+        tenantPhone: house.phoneVisibleToNeighbors ? house.tenantPhone : null,
+        phoneVisibleToNeighbors: !!house.phoneVisibleToNeighbors,
+      }, { merge: true })
+    }
+  }
+}
+
+async function applyEmailChange(uid, newEmail, actor) {
+  const profile = await getUserDoc(uid)
+  const oldEmail = normalizeEmail(profile.email || '')
+  if (!oldEmail) { const err = new Error('Current account email is missing.'); err.statusCode = 400; throw err }
+  newEmail = safeEmail(newEmail)
+  await ensureEmailAvailable(newEmail, uid)
+
+  await auth.updateUser(uid, { email: newEmail, emailVerified: false })
+  try {
+    await updateRelatedRecords(uid, profile, oldEmail, newEmail)
+  } catch (err) {
+    // Best-effort rollback so Auth and Firestore do not stay out of sync.
+    try { await auth.updateUser(uid, { email: oldEmail, emailVerified: false }) } catch {}
+    throw err
+  }
+
+  await db.collection('activityLog').add({
+    type: 'email_changed',
+    actorUid: actor.uid,
+    actorName: actor.name || actor.email || 'System',
+    targetUid: uid,
+    oldEmail,
+    newEmail,
+    createdAt: Date.now(),
+  })
+  return { uid, oldEmail, newEmail }
+}
+
+async function requestEmailChange(req, res) {
+  const decoded = await requireAuth(req)
+  const profile = await getUserDoc(decoded.uid)
+  const oldEmail = normalizeEmail(decoded.email || profile.email || '')
+  if (!oldEmail) return res.status(400).json({ error: 'Your account does not have a current email address.' })
+
+  const newEmail = safeEmail(req.body?.newEmail)
+  if (newEmail === oldEmail) return res.status(400).json({ error: 'New email must be different from your current email.' })
+  await ensureEmailAvailable(newEmail, decoded.uid)
+
+  const oldEmailUnavailable = !!req.body?.oldEmailUnavailable
+  const reason = String(req.body?.reason || '').trim().slice(0, 1000)
+  if (oldEmailUnavailable && !reason) return res.status(400).json({ error: 'Please explain why you cannot access the old email address.' })
+
+  // Cancel older pending requests for this user so only the newest request can be used.
+  const existing = await db.collection('emailChangeRequests').where('uid', '==', decoded.uid).where('status', '==', 'pending').get()
+  const batch = db.batch()
+  existing.docs.forEach(d => batch.update(d.ref, { status: 'superseded', updatedAt: Date.now() }))
+  await batch.commit()
+
+  const ref = db.collection('emailChangeRequests').doc()
+  const now = Date.now()
+  const base = {
+    uid: decoded.uid,
+    role: profile.role || 'unknown',
+    oldEmail,
+    newEmail,
+    oldEmailUnavailable,
+    reason,
+    status: oldEmailUnavailable ? 'pending_admin' : 'pending_otp',
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: now + REQUEST_TTL_MS,
+    otpExpiresAt: now + OTP_TTL_MS,
+    oldOtpAttempts: 0,
+    newOtpAttempts: 0,
+    createdIp: String(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || '').split(',')[0].trim().slice(0, 80),
+  }
+
+  if (oldEmailUnavailable) {
+    await ref.set(base)
+    return res.status(200).json({ ok: true, mode: 'admin_review', message: 'Your request was submitted for administrator review.' })
+  }
+
+  const oldOtp = makeOtp()
+  const newOtp = makeOtp()
+  const salt = crypto.randomBytes(16).toString('hex')
+  await ref.set({ ...base, otpSalt: salt, oldOtpHash: hashOtp(oldOtp, salt), newOtpHash: hashOtp(newOtp, salt) })
+
+  try {
+    await Promise.all([
+      sendEmail({
+        to: oldEmail,
+        subject: 'Rental Manager — verify your email change',
+        text: `Your Rental Manager email-change OTP is ${oldOtp}. It expires in 10 minutes. If you did not request this, ignore this message.`,
+        html: `<p>Your Rental Manager email-change verification code is:</p><h2 style="letter-spacing:6px">${oldOtp}</h2><p>It expires in 10 minutes. If you did not request this, ignore this message.</p>`,
+      }),
+      sendEmail({
+        to: newEmail,
+        subject: 'Rental Manager — verify your new email',
+        text: `Your Rental Manager new-email verification OTP is ${newOtp}. It expires in 10 minutes. If you did not request this, ignore this message.`,
+        html: `<p>Your Rental Manager new-email verification code is:</p><h2 style="letter-spacing:6px">${newOtp}</h2><p>It expires in 10 minutes. It is only valid for this email-change request.</p>`,
+      }),
+    ])
+  } catch (err) {
+    await ref.update({ status: 'delivery_failed', updatedAt: Date.now(), deliveryError: err.message.slice(0, 300) })
+    throw err
+  }
+
+  return res.status(200).json({ ok: true, mode: 'otp', requestId: ref.id, expiresAt: now + OTP_TTL_MS, message: 'Verification codes were sent to your old and new email addresses.' })
+}
+
+async function verifyEmailChange(req, res) {
+  const decoded = await requireAuth(req)
+  const requestId = String(req.body?.requestId || '')
+  const oldOtp = String(req.body?.oldOtp || '').trim()
+  const newOtp = String(req.body?.newOtp || '').trim()
+  if (!requestId || !/^\d{6}$/.test(oldOtp) || !/^\d{6}$/.test(newOtp)) return res.status(400).json({ error: 'Enter both 6-digit verification codes.' })
+
+  const ref = db.collection('emailChangeRequests').doc(requestId)
+  const snap = await ref.get()
+  if (!snap.exists || snap.data()?.uid !== decoded.uid) return res.status(404).json({ error: 'Email-change request not found.' })
+  const data = snap.data()
+  if (data.status !== 'pending_otp') return res.status(400).json({ error: 'This request is no longer active.' })
+  if (Number(data.otpExpiresAt || 0) < Date.now()) { await ref.update({ status: 'expired', updatedAt: Date.now() }); return res.status(400).json({ error: 'The verification codes have expired. Start a new request.' }) }
+  if (Number(data.oldOtpAttempts || 0) >= MAX_OTP_ATTEMPTS || Number(data.newOtpAttempts || 0) >= MAX_OTP_ATTEMPTS) return res.status(429).json({ error: 'Too many incorrect attempts. Start a new request.' })
+
+  const salt = data.otpSalt
+  const oldOk = crypto.timingSafeEqual(Buffer.from(hashOtp(oldOtp, salt)), Buffer.from(data.oldOtpHash || ''))
+  const newOk = crypto.timingSafeEqual(Buffer.from(hashOtp(newOtp, salt)), Buffer.from(data.newOtpHash || ''))
+  if (!oldOk || !newOk) {
+    await ref.update({ oldOtpAttempts: Number(data.oldOtpAttempts || 0) + (oldOk ? 0 : 1), newOtpAttempts: Number(data.newOtpAttempts || 0) + (newOk ? 0 : 1), updatedAt: Date.now() })
+    return res.status(400).json({ error: 'One or both verification codes are incorrect.' })
+  }
+
+  const actor = { uid: decoded.uid, name: (await getUserDoc(decoded.uid)).name, email: decoded.email }
+  const result = await applyEmailChange(decoded.uid, data.newEmail, actor)
+  await ref.update({ status: 'approved', verifiedAt: Date.now(), updatedAt: Date.now(), completedAt: Date.now() })
+  return res.status(200).json({ ok: true, ...result })
+}
+
+async function adminList(req, res) {
+  const decoded = await requireAdmin(req)
+  const snap = await db.collection('emailChangeRequests').where('status', '==', 'pending_admin').limit(50).get()
+  return res.status(200).json({ requests: snap.docs.map(d => ({ id: d.id, ...d.data(), oldOtpHash: undefined, newOtpHash: undefined, otpSalt: undefined })) })
+}
+

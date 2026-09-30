@@ -14,7 +14,7 @@ export async function postMessage({ authorId, authorName, authorRole, houseId, t
   })
 }
 
-export async function listRecentMessages(count = 100) {
+export async function listRecentMessages(count = 60) {
   const snap = await getDocs(query(messagesRef, orderBy('createdAt', 'desc'), fsLimit(count)))
   return snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse()
 }
@@ -23,7 +23,7 @@ export async function deleteMessage(id) {
   await deleteDoc(doc(db, 'communityMessages', id))
 }
 
-export function subscribeToMessages(callback, count = 100) {
+export function subscribeToMessages(callback, count = 60) {
   const q = query(messagesRef, orderBy('createdAt', 'desc'), fsLimit(count))
   return onSnapshot(q, (snap) => {
     const msgs = snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse()

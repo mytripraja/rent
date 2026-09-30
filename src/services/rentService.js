@@ -9,9 +9,12 @@ import {
   where,
   orderBy,
 } from 'firebase/firestore'
-import { db } from './firebase'
-import { uploadUnsigned } from './cloudinaryService'
+import { db, authedFetch } from './firebase'
+import { getActivePropertyId } from './configService'
+import { uploadPrivate } from './cloudinaryService'
 import { createNotification } from './notificationService'
+import { createAccountingJournal } from './enterpriseService'
+import { cachedRequest, invalidateCache } from './performanceCache'
 
 const paymentsRef = collection(db, 'rentPayments')
 
@@ -37,9 +40,13 @@ export async function submitRentPayment({
   recordedBy,
 }) {
   let proofUrl = null
+  let proofPublicId = null
+  let proofResourceType = null
   if (proofFile) {
-    const { url } = await uploadUnsigned(proofFile, `rent-proofs/${houseId}`)
-    proofUrl = url
+    const uploaded = await uploadPrivate(proofFile, `rent-proofs/${houseId}`)
+    proofUrl = null
+    proofPublicId = uploaded.publicId
+    proofResourceType = uploaded.resourceType
   }
 
   const applicationNumber = generateApplicationNumber()
@@ -55,6 +62,8 @@ export async function submitRentPayment({
     neighborHouseId: mode === 'neighbor' ? neighborHouseId : null,
     neighborCollectedBy: null, // owner fills this in on approval if mode === neighbor
     proofUrl,
+    proofPublicId: proofPublicId || null,
+    proofResourceType: proofResourceType || null,
     applicationNumber,
     status: 'waiting_approval', // waiting_approval | approved | rejected
     uploadedByOwner,
@@ -68,22 +77,70 @@ export async function submitRentPayment({
   return applicationNumber
 }
 
-export async function listPendingApprovals() {
-  const snap = await getDocs(query(paymentsRef, where('status', '==', 'waiting_approval')))
+export async function listRentPaymentsForMonth(month) {
+  const snap = await getDocs(query(paymentsRef, where('month', '==', month)))
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
-export async function listRentHistory(houseId) {
-  const snap = await getDocs(
-    query(paymentsRef, where('houseId', '==', houseId), orderBy('submittedAt', 'desc'))
+// Property-scoped bulk read. Firestore 'in' supports up to 30 values, so chunk
+// house IDs instead of downloading every rent payment across every apartment.
+export async function listRentPaymentsForHouses(houseIds = []) {
+  const ids = [...new Set((houseIds || []).filter(Boolean))]
+  const chunks = []
+  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30))
+  const snapshots = await Promise.all(
+    chunks.map((chunk) => getDocs(query(paymentsRef, where('houseId', 'in', chunk))))
   )
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const seen = new Map()
+  snapshots.forEach((snap) => snap.docs.forEach((d) => seen.set(d.id, { id: d.id, ...d.data() })))
+  return [...seen.values()]
+}
+
+export async function listPendingApprovals(houseIds = []) {
+  const ids = [...new Set((houseIds || []).filter(Boolean))]
+  const cacheKey = `rent-approvals:${getActivePropertyId() || 'default'}:${ids.slice().sort().join(',')}`
+  return cachedRequest(cacheKey, async () => {
+    try {
+      const result = await authedFetch('/api/rental?route=pending-rent-approvals', {
+        propertyId: getActivePropertyId() || 'default',
+        houseIds: ids,
+      })
+      return (result.payments || []).sort((a, b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0))
+    } catch (serverError) {
+      console.warn('Secure rent approval API unavailable; using Firestore fallback:', serverError?.message || serverError)
+      const chunks = []
+      for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30))
+      if (!chunks.length) return []
+      const snapshots = await Promise.all(chunks.map((chunk) => getDocs(query(paymentsRef, where('houseId', 'in', chunk)))))
+      const seen = new Map()
+      snapshots.forEach((snap) => snap.docs.forEach((d) => {
+        const data = d.data()
+        if (data.status === 'waiting_approval') seen.set(d.id, { id: d.id, ...data })
+      }))
+      return [...seen.values()].sort((a, b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0))
+    }
+  }, 8000)
+}
+
+export function invalidateRentApprovalCache() {
+  invalidateCache('rent-approvals:')
+}
+
+export async function getTenantRentStatus(month) {
+  return authedFetch('/api/tenant-rent-status', { month })
+}
+
+export async function listRentHistory(houseId) {
+  const snap = await getDocs(query(paymentsRef, where('houseId', '==', houseId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0))
 }
 
 export async function approvePayment(paymentId, { neighborCollectedBy, actionedBy } = {}) {
   const paymentRef = doc(db, 'rentPayments', paymentId)
   const snap = await getDoc(paymentRef)
   const paymentData = snap.data()
+  const houseSnap = paymentData?.houseId ? await getDoc(doc(db, 'houses', paymentData.houseId)) : null
+  const houseData = houseSnap?.exists() ? houseSnap.data() : null
 
   await updateDoc(paymentRef, {
     status: 'approved',
@@ -102,6 +159,20 @@ export async function approvePayment(paymentId, { neighborCollectedBy, actionedB
     })
   }
 
+  if (houseData?.propertyId) {
+    await createAccountingJournal({
+      propertyId: houseData.propertyId,
+      createdBy: actionedBy?.uid || null,
+      date: paymentData.month ? `${paymentData.month}-01` : new Date().toISOString().slice(0, 10),
+      description: `Approved rent ${paymentData.month || ''} for ${houseData.internalDoorNumber || paymentData.houseId}`,
+      amount: Number(paymentData.amount || 0),
+      debitAccount: paymentData.mode === 'cash' ? 'Cash / Bank' : 'Cash / Bank',
+      creditAccount: 'Rental Income',
+      category: 'Rent',
+      houseId: paymentData.houseId,
+    }).catch(() => {})
+  }
+
   // Task 2: Log activity
   const { logActivity } = await import('./activityLogService')
   await logActivity({
@@ -110,14 +181,18 @@ export async function approvePayment(paymentId, { neighborCollectedBy, actionedB
     entityId: paymentId,
     performedBy: actionedBy?.uid || null,
     performedByName: actionedBy?.name || 'Owner',
-    details: `Approved rent payment for ${paymentData?.month}`
+    details: `Approved rent payment for ${paymentData?.month}`,
+    propertyId: houseData?.propertyId || 'default'
   })
+  invalidateRentApprovalCache()
 }
 
 export async function rejectPayment(paymentId, reason, actionedBy) {
   const paymentRef = doc(db, 'rentPayments', paymentId)
   const snap = await getDoc(paymentRef)
   const paymentData = snap.data()
+  const houseSnap = paymentData?.houseId ? await getDoc(doc(db, 'houses', paymentData.houseId)) : null
+  const houseData = houseSnap?.exists() ? houseSnap.data() : null
 
   await updateDoc(paymentRef, {
     status: 'rejected',
@@ -135,6 +210,20 @@ export async function rejectPayment(paymentId, reason, actionedBy) {
     })
   }
 
+  if (houseData?.propertyId) {
+    await createAccountingJournal({
+      propertyId: houseData.propertyId,
+      createdBy: actionedBy?.uid || null,
+      date: paymentData.month ? `${paymentData.month}-01` : new Date().toISOString().slice(0, 10),
+      description: `Approved rent ${paymentData.month || ''} for ${houseData.internalDoorNumber || paymentData.houseId}`,
+      amount: Number(paymentData.amount || 0),
+      debitAccount: paymentData.mode === 'cash' ? 'Cash / Bank' : 'Cash / Bank',
+      creditAccount: 'Rental Income',
+      category: 'Rent',
+      houseId: paymentData.houseId,
+    }).catch(() => {})
+  }
+
   // Task 2: Log activity
   const { logActivity } = await import('./activityLogService')
   await logActivity({
@@ -143,8 +232,10 @@ export async function rejectPayment(paymentId, reason, actionedBy) {
     entityId: paymentId,
     performedBy: actionedBy?.uid || null,
     performedByName: actionedBy?.name || 'Owner',
-    details: `Rejected rent payment for ${paymentData?.month}. Reason: ${reason}`
+    details: `Rejected rent payment for ${paymentData?.month}. Reason: ${reason}`,
+    propertyId: houseData?.propertyId || 'default'
   })
+  invalidateRentApprovalCache()
 }
 
 // Given a house + list of already-submitted months, figure out current-month status
@@ -184,15 +275,14 @@ export function countMonthsPending(payments) {
 }
 
 export async function getMonthlyPaymentTotal(houseId, month) {
-  const snap = await getDocs(
-    query(
-      paymentsRef, 
-      where('houseId', '==', houseId), 
-      where('month', '==', month),
-      where('status', '==', 'approved')
-    )
-  )
-  return snap.docs.reduce((total, doc) => total + (Number(doc.data().amount) || 0), 0)
+  // Query only by houseId and filter month/status locally. This avoids another
+  // composite-index dependency while keeping the read tightly scoped to one house.
+  const snap = await getDocs(query(paymentsRef, where('houseId', '==', houseId)))
+  return snap.docs.reduce((total, doc) => {
+    const data = doc.data()
+    if (data.month !== month || data.status !== 'approved') return total
+    return total + (Number(data.amount) || 0)
+  }, 0)
 }
 
 export function calculateLateFee(rentAmount, dueDate, paymentDate, config) {

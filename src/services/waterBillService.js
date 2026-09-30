@@ -1,6 +1,7 @@
 import { collection, addDoc, getDocs, query, orderBy, where, updateDoc, doc } from 'firebase/firestore'
 import { db } from './firebase'
-import { uploadUnsigned } from './cloudinaryService'
+import { getActivePropertyId } from './configService'
+import { uploadPrivate } from './cloudinaryService'
 import { listHouses } from './houseService'
 import { createBulkNotifications } from './notificationService'
 
@@ -46,12 +47,13 @@ function round2(n) {
   return Math.round(n * 100) / 100
 }
 
-export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate }) {
+export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId }) {
   const houses = await listHouses()
   const shares = calculateWaterSplit(totalAmount, cycleMonths, houses)
 
   const docRef = await addDoc(billsRef, {
     cycleLabel,
+    propertyId: propertyId || houses[0]?.propertyId || getActivePropertyId() || 'default',
     totalAmount,
     cycleMonths,
     dueDate,
@@ -84,9 +86,10 @@ export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonth
 }
 
 export async function listWaterBillCycles(houseId = null) {
-  const base = houseId ? query(billsRef, where('houseIds', 'array-contains', houseId), orderBy('createdAt', 'desc')) : query(billsRef, orderBy('createdAt', 'desc'))
+  const propertyId = getActivePropertyId() || 'default'
+  const base = houseId ? query(billsRef, where('houseIds', 'array-contains', houseId)) : query(billsRef, where('propertyId', '==', propertyId))
   const snap = await getDocs(base)
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
 }
 
 export function houseShareFromWaterBill(bill, houseId) {
@@ -114,9 +117,13 @@ export async function submitWaterPayment({
   recordedBy,
 }) {
   let proofUrl = null
+  let proofPublicId = null
+  let proofResourceType = null
   if (proofFile) {
-    const { url } = await uploadUnsigned(proofFile, `water-proofs/${houseId}`)
-    proofUrl = url
+    const uploaded = await uploadPrivate(proofFile, `water-proofs/${houseId}`)
+    proofUrl = null
+    proofPublicId = uploaded.publicId
+    proofResourceType = uploaded.resourceType
   }
 
   const applicationNumber = generateWaterApplicationNumber()
@@ -132,6 +139,8 @@ export async function submitWaterPayment({
     neighborHouseId: mode === 'neighbor' ? neighborHouseId : null,
     neighborCollectedBy: null,
     proofUrl,
+    proofPublicId: proofPublicId || null,
+    proofResourceType: proofResourceType || null,
     applicationNumber,
     status: 'waiting_approval',
     uploadedByOwner,
@@ -145,16 +154,38 @@ export async function submitWaterPayment({
   return applicationNumber
 }
 
-export async function listPendingWaterApprovals() {
-  const snap = await getDocs(query(waterPaymentsRef, where('status', '==', 'waiting_approval')))
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+export async function listPendingWaterApprovals(houseIds = []) {
+  const ids = [...new Set(houseIds.filter(Boolean))]
+  if (!ids.length) return []
+  const chunks = []
+  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30))
+  const snapshots = await Promise.all(
+    chunks.map((chunk) => getDocs(query(waterPaymentsRef, where('houseId', 'in', chunk))))
+  )
+  const seen = new Map()
+  snapshots.forEach((snap) => snap.docs.forEach((d) => {
+    const data = d.data()
+    if (data.status === 'waiting_approval') seen.set(d.id, { id: d.id, ...data })
+  }))
+  return [...seen.values()].sort((a, b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0))
+}
+
+export async function listWaterBillCyclesForHouses(houseIds = []) {
+  const ids = [...new Set(houseIds.filter(Boolean))]
+  if (!ids.length) return []
+  const chunks = []
+  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30))
+  const snapshots = await Promise.all(
+    chunks.map((chunk) => getDocs(query(billsRef, where('houseIds', 'array-contains-any', chunk))))
+  )
+  const seen = new Map()
+  snapshots.forEach((snap) => snap.docs.forEach((d) => seen.set(d.id, { id: d.id, ...d.data() })))
+  return [...seen.values()].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
 }
 
 export async function listWaterPaymentsForHouse(houseId) {
-  const snap = await getDocs(
-    query(waterPaymentsRef, where('houseId', '==', houseId), orderBy('submittedAt', 'desc'))
-  )
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const snap = await getDocs(query(waterPaymentsRef, where('houseId', '==', houseId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0))
 }
 
 export async function listWaterPaymentsForBill(billId) {

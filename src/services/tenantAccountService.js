@@ -2,7 +2,12 @@ import { collection, getDocs, query, where, updateDoc, doc, orderBy } from 'fire
 import { db, authedFetch } from './firebase'
 
 export const DEFAULT_TENANT_PERMISSIONS = {
+  // Legacy `rent` remains the master rent switch. New controls let the admin
+  // allow status/details viewing separately from payment submission.
   rent: true,
+  rentStatus: true,
+  rentDetails: true,
+  rentSubmit: true,
   bills: true,
   notices: true,
   complaints: true,
@@ -12,22 +17,31 @@ export const DEFAULT_TENANT_PERMISSIONS = {
   documents: true,
   directory: true,
   community: true,
+  blueprint: true,
+  calendar: true,
+  family: true,
+  serviceContacts: true,
 }
 
 export async function listHouseTenantAccounts(houseId) {
-  return authedFetch('/api/list-subtenants', { houseId })
+  return authedFetch('/api/subtenant', { action: 'list', houseId })
 }
 
-export async function createSubTenantAccount({ houseId, email, password, name, phone, relationship, permissions }) {
-  return authedFetch('/api/create-subtenant', { houseId, email, password, name, phone, relationship, permissions })
+export async function createSubTenantAccount({ houseId, email, name, phone, relationship, permissions }) {
+  return authedFetch('/api/subtenant', { action: 'create', houseId, email, name, phone, relationship, permissions })
 }
 
 export async function updateSubTenantAccount(uid, { name, phone, relationship, permissions, disabled }) {
-  return authedFetch('/api/update-subtenant', { uid, name, phone, relationship, permissions, disabled })
+  return authedFetch('/api/subtenant', { action: 'update', uid, name, phone, relationship, permissions, disabled })
 }
 
 export async function deleteSubTenantAccount(uid) {
-  return authedFetch('/api/delete-subtenant', { uid })
+  return authedFetch('/api/subtenant', { action: 'delete', uid })
+}
+
+export async function updateTenantPermissions(uid, tenantPermissions) {
+  if (!uid) throw new Error('Tenant account is missing.')
+  await updateDoc(doc(db, 'users', uid), { tenantPermissions })
 }
 
 export function isPrimaryTenant(user) {
@@ -35,5 +49,33 @@ export function isPrimaryTenant(user) {
 }
 
 export function tenantCan(user, permission) {
-  return isPrimaryTenant(user) || user?.tenantPermissions?.[permission] !== false
+  if (user?.role !== 'tenant') return false
+  const permissions = user?.tenantPermissions || {}
+  if (permission === 'rentStatus' || permission === 'rentDetails' || permission === 'rentSubmit') {
+    if (permissions.rent === false) return false
+  }
+  return permissions[permission] !== false
 }
+
+export const TENANT_PERMISSION_LABELS = {
+  rent: 'Rent access (master switch)',
+  rentStatus: 'Rent status',
+  rentDetails: 'Rent amount & history',
+  rentSubmit: 'Submit rent / upload payment proof',
+  bills: 'EB / water bills',
+  notices: 'Notices',
+  complaints: 'Complaints',
+  maintenance: 'Maintenance requests',
+  visitors: 'Visitors',
+  commonArea: 'Common-area booking',
+  documents: 'Documents',
+  directory: 'Neighbour directory',
+  community: 'Community',
+  blueprint: 'Property blueprint',
+  calendar: 'Calendar & weather',
+  family: 'Family accounts',
+  serviceContacts: 'Service contacts',
+}
+
+export const ALL_TENANT_PERMISSIONS = Object.keys(TENANT_PERMISSION_LABELS)
+

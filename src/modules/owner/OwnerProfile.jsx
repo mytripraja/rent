@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { updateOwnProfile } from '../../services/authService'
-import { uploadUnsigned } from '../../services/cloudinaryService'
+import { uploadSigned } from '../../services/cloudinaryService'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../shared/ui/Toast'
 import PhotoCropper from '../shared/ui/PhotoCropper'
@@ -19,7 +19,7 @@ export default function OwnerProfile() {
     setCropFile(null)
     setUploading(true)
     try {
-      const { url } = await uploadUnsigned(blob, 'profile-photos')
+      const { url } = await uploadSigned(blob, `profile-photos/${user.uid}`, { visibility: 'upload' })
       setPhotoUrl(url)
       showToast({ message: "Photo uploaded successfully", type: "success" })
     } catch (err) {

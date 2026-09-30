@@ -51,6 +51,7 @@ export default function WaterBillCreator() {
     setSaving(true)
     try {
       await createWaterBillCycle({
+        propertyId: houses[0]?.propertyId || 'default',
         cycleLabel,
         totalAmount: Number(totalAmount),
         cycleMonths: Number(cycleMonths),

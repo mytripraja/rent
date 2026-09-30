@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { listBookings, approveBooking, rejectBooking } from '../../services/bookingService'
+import { listHouses } from '../../services/houseService'
 
 export default function BookingApprovals() {
   const [bookings, setBookings] = useState([])
@@ -9,7 +10,8 @@ export default function BookingApprovals() {
   }, [])
 
   async function load() {
-    const data = await listBookings()
+    const houses = await listHouses()
+    const data = await listBookings(null, null, houses.map(h => h.id))
     setBookings(data)
   }
 

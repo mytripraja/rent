@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { subscribeToNotifications, markAsRead, markAllAsRead } from '../../../services/notificationService';
 import { showBrowserNotification } from '../../../services/pushService';
 
-export default function NotificationBell({ userId }) {
+export default function NotificationBell({ userId, darkHeader = false }) {
   const [notifications, setNotifications] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -14,7 +14,7 @@ export default function NotificationBell({ userId }) {
     const unsubscribe = subscribeToNotifications(userId, (notifs) => {
       setNotifications(prev => {
         if (prev.length > 0 && notifs.length > 0 && notifs[0].id !== prev[0].id && !notifs[0].read) {
-          showBrowserNotification(notifs[0].title, notifs[0].message)
+          (() => { try { const p = JSON.parse(localStorage.getItem('rm_notification_preferences_v1') || '{}'); if (p.browser !== false) showBrowserNotification(notifs[0].title, notifs[0].message) } catch { showBrowserNotification(notifs[0].title, notifs[0].message) } })()
         }
         return notifs
       })
@@ -34,7 +34,9 @@ export default function NotificationBell({ userId }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const prefs = (() => { try { return JSON.parse(localStorage.getItem('rm_notification_preferences_v1') || '{}') } catch { return {} } })();
+  const visibleNotifications = notifications.filter(n => prefs.inApp !== false && (n.type === 'payment_reminder' ? prefs.rent !== false : ['notice_posted','message_received','message'].includes(n.type) ? prefs.messages !== false : ['maintenance','complaint_received'].includes(n.type) ? prefs.maintenance !== false : prefs.general !== false));
+  const unreadCount = visibleNotifications.filter(n => !n.read).length;
 
   const handleMarkAllAsRead = async (e) => {
     e.stopPropagation();
@@ -54,6 +56,7 @@ export default function NotificationBell({ userId }) {
       }
     }
     setIsOpen(false);
+    if (notification.link) window.location.href = notification.link;
   };
 
   const getIconForType = (type) => {
@@ -89,10 +92,10 @@ export default function NotificationBell({ userId }) {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 rounded-full hover:bg-black/5 transition-colors focus:outline-none focus:ring-2 focus:ring-cover"
+        className={`relative p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-cover ${darkHeader ? 'hover:bg-white/10' : 'hover:bg-black/5'}`}
         aria-label="Notifications"
       >
-        <Bell className="w-6 h-6 text-ink" />
+        <Bell className={`w-6 h-6 ${darkHeader ? 'text-white' : 'text-ink'}`} />
         {unreadCount > 0 && (
           <span className="absolute top-1 right-1 flex items-center justify-center w-5 h-5 text-[10px] font-bold text-paper bg-stamp-red rounded-full border-2 border-paper">
             {unreadCount > 99 ? '99+' : unreadCount}
@@ -107,7 +110,7 @@ export default function NotificationBell({ userId }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="absolute right-0 mt-2 w-80 sm:w-96 bg-paper-raised border border-brass/30 rounded-xl shadow-xl overflow-hidden z-50"
+            className="rm-notification-panel absolute right-0 mt-2 w-[min(24rem,calc(100vw-1.5rem))] bg-paper-raised border border-brass/30 rounded-xl shadow-xl overflow-hidden z-[70]"
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-brass/20 bg-paper">
               <h3 className="font-display font-semibold text-ink">Notifications</h3>
@@ -123,14 +126,14 @@ export default function NotificationBell({ userId }) {
             </div>
 
             <div className="max-h-[400px] overflow-y-auto overscroll-contain">
-              {notifications.length === 0 ? (
+              {visibleNotifications.length === 0 ? (
                 <div className="px-4 py-8 text-center text-ink-soft">
                   <Bell className="w-8 h-8 mx-auto mb-2 opacity-20" />
                   <p className="text-sm">No notifications yet.</p>
                 </div>
               ) : (
                 <div className="divide-y divide-brass/10">
-                  {notifications.map((notification) => (
+                  {visibleNotifications.map((notification) => (
                     <div
                       key={notification.id}
                       onClick={() => handleNotificationClick(notification)}

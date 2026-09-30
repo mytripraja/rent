@@ -69,7 +69,7 @@ export default function ManualEntryForTenant() {
       // immediately (rather than going through the approval queue) is expected.
       let match = null
       for (let attempt = 0; attempt < 5; attempt++) {
-        const pending = await listPendingApprovals()
+        const pending = await listPendingApprovals(houses.map((h) => h.id))
         match = pending.find((p) => p.applicationNumber === applicationNumber)
         if (match) break
         await new Promise(resolve => setTimeout(resolve, 1000))

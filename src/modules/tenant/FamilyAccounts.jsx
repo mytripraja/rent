@@ -5,9 +5,11 @@ import { createSubTenantAccount, deleteSubTenantAccount, isPrimaryTenant, listHo
 import { useAuth } from '../../context/AuthContext'
 
 const PERMISSIONS = [
-  ['rent', 'Rent & payment status'], ['bills', 'EB & water bills'], ['notices', 'Notices'], ['complaints', 'Complaints'],
-  ['maintenance', 'Maintenance'], ['visitors', 'Visitors'], ['commonArea', 'Common-area booking'], ['documents', 'Documents'],
-  ['directory', 'Neighbour directory'], ['community', 'Community board'],
+  ['rent', 'Rent access'], ['rentStatus', 'Rent status'], ['rentDetails', 'Rent amount & history'], ['rentSubmit', 'Submit rent'],
+  ['bills', 'EB & water bills'], ['notices', 'Notices'], ['complaints', 'Complaints'], ['maintenance', 'Maintenance'],
+  ['visitors', 'Visitors'], ['commonArea', 'Common-area booking'], ['documents', 'Documents'], ['directory', 'Neighbour directory'],
+  ['community', 'Community board'], ['blueprint', 'Property blueprint'], ['calendar', 'Calendar & weather'],
+  ['family', 'Family accounts'], ['serviceContacts', 'Service contacts'],
 ]
 
 export default function FamilyAccounts({ houseId: propHouseId, ownerMode = false } = {}) {
@@ -31,7 +33,7 @@ export default function FamilyAccounts({ houseId: propHouseId, ownerMode = false
   if (!ownerMode && !primary) return null
 
   function reset() {
-    setForm({ name: '', relationship: '', email: '', phone: '', password: '', permissions: { ...DEFAULT_TENANT_PERMISSIONS } })
+    setForm({ name: '', relationship: '', email: '', phone: '', permissions: { ...DEFAULT_TENANT_PERMISSIONS } })
     setShowCreate(false); setEditing(null); setMessage('')
   }
 
@@ -45,7 +47,7 @@ export default function FamilyAccounts({ houseId: propHouseId, ownerMode = false
 
   function beginEdit(account) {
     setEditing(account)
-    setForm({ name: account.name || '', relationship: account.relationship || '', email: account.email || '', phone: account.phone || '', password: '', permissions: { ...DEFAULT_TENANT_PERMISSIONS, ...(account.tenantPermissions || {}) } })
+    setForm({ name: account.name || '', relationship: account.relationship || '', email: account.email || '', phone: account.phone || '', permissions: { ...DEFAULT_TENANT_PERMISSIONS, ...(account.tenantPermissions || {}) } })
     setShowCreate(false)
   }
 
@@ -85,7 +87,8 @@ export default function FamilyAccounts({ houseId: propHouseId, ownerMode = false
 
       {(showCreate || editing) && <div className="mt-5 pt-5 border-t border-[var(--rm-border)]"><div className="flex items-center justify-between mb-4"><div><h3 className="font-semibold text-ink">{editing ? `Manage ${editing.name}` : 'Create family account'}</h3><p className="text-xs text-ink-soft mt-0.5">{editing ? 'Change profile and access permissions.' : `${5 - subs.length} slot${5-subs.length===1?'':'s'} remaining`}</p></div><button onClick={reset} className="w-9 h-9 rounded-lg bg-paper flex items-center justify-center"><X size={18}/></button></div>
         <form onSubmit={editing ? saveEdit : create} className="space-y-4">
-          <div className="grid sm:grid-cols-2 gap-3"><TextField label="Name" required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/><TextField label="Relationship" placeholder="Wife, son, daughter…" value={form.relationship} onChange={e=>setForm({...form,relationship:e.target.value})}/><TextField label="Email" type="email" required={!editing} disabled={!!editing} value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/><TextField label="Phone" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/>{!editing && <TextField label="Temporary password" type="password" required value={form.password} onChange={e=>setForm({...form,password:e.target.value})} hint="They can change it later using password reset."/>}</div>
+          <div className="grid sm:grid-cols-2 gap-3"><TextField label="Name" required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/><TextField label="Relationship" placeholder="Wife, son, daughter…" value={form.relationship} onChange={e=>setForm({...form,relationship:e.target.value})}/><TextField label="Email" type="email" required={!editing} disabled={!!editing} value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/><TextField label="Phone" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
+          {!editing && <div className="rounded-xl bg-brand/5 border border-brand/10 p-3 text-xs text-ink-soft"><ShieldCheck size={15} className="inline mr-1 text-brand"/> No password is created or shown here. A secure setup email will be sent so the family member creates their own password.</div>}
           <div><div className="flex items-center justify-between mb-2"><h4 className="text-sm font-semibold text-ink">What can this account access?</h4><button type="button" onClick={()=>setForm({...form,permissions:Object.fromEntries(PERMISSIONS.map(([k])=>[k,true]))})} className="text-xs text-brand font-semibold">Allow all</button></div><div className="grid sm:grid-cols-2 gap-2">{PERMISSIONS.map(([key,label])=>{const on=form.permissions[key]!==false;return <button type="button" key={key} onClick={()=>setForm({...form,permissions:{...form.permissions,[key]:!on}})} className={`flex items-center gap-2 p-3 rounded-xl border text-left ${on?'border-brand/20 bg-brand/5':'border-[var(--rm-border)] bg-paper'}`}><span className={`w-7 h-7 rounded-lg flex items-center justify-center ${on?'bg-brand text-white':'bg-paper-raised text-ink-soft'}`}>{on?<Check size={15}/>:<X size={15}/>}</span><span className="text-xs font-medium text-ink">{label}</span></button>})}</div></div>
           <div className="flex gap-2"><button disabled={busy} className="flex-1 rounded-xl bg-brand text-white py-2.5 text-sm font-semibold">{busy ? 'Saving…' : editing ? 'Save changes' : 'Create account'}</button><button type="button" onClick={reset} className="px-4 rounded-xl border border-[var(--rm-border)] text-sm">Cancel</button></div>
         </form>

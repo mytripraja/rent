@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { listHouses } from '../../services/houseService'
 import { listRentHistory, countMonthsPending, currentMonthStr, resolveMonthStatus } from '../../services/rentService'
-import { listActiveNotices } from '../../services/noticeService'
+import { listActiveNoticesForHouses } from '../../services/noticeService'
 import { listAllComplaints } from '../../services/complaintService'
 import { useAuth } from '../../context/AuthContext'
 import { Skeleton } from '../shared/ui/Skeleton'
@@ -49,8 +49,8 @@ export default function OwnerHome({ onNavigate }) {
 
       setStats({ occupied: occupied.length, total: houses.length, collected, pendingHouses })
       setAttention(attentionRows.sort((a, b) => b.months - a.months).slice(0, 5))
-      setNotices(await listActiveNotices())
-      const complaints = await listAllComplaints()
+      setNotices(await listActiveNoticesForHouses(houses.map((h) => h.id)))
+      const complaints = await listAllComplaints(houses.map((h) => h.id), houses[0]?.propertyId || null)
       setOpenComplaints(complaints.filter((c) => c.status === 'open').length)
     } catch (err) {
       console.error(err)
@@ -120,9 +120,9 @@ export default function OwnerHome({ onNavigate }) {
       </section>
 
       <div className="grid lg:grid-cols-[1.25fr_.75fr] gap-4">
-        <section className="rm-card p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-4"><div><SectionHeader icon={Activity} label="Needs attention"/><h3 className="font-display text-lg font-bold text-ink mt-1">Priority follow-ups</h3></div>{attention.length > 0 && <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-bold">{attention.length}</span>}</div>
-          {attention.length ? <div className="space-y-2">{attention.map(a => <button key={a.house} onClick={() => onNavigate('tenants')} className="w-full flex items-center gap-3 rounded-2xl border border-[var(--rm-border)] bg-paper p-3 text-left hover:border-brand/30 transition"><div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0"><Clock3 size={18}/></div><div className="flex-1 min-w-0"><p className="text-sm font-semibold text-ink truncate">{a.tenant || 'Tenant'} · House {a.house}</p><p className="text-xs text-ink-soft">{a.months} month{a.months === 1 ? '' : 's'} without an approved rent payment</p></div><ArrowRight size={16} className="text-ink-soft"/></button>)}</div> : <div className="rounded-2xl bg-brand/5 border border-brand/10 p-4 text-sm text-ink-soft flex gap-2"><CircleCheck size={18} className="text-brand shrink-0"/> No rent follow-ups at the moment.</div>}
+        <section className="rm-card p-4 sm:p-6 overflow-hidden">
+          <div className="flex items-center justify-between mb-4 min-w-0"><div className="min-w-0"><SectionHeader icon={Activity} label="Needs attention"/><h3 className="font-display text-lg font-bold text-ink mt-1">Priority follow-ups</h3></div>{attention.length > 0 && <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-bold">{attention.length}</span>}</div>
+          {attention.length ? <div className="space-y-2">{attention.map(a => <button key={a.house} onClick={() => onNavigate('tenants')} className="w-full min-w-0 overflow-hidden flex items-center gap-3 rounded-2xl border border-[var(--rm-border)] bg-paper p-3 text-left hover:border-brand/30 transition"><div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0"><Clock3 size={18}/></div><div className="flex-1 min-w-0"><p className="text-sm font-semibold text-ink truncate">{a.tenant || 'Tenant'} · House {a.house}</p><p className="text-xs text-ink-soft break-words leading-5">{a.months} month{a.months === 1 ? '' : 's'} without an approved rent payment</p></div><ArrowRight size={16} className="text-ink-soft"/></button>)}</div> : <div className="rounded-2xl bg-brand/5 border border-brand/10 p-4 text-sm text-ink-soft flex gap-2"><CircleCheck size={18} className="text-brand shrink-0"/> No rent follow-ups at the moment.</div>}
         </section>
 
         <section className="rm-card p-4 sm:p-6">

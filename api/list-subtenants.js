@@ -1,4 +1,4 @@
-import { db, requireAuth } from '../lib/firebaseAdmin.js'
+import { db, requireAuth, ownerCanAccessProperty } from '../lib/firebaseAdmin.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -8,7 +8,12 @@ export default async function handler(req, res) {
     if (!houseId) return res.status(400).json({ error: 'House id is required' })
     const callerSnap = await db.collection('users').doc(decoded.uid).get()
     const caller = callerSnap.data()
-    const allowed = caller?.role === 'owner' || caller?.role === 'admin' || (caller?.role === 'tenant' && caller.accountType !== 'sub' && caller.houseId === houseId)
+    let allowed = caller?.role === 'admin' || (caller?.role === 'owner' && caller?.appMode !== 'dad-lite')
+    if (allowed) {
+      const houseSnap = await db.collection('houses').doc(String(houseId)).get()
+      allowed = houseSnap.exists && ownerCanAccessProperty(caller, String(houseSnap.data()?.propertyId || 'default'))
+    }
+    allowed = allowed || (caller?.role === 'tenant' && caller.accountType !== 'sub' && caller.houseId === houseId)
     if (!allowed) return res.status(403).json({ error: 'Not allowed to view family accounts' })
     const snap = await db.collection('users').where('role', '==', 'tenant').where('houseId', '==', houseId).get()
     const rows = snap.docs.map(d => ({ uid: d.id, ...d.data() }))

@@ -1,0 +1,15 @@
+name: Rental Manager Automated Backup
+
+on:
+  schedule:
+    - cron: '30 20 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create secure cloud-storage backup package
+        run: |
+          curl -sf -X POST "https://${{ vars.VERCEL_APP_DOMAIN }}/api/revoke-vacated-access?job=backup" \
+            -H "x-cron-secret: ${{ secrets.REVOKE_CRON_SECRET }}"

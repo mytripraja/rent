@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { listHouses, setEbOverride } from '../../services/houseService'
-import { calculateEbSplit, createEbBillCycle, listEbBillCycles } from '../../services/ebBillService'
+import { calculateEbSplit, createEbBillCycle, listEbBillCycles, listEbMeterReadingsForHouses, recordEbMeterReadingsBulk } from '../../services/ebBillService'
 import { useToast } from '../shared/ui/Toast'
 import { createGoogleCalendarLink } from '../../utils/calendarLinks'
 import { CalendarPlus } from 'lucide-react'
@@ -15,6 +15,8 @@ export default function EBBillCreator() {
   const [dueDate, setDueDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [createdCycle, setCreatedCycle] = useState(null)
+  const [meterRows, setMeterRows] = useState([])
+  const [savingReadings, setSavingReadings] = useState(false)
 
   useEffect(() => {
     refresh()
@@ -22,8 +24,15 @@ export default function EBBillCreator() {
 
   async function refresh() {
     try {
-      setHouses(await listHouses())
+      const houseRows = await listHouses()
+      setHouses(houseRows)
       setCycles(await listEbBillCycles())
+      const occupied = houseRows.filter(h => h.status === 'occupied')
+      const readingRows = await listEbMeterReadingsForHouses(occupied.map(h => h.id))
+      setMeterRows(occupied.map((h) => {
+        const latest = readingRows.find(r => r.houseId === h.id)
+        return { houseId: h.id, door: h.internalDoorNumber || h.govtDoorNumber || h.id, tenantName: h.tenantName || 'Vacant', reading: latest?.reading ?? '', readingDate: latest?.readingDate || '', readingTime: latest?.readingTime || '', note: '' }
+      }))
     } catch (err) {
       console.error(err)
       showToast({ message: "Failed to load EB bill data", type: "error" })
@@ -35,6 +44,26 @@ export default function EBBillCreator() {
     totalAmount && !isNaN(Number(totalAmount))
       ? calculateEbSplit(Number(totalAmount), Number(cycleMonths), houses)
       : []
+
+  function updateMeterRow(houseId, field, value) {
+    setMeterRows(rows => rows.map(row => row.houseId === houseId ? { ...row, [field]: value } : row))
+  }
+
+  async function saveMeterReadings() {
+    const rows = meterRows.filter(row => row.reading !== '' || row.readingDate)
+    if (!rows.length) { showToast({ message: 'Enter at least one meter reading.', type: 'error' }); return }
+    const invalid = rows.find(row => row.reading === '' || !row.readingDate || !Number.isFinite(Number(row.reading)) || Number(row.reading) < 0)
+    if (invalid) { showToast({ message: `Complete the reading and date for ${invalid.door}.`, type: 'error' }); return }
+    setSavingReadings(true)
+    try {
+      await recordEbMeterReadingsBulk(rows, houses[0]?.propertyId)
+      showToast({ message: 'Meter readings saved for the selected houses.', type: 'success' })
+      await refresh()
+    } catch (err) {
+      console.error(err)
+      showToast({ message: err.message || 'Failed to save meter readings', type: 'error' })
+    } finally { setSavingReadings(false) }
+  }
 
   async function toggleOwnMeter(house) {
     try {
@@ -69,10 +98,15 @@ export default function EBBillCreator() {
     setSaving(true)
     try {
       await createEbBillCycle({
+        propertyId: houses[0]?.propertyId || 'default',
         cycleLabel,
         totalAmount: Number(totalAmount),
         cycleMonths: Number(cycleMonths),
         dueDate,
+        previousMeterReading: document.getElementById('eb-previous-reading')?.value || '',
+        currentMeterReading: document.getElementById('eb-current-reading')?.value || '',
+        meterReadingDate: document.getElementById('eb-reading-date')?.value || '',
+        meterReadingTime: document.getElementById('eb-reading-time')?.value || '',
       })
       setCreatedCycle({ label: cycleLabel, dueDate })
       setTotalAmount('')
@@ -93,6 +127,29 @@ export default function EBBillCreator() {
       <div>
         <h2 className="text-lg font-semibold text-ink">EB Bill</h2>
         <p className="text-sm text-ink-soft">Every 2 months by default — override per house below if needed.</p>
+      </div>
+
+      {/* Physical meter register */}
+      <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+          <div>
+            <h3 className="text-sm font-semibold text-ink">EB meter reading register</h3>
+            <p className="text-xs text-ink-soft mt-1">Record the reading when you physically see the meter. Tenants can use this history to compare it with the government bill.</p>
+          </div>
+          <button type="button" onClick={saveMeterReadings} disabled={savingReadings || !meterRows.length} className="bg-brand text-white px-3 py-2 rounded-lg text-xs font-medium disabled:opacity-50">{savingReadings ? 'Saving…' : 'Save readings'}</button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[760px]">
+            <thead><tr className="text-left text-ink-soft border-b border-brass/15"><th className="py-2 pr-2">House / tenant</th><th className="py-2 pr-2">Reading (kWh)</th><th className="py-2 pr-2">Date</th><th className="py-2 pr-2">Time</th><th className="py-2">Note</th></tr></thead>
+            <tbody>{meterRows.map(row => <tr key={row.houseId} className="border-b border-brass/10">
+              <td className="py-2 pr-2"><span className="font-medium text-ink">{row.door}</span><span className="block text-ink-soft">{row.tenantName}</span></td>
+              <td className="py-2 pr-2"><input inputMode="decimal" type="number" min="0" step="0.01" value={row.reading} onChange={e => updateMeterRow(row.houseId, 'reading', e.target.value)} onWheel={e => e.currentTarget.blur()} className="w-28 border border-brass/30 rounded px-2 py-1.5" placeholder="e.g. 10579" /></td>
+              <td className="py-2 pr-2"><input type="date" value={row.readingDate} onChange={e => updateMeterRow(row.houseId, 'readingDate', e.target.value)} className="border border-brass/30 rounded px-2 py-1.5" /></td>
+              <td className="py-2 pr-2"><input type="time" value={row.readingTime} onChange={e => updateMeterRow(row.houseId, 'readingTime', e.target.value)} className="border border-brass/30 rounded px-2 py-1.5" /></td>
+              <td><input value={row.note} onChange={e => updateMeterRow(row.houseId, 'note', e.target.value)} className="w-40 border border-brass/30 rounded px-2 py-1.5" placeholder="Optional note" /></td>
+            </tr>)}</tbody>
+          </table>
+        </div>
       </div>
 
       {/* Per-house overrides */}
@@ -143,6 +200,12 @@ export default function EBBillCreator() {
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
         <input required type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <div className="rounded-xl bg-paper border border-brass/20 p-3 space-y-2">
+          <p className="text-xs font-semibold text-ink">Government bill reading (optional)</p>
+          <p className="text-[11px] text-ink-soft">Use the official EB bill values when available. The system calculates consumption as current − previous; it does not claim an individual tenant's unit usage for a shared meter.</p>
+          <div className="grid grid-cols-2 gap-2"><input id="eb-previous-reading" type="number" min="0" step="0.01" placeholder="Previous reading" className="border border-brass/30 rounded-lg px-3 py-2 text-sm" onWheel={e => e.currentTarget.blur()} /><input id="eb-current-reading" type="number" min="0" step="0.01" placeholder="Current reading" className="border border-brass/30 rounded-lg px-3 py-2 text-sm" onWheel={e => e.currentTarget.blur()} /></div>
+          <div className="grid grid-cols-2 gap-2"><input id="eb-reading-date" type="date" className="border border-brass/30 rounded-lg px-3 py-2 text-sm" /><input id="eb-reading-time" type="time" className="border border-brass/30 rounded-lg px-3 py-2 text-sm" /></div>
+        </div>
 
         {preview.length > 0 && (
           <div className="bg-paper rounded-lg p-3 text-xs space-y-1">

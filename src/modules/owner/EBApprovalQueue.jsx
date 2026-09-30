@@ -6,9 +6,11 @@ import { getCashReceivers } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../shared/ui/ConfirmDialog'
 import { useToast } from '../shared/ui/Toast'
+import { getPaymentProofUrl } from '../../services/cloudinaryService'
 
 export default function EBApprovalQueue() {
   const { user } = useAuth()
+  const [proofUrls, setProofUrls] = useState({})
   const [pending, setPending] = useState([])
   const [rejectingId, setRejectingId] = useState(null)
   const [reason, setReason] = useState('')
@@ -41,7 +43,8 @@ export default function EBApprovalQueue() {
 
   async function refresh() {
     try {
-      setPending(await listPendingEbApprovals())
+      const hList = await listHouses()
+      setPending(await listPendingEbApprovals(hList.map(h => h.id)))
     } catch (error) {
       console.error("Error fetching approvals", error)
       toast.error('Failed to fetch pending EB approvals')
@@ -102,6 +105,11 @@ export default function EBApprovalQueue() {
     return <p className="text-sm text-ink-soft py-8 text-center">No EB bill submissions waiting for approval.</p>
   }
 
+  async function openProof(payment) {
+    if (proofUrls[payment.id] || payment.proofUrl) return
+    try { const url = await getPaymentProofUrl('ebBillPayments', payment.id); setProofUrls(v => ({ ...v, [payment.id]: url })); window.open(url, '_blank', 'noopener,noreferrer') } catch (e) { console.error(e) }
+  }
+
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-semibold text-ink">EB Bill — Pending Approvals</h2>
@@ -137,7 +145,7 @@ export default function EBApprovalQueue() {
                 <p className="text-xs text-ink-soft">Sent: {p.dateSent} · App# {p.applicationNumber}</p>
                 {p.recordedBy && <p className="text-xs text-ink-soft">Entered by {p.recordedBy.name}</p>}
                 {p.proofUrl && (
-                  <a href={p.proofUrl} target="_blank" rel="noreferrer" className="text-xs text-brand hover:underline mt-1 inline-block">
+                  <a href={proofUrls[p.id] || p.proofUrl || '#'} target="_blank" rel="noreferrer" onClick={e => { if (!p.proofUrl && !proofUrls[p.id]) { e.preventDefault(); openProof(p) } }} className="text-xs text-brand hover:underline mt-1 inline-block">
                     View proof screenshot
                   </a>
                 )}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Download, Copy, Info } from 'lucide-react'
-import { collection, getDocs, query, orderBy } from 'firebase/firestore'
-import { db } from '../../services/firebase'
+import { listHouses } from '../../services/houseService'
+import { listRentPaymentsForHouses } from '../../services/rentService'
 import { useToast } from '../shared/ui/Toast'
 
 export default function GoogleSheetsExport() {
@@ -14,12 +14,10 @@ export default function GoogleSheetsExport() {
       const houses = await listHouses()
       const houseById = Object.fromEntries(houses.map((h) => [h.id, h]))
 
-      const q = query(collection(db, 'rentPayments'), orderBy('month', 'desc'))
-      const snap = await getDocs(q)
-      const data = snap.docs.map(doc => {
-        const d = doc.data()
+      const snapData = await listRentPaymentsForHouses(houses.map((h) => h.id))
+      const data = snapData.map(d => {
         return {
-          id: doc.id,
+          id: d.id,
           month: d.month || '',
           houseId: d.houseId || '',
           // The tenant's name comes from the house record, not recordedBy —

@@ -1,6 +1,6 @@
-import { auth, db, requireAuth } from '../lib/firebaseAdmin.js'
+import { auth, db, requireAuth, ownerCanAccessProperty } from '../lib/firebaseAdmin.js'
 
-const DEFAULTS = ['rent','bills','notices','complaints','maintenance','visitors','commonArea','documents','directory','community']
+const DEFAULTS = ['rent','rentStatus','rentDetails','rentSubmit','bills','notices','complaints','maintenance','visitors','commonArea','documents','directory','community']
 
 async function profile(uid) {
   const snap = await db.collection('users').doc(uid).get()
@@ -17,7 +17,11 @@ export default async function handler(req, res) {
     const target = await profile(uid)
     if (!target || target.role !== 'tenant' || target.accountType !== 'sub') return res.status(404).json({ error: 'Family account not found' })
 
-    const ownerAccess = caller?.role === 'owner' || caller?.role === 'admin'
+    let ownerAccess = caller?.role === 'admin' || (caller?.role === 'owner' && caller?.appMode !== 'dad-lite')
+    if (ownerAccess) {
+      const houseSnap = await db.collection('houses').doc(String(target.houseId || '')).get()
+      ownerAccess = houseSnap.exists && ownerCanAccessProperty(caller, String(houseSnap.data()?.propertyId || 'default'))
+    }
     const primaryAccess = caller?.role === 'tenant' && caller.accountType !== 'sub' && caller.houseId === target.houseId
     if (!ownerAccess && !primaryAccess) return res.status(403).json({ error: 'Not allowed to manage this family account' })
 

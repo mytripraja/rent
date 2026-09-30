@@ -16,8 +16,9 @@ export default function ComplaintInbox() {
 
   async function refresh() {
     try {
-      setHouses(await listHouses())
-      setComplaints(await listAllComplaints())
+      const loadedHouses = await listHouses()
+      setHouses(loadedHouses)
+      setComplaints(await listAllComplaints(loadedHouses.map((h) => h.id), loadedHouses[0]?.propertyId || null))
     } catch (err) {
       showToast({ message: 'Failed to load complaints: ' + err.message, type: 'error' })
     }
@@ -120,6 +121,7 @@ function SendComplaintModal({ houses, onClose, onSent, showToast }) {
       await submitOwnerComplaint({
         targetHouseIds: audience === 'all' ? 'all' : selectedHouseIds,
         message,
+        propertyId: houses[0]?.propertyId || 'default',
       })
       showToast({ message: 'Complaint sent successfully', type: 'success' })
       onSent()

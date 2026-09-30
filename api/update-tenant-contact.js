@@ -1,51 +1,404 @@
-import { auth, db, requireOwnerLevel } from '../lib/firebaseAdmin.js'
+import crypto from 'node:crypto'
+import { auth, db, requireAuth, requireAdmin, requireOwnerLevel, ownerCanAccessProperty } from '../lib/firebaseAdmin.js'
 
-// Changing a tenant's login EMAIL has to go through the Admin SDK — a client
-// can't change another user's Firebase Auth email, and just editing the
-// Firestore copy would leave their actual login email out of sync. Phone
-// number is Firestore-only, but bundled here so both update in one call and
-// stay consistent across users/{uid}, houses/{houseId}, and customers/{id}.
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+const OTP_TTL_MS = 10 * 60 * 1000
+const MAX_OTP_ATTEMPTS = 5
+const REQUEST_TTL_MS = 24 * 60 * 60 * 1000
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function normalizeEmail(value) { return String(value || '').trim().toLowerCase() }
+function hashOtp(otp, salt) { return crypto.createHash('sha256').update(`${salt}:${otp}`).digest('hex') }
+function makeOtp() { return String(crypto.randomInt(100000, 1000000)) }
+function safeEmail(value) { const e = normalizeEmail(value); if (!EMAIL_RE.test(e) || e.length > 320) throw new Error('Enter a valid email address.') ; return e }
+
+async function sendEmail({ to, subject, text, html }) {
+  const key = process.env.RESEND_API_KEY
+  const from = process.env.EMAIL_FROM
+  if (!key || !from) {
+    const err = new Error('Email delivery is not configured. Ask the administrator to configure RESEND_API_KEY and EMAIL_FROM.')
+    err.statusCode = 503
+    throw err
+  }
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to: [to], subject, text, html }),
+  })
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    const err = new Error(`Email delivery failed${body ? `: ${body.slice(0, 180)}` : '.'}`)
+    err.statusCode = 502
+    throw err
+  }
+}
+
+async function ensureEmailAvailable(email, uid) {
+  try {
+    const existing = await auth.getUserByEmail(email)
+    if (existing.uid !== uid) {
+      const err = new Error('That email address is already used by another account.')
+      err.statusCode = 409
+      throw err
+    }
+    const err = new Error('New email must be different from the current email.')
+    err.statusCode = 400
+    throw err
+  } catch (err) {
+    if (err?.code === 'auth/user-not-found') return
+    throw err
+  }
+}
+
+async function getUserDoc(uid) {
+  const snap = await db.collection('users').doc(uid).get()
+  if (!snap.exists) { const err = new Error('Account profile not found.'); err.statusCode = 404; throw err }
+  return snap.data() || {}
+}
+
+async function updateRelatedRecords(uid, profile, oldEmail, newEmail) {
+  const updates = { email: newEmail, emailChangedAt: Date.now(), previousEmail: oldEmail }
+  await db.collection('users').doc(uid).update(updates)
+
+  const customerSnap = await db.collection('customers').where('linkedUids', 'array-contains', uid).get()
+  for (const customer of customerSnap.docs) {
+    await customer.ref.update({ email: newEmail, emailChangedAt: Date.now() })
+    await db.collection('customerLookup').doc(customer.id).set({ email: newEmail }, { merge: true })
+  }
+
+  const houseId = profile.houseId
+  if (profile.role === 'tenant' && houseId) {
+    const houseRef = db.collection('houses').doc(houseId)
+    const houseSnap = await houseRef.get()
+    if (houseSnap.exists) {
+      const house = houseSnap.data() || {}
+      await houseRef.update({ tenantEmail: newEmail, emailChangedAt: Date.now() })
+      await db.collection('directory').doc(houseId).set({
+        internalDoorNumber: house.internalDoorNumber,
+        status: house.status,
+        tenantName: house.tenantName,
+        tenantPhone: house.phoneVisibleToNeighbors ? house.tenantPhone : null,
+        phoneVisibleToNeighbors: !!house.phoneVisibleToNeighbors,
+      }, { merge: true })
+    }
+  }
+}
+
+async function applyEmailChange(uid, newEmail, actor) {
+  const profile = await getUserDoc(uid)
+  const oldEmail = normalizeEmail(profile.email || '')
+  if (!oldEmail) { const err = new Error('Current account email is missing.'); err.statusCode = 400; throw err }
+  newEmail = safeEmail(newEmail)
+  await ensureEmailAvailable(newEmail, uid)
+
+  await auth.updateUser(uid, { email: newEmail, emailVerified: false })
+  try {
+    await updateRelatedRecords(uid, profile, oldEmail, newEmail)
+  } catch (err) {
+    // Best-effort rollback so Auth and Firestore do not stay out of sync.
+    try { await auth.updateUser(uid, { email: oldEmail, emailVerified: false }) } catch {}
+    throw err
+  }
+
+  await db.collection('activityLog').add({
+    type: 'email_changed',
+    actorUid: actor.uid,
+    actorName: actor.name || actor.email || 'System',
+    targetUid: uid,
+    oldEmail,
+    newEmail,
+    createdAt: Date.now(),
+  })
+  return { uid, oldEmail, newEmail }
+}
+
+async function requestEmailChange(req, res) {
+  const decoded = await requireAuth(req)
+  const profile = await getUserDoc(decoded.uid)
+  const oldEmail = normalizeEmail(decoded.email || profile.email || '')
+  if (!oldEmail) return res.status(400).json({ error: 'Your account does not have a current email address.' })
+
+  const newEmail = safeEmail(req.body?.newEmail)
+  if (newEmail === oldEmail) return res.status(400).json({ error: 'New email must be different from your current email.' })
+  await ensureEmailAvailable(newEmail, decoded.uid)
+
+  const oldEmailUnavailable = !!req.body?.oldEmailUnavailable
+  const reason = String(req.body?.reason || '').trim().slice(0, 1000)
+  if (oldEmailUnavailable && !reason) return res.status(400).json({ error: 'Please explain why you cannot access the old email address.' })
+
+  // Cancel older pending requests for this user so only the newest request can be used.
+  const existing = await db.collection('emailChangeRequests').where('uid', '==', decoded.uid).get()
+  const pending = existing.docs.filter(d => d.data()?.status === 'pending')
+  const batch = db.batch()
+  pending.forEach(d => batch.update(d.ref, { status: 'superseded', updatedAt: Date.now() }))
+  await batch.commit()
+
+  const ref = db.collection('emailChangeRequests').doc()
+  const now = Date.now()
+  const base = {
+    uid: decoded.uid,
+    role: profile.role || 'unknown',
+    oldEmail,
+    newEmail,
+    oldEmailUnavailable,
+    reason,
+    status: oldEmailUnavailable ? 'pending_admin' : 'pending_otp',
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: now + REQUEST_TTL_MS,
+    otpExpiresAt: now + OTP_TTL_MS,
+    oldOtpAttempts: 0,
+    newOtpAttempts: 0,
+    createdIp: String(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || '').split(',')[0].trim().slice(0, 80),
+  }
+
+  if (oldEmailUnavailable) {
+    await ref.set(base)
+    return res.status(200).json({ ok: true, mode: 'admin_review', message: 'Your request was submitted for administrator review.' })
+  }
+
+  const oldOtp = makeOtp()
+  const newOtp = makeOtp()
+  const salt = crypto.randomBytes(16).toString('hex')
+  await ref.set({ ...base, otpSalt: salt, oldOtpHash: hashOtp(oldOtp, salt), newOtpHash: hashOtp(newOtp, salt) })
 
   try {
+    await Promise.all([
+      sendEmail({
+        to: oldEmail,
+        subject: 'Rental Manager — verify your email change',
+        text: `Your Rental Manager email-change OTP is ${oldOtp}. It expires in 10 minutes. If you did not request this, ignore this message.`,
+        html: `<p>Your Rental Manager email-change verification code is:</p><h2 style="letter-spacing:6px">${oldOtp}</h2><p>It expires in 10 minutes. If you did not request this, ignore this message.</p>`,
+      }),
+      sendEmail({
+        to: newEmail,
+        subject: 'Rental Manager — verify your new email',
+        text: `Your Rental Manager new-email verification OTP is ${newOtp}. It expires in 10 minutes. If you did not request this, ignore this message.`,
+        html: `<p>Your Rental Manager new-email verification code is:</p><h2 style="letter-spacing:6px">${newOtp}</h2><p>It expires in 10 minutes. It is only valid for this email-change request.</p>`,
+      }),
+    ])
+  } catch (err) {
+    await ref.update({ status: 'delivery_failed', updatedAt: Date.now(), deliveryError: err.message.slice(0, 300) })
+    throw err
+  }
+
+  return res.status(200).json({ ok: true, mode: 'otp', requestId: ref.id, expiresAt: now + OTP_TTL_MS, message: 'Verification codes were sent to your old and new email addresses.' })
+}
+
+async function verifyEmailChange(req, res) {
+  const decoded = await requireAuth(req)
+  const requestId = String(req.body?.requestId || '')
+  const oldOtp = String(req.body?.oldOtp || '').trim()
+  const newOtp = String(req.body?.newOtp || '').trim()
+  if (!requestId || !/^\d{6}$/.test(oldOtp) || !/^\d{6}$/.test(newOtp)) return res.status(400).json({ error: 'Enter both 6-digit verification codes.' })
+
+  const ref = db.collection('emailChangeRequests').doc(requestId)
+  const snap = await ref.get()
+  if (!snap.exists || snap.data()?.uid !== decoded.uid) return res.status(404).json({ error: 'Email-change request not found.' })
+  const data = snap.data()
+  if (data.status !== 'pending_otp') return res.status(400).json({ error: 'This request is no longer active.' })
+  if (Number(data.otpExpiresAt || 0) < Date.now()) { await ref.update({ status: 'expired', updatedAt: Date.now() }); return res.status(400).json({ error: 'The verification codes have expired. Start a new request.' }) }
+  if (Number(data.oldOtpAttempts || 0) >= MAX_OTP_ATTEMPTS || Number(data.newOtpAttempts || 0) >= MAX_OTP_ATTEMPTS) return res.status(429).json({ error: 'Too many incorrect attempts. Start a new request.' })
+
+  const salt = data.otpSalt
+  const oldOk = crypto.timingSafeEqual(Buffer.from(hashOtp(oldOtp, salt)), Buffer.from(data.oldOtpHash || ''))
+  const newOk = crypto.timingSafeEqual(Buffer.from(hashOtp(newOtp, salt)), Buffer.from(data.newOtpHash || ''))
+  if (!oldOk || !newOk) {
+    await ref.update({ oldOtpAttempts: Number(data.oldOtpAttempts || 0) + (oldOk ? 0 : 1), newOtpAttempts: Number(data.newOtpAttempts || 0) + (newOk ? 0 : 1), updatedAt: Date.now() })
+    return res.status(400).json({ error: 'One or both verification codes are incorrect.' })
+  }
+
+  const actor = { uid: decoded.uid, name: (await getUserDoc(decoded.uid)).name, email: decoded.email }
+  const result = await applyEmailChange(decoded.uid, data.newEmail, actor)
+  await ref.update({ status: 'approved', verifiedAt: Date.now(), updatedAt: Date.now(), completedAt: Date.now() })
+  return res.status(200).json({ ok: true, ...result })
+}
+
+async function adminList(req, res) {
+  const decoded = await requireAdmin(req)
+  const snap = await db.collection('emailChangeRequests').where('status', '==', 'pending_admin').limit(50).get()
+  return res.status(200).json({ requests: snap.docs.map(d => ({ id: d.id, ...d.data(), oldOtpHash: undefined, newOtpHash: undefined, otpSalt: undefined })) })
+}
+
+async function adminDecision(req, res, approve) {
+  const decoded = await requireAdmin(req)
+  const requestId = String(req.body?.requestId || '')
+  if (!requestId) return res.status(400).json({ error: 'Request ID is required.' })
+  const ref = db.collection('emailChangeRequests').doc(requestId)
+  const snap = await ref.get()
+  if (!snap.exists) return res.status(404).json({ error: 'Request not found.' })
+  const data = snap.data()
+  if (data.status !== 'pending_admin') return res.status(400).json({ error: 'Only administrator-review requests can be approved here.' })
+
+  const adminProfile = await getUserDoc(decoded.uid)
+  if (!approve) {
+    await ref.update({ status: 'rejected', reviewedAt: Date.now(), reviewedBy: { uid: decoded.uid, name: adminProfile.name || 'Admin' }, reviewNote: String(req.body?.note || '').slice(0, 1000) })
+    return res.status(200).json({ ok: true })
+  }
+
+  const result = await applyEmailChange(data.uid, data.newEmail, { uid: decoded.uid, name: adminProfile.name || 'Admin', email: decoded.email })
+  await ref.update({ status: 'approved', reviewedAt: Date.now(), reviewedBy: { uid: decoded.uid, name: adminProfile.name || 'Admin' }, completedAt: Date.now(), updatedAt: Date.now() })
+  return res.status(200).json({ ok: true, ...result })
+}
+
+
+async function adminListUsers(req, res) {
+  await requireAdmin(req)
+  const result = await auth.listUsers(200)
+  const users = await Promise.all(result.users.map(async u => {
+    const profile = (await db.collection('users').doc(u.uid).get()).data() || {}
+    return {
+      uid: u.uid, email: u.email || profile.email || null, displayName: u.displayName || profile.name || null,
+      role: profile.role || null, name: profile.name || u.displayName || null, appMode: profile.appMode || null,
+      disabled: !!u.disabled, emailVerified: !!u.emailVerified,
+      createdAt: u.metadata?.creationTime || null, lastSignInAt: u.metadata?.lastSignInTime || null,
+    }
+  }))
+  return res.status(200).json({ users })
+}
+
+async function adminSetDisabled(req, res) {
+  const decoded = await requireAdmin(req)
+  const uid = String(req.body?.uid || '')
+  const disabled = !!req.body?.disabled
+  if (!uid) return res.status(400).json({ error: 'User ID is required.' })
+  if (uid === decoded.uid && disabled) return res.status(400).json({ error: 'You cannot disable your own administrator account.' })
+  const target = await auth.getUser(uid)
+  await auth.updateUser(uid, { disabled })
+  const adminDoc = await getUserDoc(decoded.uid)
+  await db.collection('users').doc(uid).set({ disabled, accountStatusUpdatedAt: Date.now(), accountStatusUpdatedBy: { uid: decoded.uid, name: adminDoc.name || 'Admin' } }, { merge: true })
+  await db.collection('auditLogs').add({ action: disabled ? 'account_disabled' : 'account_enabled', targetUid: uid, targetEmail: target.email || null, actorUid: decoded.uid, actorEmail: decoded.email || null, createdAt: Date.now() })
+  return res.status(200).json({ ok: true, disabled })
+}
+
+async function adminRevokeSessions(req, res) {
+  const decoded = await requireAdmin(req)
+  const uid = String(req.body?.uid || '')
+  if (!uid) return res.status(400).json({ error: 'User ID is required.' })
+  await auth.revokeRefreshTokens(uid)
+  await db.collection('auditLogs').add({ action: 'sessions_revoked', targetUid: uid, actorUid: decoded.uid, actorEmail: decoded.email || null, createdAt: Date.now() })
+  return res.status(200).json({ ok: true, revokedAt: Date.now() })
+}
+
+async function tenantSendLoginSetup(req, res) {
+  const decoded = await requireOwnerLevel(req)
+  const tenantUid = String(req.body?.tenantUid || '')
+  const houseId = String(req.body?.houseId || '')
+  if (!tenantUid || !houseId) return res.status(400).json({ error: 'Missing tenant or house.' })
+
+  const target = await auth.getUser(tenantUid)
+  if (!target.email) return res.status(400).json({ error: 'Link an email address to this tenant before sending login access.' })
+  const houseSnap = await db.collection('houses').doc(houseId).get()
+  if (!houseSnap.exists || houseSnap.data()?.currentTenantId !== tenantUid) return res.status(403).json({ error: 'This tenant is not linked to the selected house.' })
+  const callerDoc = await db.collection('users').doc(decoded.uid).get()
+  const caller = callerDoc.data() || {}
+  if (!ownerCanAccessProperty(caller, String(houseSnap.data()?.propertyId || 'default'))) return res.status(403).json({ error: 'You do not have access to this property.' })
+
+  const continueUrl = String(process.env.PASSWORD_RESET_CONTINUE_URL || '').trim()
+  if (continueUrl && !/^https:\/\/[^\s]+$/.test(continueUrl)) return res.status(503).json({ error: 'PASSWORD_RESET_CONTINUE_URL must be a valid HTTPS URL.' })
+  let link
+  try {
+    link = await auth.generatePasswordResetLink(target.email, continueUrl ? { url: continueUrl, handleCodeInApp: false } : undefined)
+  } catch (error) {
+    if (/continue|authorized|whitelist/i.test(String(error?.message || '') + String(error?.code || ''))) return res.status(503).json({ error: 'Login setup URL is not authorized in Firebase Authentication. Add its domain under Authentication → Settings → Authorized domains, or remove PASSWORD_RESET_CONTINUE_URL to use the Firebase default reset page.' })
+    throw error
+  }
+  const apiKey = process.env.RESEND_API_KEY
+  const from = process.env.EMAIL_FROM
+  if (!apiKey || !from) return res.status(503).json({ error: 'Email delivery is not configured. Ask the administrator to configure RESEND_API_KEY and EMAIL_FROM.' })
+  const response = await fetch('https://api.resend.com/emails', {
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+    body: JSON.stringify({ from, to:[target.email], subject:'Rental Manager — set up your login', text:`Your Rental Manager account is ready. Set your password using this secure link: ${link}`, html:`<p>Your Rental Manager account is ready.</p><p><a href="${link}">Set your password and sign in</a></p><p>If you did not expect this message, contact your property administrator.</p>` })
+  })
+  if (!response.ok) return res.status(502).json({ error: 'Could not send the login setup email.' })
+  await db.collection('auditLogs').add({ action:'tenant_login_setup_sent', targetUid:tenantUid, targetEmail:target.email, houseId, actorUid:decoded.uid, actorEmail:decoded.email || null, createdAt:Date.now() })
+  return res.status(200).json({ ok:true })
+}
+
+async function adminSendPasswordReset(req, res) {
+  const decoded = await requireAdmin(req)
+  const uid = String(req.body?.uid || '')
+  if (!uid) return res.status(400).json({ error: 'User ID is required.' })
+  const target = await auth.getUser(uid)
+  if (!target.email) return res.status(400).json({ error: 'This account has no email address.' })
+  const continueUrl = String(process.env.PASSWORD_RESET_CONTINUE_URL || '').trim()
+  if (continueUrl && !/^https:\/\/[^\s]+$/.test(continueUrl)) return res.status(503).json({ error: 'PASSWORD_RESET_CONTINUE_URL must be a valid HTTPS URL.' })
+  let link
+  try {
+    link = await auth.generatePasswordResetLink(target.email, continueUrl ? { url: continueUrl, handleCodeInApp: false } : undefined)
+  } catch (error) {
+    if (/continue|authorized|whitelist/i.test(String(error?.message || '') + String(error?.code || ''))) return res.status(503).json({ error: 'Login setup URL is not authorized in Firebase Authentication. Add its domain under Authentication → Settings → Authorized domains, or remove PASSWORD_RESET_CONTINUE_URL to use the Firebase default reset page.' })
+    throw error
+  }
+  const apiKey = process.env.RESEND_API_KEY
+  const from = process.env.EMAIL_FROM
+  if (!apiKey || !from) return res.status(503).json({ error: 'Password reset email service is not configured.' })
+  const response = await fetch('https://api.resend.com/emails', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`}, body: JSON.stringify({ from, to:[target.email], subject:'Rental Manager — password reset', text:`An administrator requested a password reset for your Rental Manager account. Use this secure link: ${link}`, html:`<p>An administrator requested a password reset for your Rental Manager account.</p><p><a href="${link}">Reset your password</a></p><p>If you did not expect this, contact your administrator.</p>` }) })
+  if (!response.ok) throw new Error('Could not send the password reset email.')
+  await db.collection('auditLogs').add({ action: 'admin_password_reset_sent', targetUid: uid, targetEmail: target.email, actorUid: decoded.uid, actorEmail: decoded.email || null, createdAt: Date.now() })
+  return res.status(200).json({ ok: true })
+}
+
+// Existing owner-level tenant contact endpoint + secure self-service email-change workflow.
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  res.setHeader('Cache-Control', 'no-store')
+  try {
+    const action = String(req.body?.action || 'tenant-contact')
+    if (action === 'email-change-request') return await requestEmailChange(req, res)
+    if (action === 'email-change-verify') return await verifyEmailChange(req, res)
+    if (action === 'email-change-admin-list') return await adminList(req, res)
+    if (action === 'email-change-admin-approve') return await adminDecision(req, res, true)
+    if (action === 'email-change-admin-reject') return await adminDecision(req, res, false)
+    if (action === 'admin-list-users') return await adminListUsers(req, res)
+    if (action === 'tenant-send-login-setup') return await tenantSendLoginSetup(req, res)
+    if (action === 'admin-set-disabled') return await adminSetDisabled(req, res)
+    if (action === 'admin-revoke-sessions') return await adminRevokeSessions(req, res)
+    if (action === 'admin-send-password-reset') return await adminSendPasswordReset(req, res)
+
     const decoded = await requireOwnerLevel(req)
     const callerDoc = await db.collection('users').doc(decoded.uid).get()
     const editedBy = { uid: decoded.uid, name: callerDoc.data()?.name || 'Owner' }
-
-    const { tenantUid, houseId, newEmail, newPhone } = req.body || {}
+    const { tenantUid, houseId, newEmail, newPhone, newName, moveInDate, moveInDateApproximate, ebNumber, newRentAmount } = req.body || {}
     if (!tenantUid || !houseId) return res.status(400).json({ error: 'Missing required fields' })
-
-    if (newEmail) {
-      await auth.updateUser(tenantUid, { email: newEmail })
-    }
-
+    const houseSnap = await db.collection('houses').doc(String(houseId)).get()
+    if (!houseSnap.exists) return res.status(404).json({ error: 'House not found.' })
+    const caller = callerDoc.data() || {}
+    if (!ownerCanAccessProperty(caller, String(houseSnap.data()?.propertyId || 'default'))) return res.status(403).json({ error: 'You do not have access to this property.' })
+    if (houseSnap.data()?.currentTenantId !== tenantUid) return res.status(403).json({ error: 'Tenant is not the current resident of this house.' })
+    if (newName !== undefined && (!String(newName).trim() || String(newName).length > 120)) return res.status(400).json({ error: 'Enter a valid tenant name (maximum 120 characters).' })
+    if (newPhone !== undefined && newPhone !== '' && !/^\+?[0-9 -]{10,18}$/.test(String(newPhone))) return res.status(400).json({ error: 'Enter a valid phone number.' })
+    if (newEmail !== undefined && newEmail !== '' && !EMAIL_RE.test(String(newEmail))) return res.status(400).json({ error: 'Enter a valid email address.' })
+    if (moveInDate !== undefined && moveInDate && !/^\d{4}-\d{2}-\d{2}$/.test(String(moveInDate))) return res.status(400).json({ error: 'Enter a valid move-in date.' })
+    if (ebNumber !== undefined && String(ebNumber).length > 60) return res.status(400).json({ error: 'EB number is too long.' })
+    if (newRentAmount !== undefined && (!Number.isFinite(Number(newRentAmount)) || Number(newRentAmount) < 0 || Number(newRentAmount) > 10000000)) return res.status(400).json({ error: 'Enter a valid monthly rent.' })
+    if (newEmail) await auth.updateUser(tenantUid, { email: newEmail })
     const updates = { editedAt: Date.now(), editedBy }
     if (newEmail) updates.email = newEmail
-    if (newPhone) updates.phone = newPhone
-
+    if (newPhone !== undefined) updates.phone = newPhone
+    if (newName !== undefined) updates.name = String(newName).trim()
     await db.collection('users').doc(tenantUid).update(updates)
-
     const houseUpdates = { ...updates }
     if (newEmail) houseUpdates.tenantEmail = newEmail
-    if (newPhone) houseUpdates.tenantPhone = newPhone
-    delete houseUpdates.email
-    delete houseUpdates.phone
+    if (newPhone !== undefined) houseUpdates.tenantPhone = newPhone
+    if (newName !== undefined) houseUpdates.tenantName = String(newName).trim()
+    if (moveInDate !== undefined) houseUpdates.moveInDate = moveInDate || null
+    if (moveInDateApproximate !== undefined) houseUpdates.moveInDateApproximate = !!moveInDateApproximate
+    if (ebNumber !== undefined) houseUpdates.ebNumber = String(ebNumber).trim()
+    if (newRentAmount !== undefined) houseUpdates.rentAmount = Number(newRentAmount)
+    delete houseUpdates.email; delete houseUpdates.phone
     await db.collection('houses').doc(houseId).update(houseUpdates)
-
-    // Keep the directory mirror in sync too, if phone visibility means it's shown there.
-    const houseDoc = await db.collection('houses').doc(houseId).get()
-    const house = houseDoc.data()
+    const house = houseSnap.data()
     await db.collection('directory').doc(houseId).set({
       internalDoorNumber: house.internalDoorNumber,
       status: house.status,
-      tenantName: house.tenantName,
-      tenantPhone: house.phoneVisibleToNeighbors ? house.tenantPhone : null,
+      propertyId: house.propertyId || 'default',
+      tenantName: newName !== undefined ? String(newName).trim() : house.tenantName,
+      tenantPhone: house.phoneVisibleToNeighbors ? (newPhone !== undefined ? newPhone : house.tenantPhone) : null,
       phoneVisibleToNeighbors: !!house.phoneVisibleToNeighbors,
-    })
-
+    }, { merge: true })
     res.status(200).json({ ok: true })
   } catch (err) {
+    console.error('update-tenant-contact/email-change:', err)
     res.status(err.statusCode || 500).json({ error: err.message })
   }
 }

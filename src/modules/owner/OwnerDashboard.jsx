@@ -1,11 +1,11 @@
-import React, { useState, Suspense } from 'react'
+import React, { Component, useEffect, useState, Suspense } from 'react'
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Home, DoorOpen, Users, CheckCircle2, PenSquare, Zap, ZapOff,
-  Bell, MessageSquareWarning, Phone, FileText, MessagesSquare, MoreHorizontal,
-  LogOut, HelpCircle, IndianRupee, BarChart3, Droplets, CalendarDays,
-  Menu, X, Wrench, Megaphone, ReceiptIndianRupee
+  Bell, MessageSquareWarning, Phone, FileText, MessagesSquare, MoreHorizontal, Settings,
+  LogOut, IndianRupee, BarChart3, Droplets, CalendarDays,
+  Wrench, Megaphone, ReceiptIndianRupee
 } from 'lucide-react'
 
 const OwnerHome = React.lazy(() => import('./OwnerHome'))
@@ -29,23 +29,22 @@ const AnalyticsDashboard = React.lazy(() => import('./AnalyticsDashboard'))
 const PaymentCalendar = React.lazy(() => import('./PaymentCalendar'))
 const MoreMenu = React.lazy(() => import('./MoreMenu'))
 import LoadingScreen from '../shared/LoadingScreen'
+import DadLiteDashboard from './DadLiteDashboard'
 import SearchBar from '../shared/SearchBar'
-import OnboardingTour from '../shared/OnboardingTour'
 import IconButton from '../shared/ui/IconButton'
 import ThemeToggle from '../shared/ui/ThemeToggle'
+import UserSettingsModal from '../shared/UserSettingsModal'
 import NotificationBell from '../shared/ui/NotificationBell'
-import LanguageSwitcher from '../shared/ui/LanguageSwitcher'
 import InstallAppPrompt from '../shared/ui/InstallAppPrompt'
 import PropertySwitcher from './PropertySwitcher'
-import { OWNER_TOUR_STEPS } from './ownerTourSteps'
 import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 
 const TABS = [
-  { id: 'home', route: 'home', label: 'Overview', icon: Home, group: 'Daily' },
-  { id: 'houses', route: 'houses', label: 'Houses', icon: DoorOpen, group: 'Daily' },
-  { id: 'tenants', route: 'tenants', label: 'Tenants', icon: Users, group: 'Daily' },
-  { id: 'approvals', route: 'approvals', label: 'Rent approvals', icon: CheckCircle2, group: 'Money' },
+  { id: 'home', route: 'home', label: 'Overview', mobileLabel: 'Home', icon: Home, group: 'Daily' },
+  { id: 'houses', route: 'houses', label: 'Houses', mobileLabel: 'Houses', icon: DoorOpen, group: 'Daily' },
+  { id: 'tenants', route: 'tenants', label: 'Tenants', mobileLabel: 'Tenants', icon: Users, group: 'Daily' },
+  { id: 'approvals', route: 'approvals', label: 'Rent approvals', mobileLabel: 'Approvals', icon: CheckCircle2, group: 'Money' },
   { id: 'manualEntry', route: 'manual-entry', label: 'Manual payment', icon: PenSquare, group: 'Money' },
   { id: 'eb', route: 'eb-bill', label: 'EB bills', icon: Zap, group: 'Money' },
   { id: 'ebApprovals', route: 'eb-approvals', label: 'EB approvals', icon: ZapOff, group: 'Money' },
@@ -61,7 +60,7 @@ const TABS = [
   { id: 'community', route: 'community', label: 'Community', icon: MessagesSquare, group: 'Community' },
   { id: 'reports', route: 'reports', label: 'Reports', icon: ReceiptIndianRupee, group: 'Insights' },
   { id: 'analytics', route: 'analytics', label: 'Analytics', icon: BarChart3, group: 'Insights' },
-  { id: 'more', route: 'more', label: 'More tools', icon: MoreHorizontal, group: 'Admin' },
+  { id: 'more', route: 'more', label: 'More tools', mobileLabel: 'More', icon: MoreHorizontal, group: 'Admin' },
 ]
 
 const GROUPS = ['Daily', 'Money', 'Operations', 'Community', 'Insights', 'Admin']
@@ -69,19 +68,29 @@ const MOBILE_PRIMARY = ['home', 'houses', 'approvals', 'tenants', 'more']
 
 export default function OwnerDashboard() {
   const { user } = useAuth()
+  if (user?.appMode === 'dad-lite') return <DadLiteDashboard />
   const navigate = useNavigate()
   const location = useLocation()
   const pathSegment = location.pathname.split('/owner/')[1] || 'home'
   const activeTabObj = TABS.find(t => t.route === pathSegment) || TABS[0]
   const tab = activeTabObj.id
-  const [replayTour, setReplayTour] = useState(false)
   const [searchHouseId, setSearchHouseId] = useState(null)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [propertyVersion, setPropertyVersion] = useState(0)
+
+  useEffect(() => {
+    const refresh = () => setPropertyVersion(v => v + 1)
+    window.addEventListener('rm:property-changed', refresh)
+    window.addEventListener('rm:property-created', refresh)
+    return () => {
+      window.removeEventListener('rm:property-changed', refresh)
+      window.removeEventListener('rm:property-created', refresh)
+    }
+  }, [])
 
   function go(t) {
     const target = TABS.find(x => x.id === t)?.route || 'home'
     navigate(`/owner/${target}`)
-    setSidebarOpen(false)
   }
 
   function handleSearchSelect(houseId) {
@@ -95,33 +104,33 @@ export default function OwnerDashboard() {
 
       <header className="sticky top-0 z-50 bg-cover text-white border-b border-white/10 shadow-lg">
         <div className="h-[72px] px-4 lg:px-6 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <button className="lg:hidden w-10 h-10 rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
-              <Menu size={20} />
-            </button>
-            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center font-bold overflow-hidden shrink-0">
+          <div className="hidden sm:flex items-center gap-3 min-w-0">
+            <div className="rm-owner-avatar w-10 h-10 rounded-xl bg-white/10 border border-white/15 items-center justify-center font-bold overflow-hidden shrink-0 flex">
               {user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} alt="" className="w-full h-full object-cover" /> : user?.name?.[0]}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h1 className="font-display text-lg font-extrabold truncate">Rental Manager</h1>
-                <PropertySwitcher />
+                <span className="hidden lg:inline-flex"><PropertySwitcher /></span>
               </div>
               <p className="text-xs text-white/65 truncate">{user?.name}{user?.role === 'admin' ? ' · Super Admin' : ' · Owner'}</p>
             </div>
           </div>
+          <div className="sm:hidden flex items-center min-w-0 flex-1 gap-1.5">
+            <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 grid place-items-center font-bold shrink-0 overflow-hidden">{user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} alt="" className="w-full h-full object-cover" /> : user?.name?.[0]}</div>
+            <div className="min-w-0 flex-1"><PropertySwitcher /></div>
+          </div>
 
           <div className="hidden md:flex items-center gap-2 shrink-0">
             <SearchBar onSelectHouse={handleSearchSelect} />
-            <LanguageSwitcher />
-            <NotificationBell userId={user?.uid} />
+            <NotificationBell userId={user?.uid} darkHeader />
+            <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={19}/></button>
             <ThemeToggle />
-            <IconButton icon={HelpCircle} label="Replay onboarding tour" onClick={() => setReplayTour(true)} />
             <IconButton icon={LogOut} label="Log out" onClick={logout} />
           </div>
-          <div className="md:hidden flex items-center gap-1">
-            <NotificationBell userId={user?.uid} />
-            <ThemeToggle />
+          <div className="md:hidden flex items-center gap-1 shrink-0">
+            <NotificationBell userId={user?.uid} darkHeader />
+            <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={18}/></button>
           </div>
         </div>
       </header>
@@ -157,38 +166,15 @@ export default function OwnerDashboard() {
           </div>
         </aside>
 
-        <AnimatePresence>
-          {sidebarOpen && (
-            <>
-              <motion.button className="lg:hidden fixed inset-0 z-[60] bg-black/40" onClick={() => setSidebarOpen(false)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} aria-label="Close navigation" />
-              <motion.aside className="lg:hidden fixed left-0 top-0 bottom-0 z-[70] w-[292px] bg-paper-raised shadow-2xl overflow-y-auto" initial={{ x: -320 }} animate={{ x: 0 }} exit={{ x: -320 }}>
-                <div className="p-4 border-b border-[var(--rm-border)] flex items-center justify-between">
-                  <div><div className="font-display font-extrabold text-lg">Rental Manager</div><div className="text-xs text-ink-soft">Property workspace</div></div>
-                  <button className="w-9 h-9 rounded-lg bg-paper flex items-center justify-center" onClick={() => setSidebarOpen(false)} aria-label="Close navigation"><X size={18} /></button>
-                </div>
-                <div className="p-4">
-                  {GROUPS.map(group => (
-                    <div key={group} className="mb-5">
-                      <div className="px-2 mb-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-ink-soft">{group}</div>
-                      {TABS.filter(t => t.group === group).map(t => {
-                        const active = tab === t.id
-                        return <button key={t.id} onClick={() => go(t.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-0.5 text-left ${active ? 'bg-brand/10 text-brand font-bold' : 'text-ink-soft'}`}><t.icon size={18} /><span>{t.label}</span></button>
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </motion.aside>
-            </>
-          )}
-        </AnimatePresence>
 
         <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8">
           <div className="max-w-[1400px] mx-auto">
             <div className="md:hidden mb-4"><SearchBar onSelectHouse={handleSearchSelect} /></div>
             <AnimatePresence mode="wait">
-              <motion.div key={location.pathname} role="tabpanel" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: .16 }}>
+              <motion.div key={`${location.pathname}:${propertyVersion}`} role="tabpanel" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: .16 }}>
                 <Suspense fallback={<LoadingScreen />}>
-                  <Routes>
+                  <RouteErrorBoundary>
+                    <Routes>
                     <Route path="home" element={<OwnerHome onNavigate={go} />} />
                     <Route path="houses" element={<HouseManager />} />
                     <Route path="tenants" element={<TenantsSection openHouseId={searchHouseId} onOpenHouseHandled={() => setSearchHouseId(null)} />} />
@@ -210,7 +196,8 @@ export default function OwnerDashboard() {
                     <Route path="community" element={<CommunityBoard user={user} canModerate />} />
                     <Route path="more" element={<MoreMenu />} />
                     <Route path="*" element={<OwnerHome onNavigate={go} />} />
-                  </Routes>
+                    </Routes>
+                  </RouteErrorBoundary>
                 </Suspense>
               </motion.div>
             </AnimatePresence>
@@ -221,12 +208,42 @@ export default function OwnerDashboard() {
       <nav className="rm-mobile-nav lg:hidden fixed bottom-0 inset-x-0 bg-paper-raised/95 backdrop-blur-xl border-t border-[var(--rm-border)] flex items-stretch z-40 shadow-[0_-8px_24px_rgba(23,32,51,.08)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} aria-label="Primary">
         {TABS.filter(t => MOBILE_PRIMARY.includes(t.id)).map(t => {
           const active = tab === t.id
-          return <button key={t.id} onClick={() => go(t.id)} className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 py-2.5 px-1 text-[10px] whitespace-nowrap ${active ? 'text-brand font-bold' : 'text-ink-soft'}`} aria-current={active ? 'page' : undefined}><span className={`w-8 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-brand/10' : ''}`}><t.icon size={18} /></span>{t.label}</button>
+          return <button key={t.id} onClick={() => go(t.id)} title={t.mobileLabel || t.label} aria-label={t.mobileLabel || t.label} className={`flex-1 min-w-0 flex items-center justify-center py-2 px-1 ${active ? 'text-brand' : 'text-ink-soft'}`} aria-current={active ? 'page' : undefined}><span className={`w-11 h-10 rounded-xl flex items-center justify-center ${active ? 'bg-brand/10' : ''}`}><t.icon size={21} /></span></button>
         })}
       </nav>
 
       <InstallAppPrompt />
-      <OnboardingTour steps={OWNER_TOUR_STEPS} storageKey={`tour_seen_owner_${user?.uid}`} forceOpen={replayTour ? true : undefined} onClose={() => setReplayTour(false)} />
+      <UserSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
+}
+
+
+class RouteErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  componentDidCatch(error, info) {
+    console.error('Owner screen error:', error, info)
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <div className="mx-auto max-w-xl rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
+        <div className="text-sm font-bold text-red-700">This screen could not be loaded</div>
+        <p className="mt-1 text-sm text-ink-soft">Your saved property data is still safe. Refresh the page or go back to Overview.</p>
+        <div className="mt-4 flex gap-2">
+          <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('rm:app-refresh'))} className="rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white">Refresh</button>
+          <button type="button" onClick={() => this.setState({ error: null })} className="rounded-xl border border-[var(--rm-border)] px-4 py-2.5 text-sm font-bold text-ink">Try again</button>
+        </div>
+      </div>
+    )
+  }
 }

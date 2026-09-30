@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { listAllRequests, updateRequestStatus, resolveRequest } from '../../services/maintenanceService'
+import { listHouses } from '../../services/houseService'
 import { motion } from 'framer-motion'
 import { Wrench, ChevronDown, ChevronUp, CheckCircle, Clock } from 'lucide-react'
 
@@ -13,7 +14,8 @@ export default function MaintenanceManager() {
   }, [])
 
   async function load() {
-    const data = await listAllRequests()
+    const houses = await listHouses()
+    const data = await listAllRequests('all', houses.map(h => h.id))
     setRequests(data)
   }
 

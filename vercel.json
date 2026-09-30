@@ -1,8 +1,72 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/api/app-config",
+      "destination": "/api/rental?route=app-config"
+    },
+    {
+      "source": "/api/create-owner",
+      "destination": "/api/owner?action=create"
+    },
+    {
+      "source": "/api/delete-owner",
+      "destination": "/api/owner?action=delete"
+    },
+    {
+      "source": "/api/get-agreement-url",
+      "destination": "/api/media?action=agreement"
+    },
+    {
+      "source": "/api/get-signed-url",
+      "destination": "/api/media?action=signed"
+    },
+    {
+      "source": "/api/public-notice",
+      "destination": "/api/rental?route=public-notice"
+    },
+    {
+      "source": "/api/owner-houses",
+      "destination": "/api/rental?route=owner-houses"
+    },
+    {
+      "source": "/api/owner-documents",
+      "destination": "/api/rental?route=owner-documents"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "microphone=(self), camera=(), geolocation=()"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin-allow-popups"
+        }
+      ]
     }
   ]
 }

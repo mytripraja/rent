@@ -1,7 +1,7 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { db } from './firebase'
-
-const configDocRef = doc(db, 'appConfig', 'general')
+import { authedFetch } from './firebase'
+let appConfigCache = null
+let appConfigCacheAt = 0
+const APP_CONFIG_CACHE_MS = 120000
 const DEFAULT_RECEIVERS = ['Deepu', 'Rajavel', 'Siva', 'Hemalathe']
 
 const DEFAULTS = {
@@ -29,6 +29,7 @@ const DEFAULTS = {
 }
 
 export async function getAppConfig() {
+  if (appConfigCache && Date.now() - appConfigCacheAt < APP_CONFIG_CACHE_MS) return { ...appConfigCache, wasteSchedule: appConfigCache.wasteSchedule ? { ...appConfigCache.wasteSchedule } : appConfigCache.wasteSchedule }
   // Every cashReceivers/templates/properties/wasteSchedule lookup in the app
   // funnels through this one function, so a single network hiccup here used
   // to break all of them at once (the Firestore read had no error handling —
@@ -36,37 +37,29 @@ export async function getAppConfig() {
   // empty for the rest of the session, cash payment included). Falling back
   // to sane defaults here fixes it everywhere in one place instead of
   // patching six separate .catch() handlers with six different fallbacks.
-  let snap
   try {
-    snap = await getDoc(configDocRef)
+    const result = await authedFetch('/api/app-config', {})
+    appConfigCache = result
+    appConfigCacheAt = Date.now()
+    return result
   } catch (err) {
     console.warn('appConfig unreachable, using defaults:', err.message)
+    // Never replace a previously loaded apartment registry with a default on a transient failure.
+    if (appConfigCache) return { ...appConfigCache }
+    appConfigCacheAt = 0
     return { ...DEFAULTS }
   }
-
-  if (snap.exists()) {
-    const data = snap.data()
-    return {
-      cashReceivers: data.cashReceivers || DEFAULT_RECEIVERS,
-      apartmentName: data.apartmentName || DEFAULTS.apartmentName,
-      apartmentAddress: data.apartmentAddress || DEFAULTS.apartmentAddress,
-      dueDate: data.dueDate || DEFAULTS.dueDate,
-      gracePeriod: data.gracePeriod || DEFAULTS.gracePeriod,
-      penaltyPerDay: data.penaltyPerDay || DEFAULTS.penaltyPerDay,
-      upiId: data.upiId || DEFAULTS.upiId,
-      ownerName: data.ownerName || DEFAULTS.ownerName,
-      paymentModes: data.paymentModes || DEFAULTS.paymentModes,
-      lateFeeType: data.lateFeeType || DEFAULTS.lateFeeType,
-      lateFeeAmount: data.lateFeeAmount || DEFAULTS.lateFeeAmount,
-      lateFeeGraceDays: data.lateFeeGraceDays || DEFAULTS.lateFeeGraceDays,
-      wasteSchedule: data.wasteSchedule || DEFAULTS.wasteSchedule,
-    }
-  }
-  return { ...DEFAULTS }
 }
 
 export async function updateAppConfig(fields) {
-  await setDoc(configDocRef, { ...fields, updatedAt: Date.now() }, { merge: true })
+  appConfigCache = null
+  appConfigCacheAt = 0
+  propertyRegistryRecoveryDone = false
+  propertyRegistryRecoveryPromise = null
+  const result = await authedFetch('/api/app-config', { action: 'update', fields })
+  appConfigCache = result
+  appConfigCacheAt = Date.now()
+  return result
 }
 
 export async function getCashReceivers() {
@@ -94,23 +87,73 @@ export async function updateTemplates(templates) {
   await updateAppConfig({ messageTemplates: templates })
 }
 
-export async function getProperties() {
+let propertyRegistryRecoveryDone = false
+let propertyRegistryRecoveryPromise = null
+
+export async function getProperties({ recoverLegacy = true } = {}) {
+  // Reuse the already-loaded config for two minutes. Property changes call
+  // updateAppConfig(), which clears this cache immediately, so freshness is
+  // preserved without making every screen pay the network round-trip.
   const config = await getAppConfig()
-  return config.properties || [{ id: 'default', name: config.apartmentName || 'My Apartment', address: config.apartmentAddress || '' }]
+  const base = Array.isArray(config.properties) && config.properties.length
+    ? config.properties.map(p => ({ ...p, id: String(p.id || 'default') }))
+    : [{ id: 'default', name: config.apartmentName || 'My Apartment', address: config.apartmentAddress || '' }]
+
+  // Legacy recovery is expensive because it may inspect owner house data. Run it
+  // once per app session unless a property/config change explicitly resets it.
+  if (!recoverLegacy || propertyRegistryRecoveryDone) return base
+  if (propertyRegistryRecoveryPromise) return propertyRegistryRecoveryPromise
+  propertyRegistryRecoveryPromise = (async () => {
+    try {
+      const { auth } = await import('./firebase')
+      if (!auth.currentUser) return base
+      const result = await authedFetch('/api/owner-houses', {})
+      const known = new Set(base.map(p => String(p.id || 'default')))
+      const recovered = []
+      for (const house of (result.houses || [])) {
+        const id = String(house.propertyId || 'default')
+        if (id !== 'default' && !known.has(id)) {
+          known.add(id)
+          recovered.push({ id, name: `Recovered Apartment (${id})`, address: '', recoveredAt: Date.now() })
+        }
+      }
+      propertyRegistryRecoveryDone = true
+      if (!recovered.length) return base
+      const next = [...base, ...recovered]
+      try { await updateAppConfig({ properties: next }) } catch {}
+      propertyRegistryRecoveryDone = true
+      return next
+    } catch (err) {
+      propertyRegistryRecoveryDone = true
+      console.warn('Legacy property discovery skipped:', err?.message || err)
+      return base
+    } finally {
+      propertyRegistryRecoveryPromise = null
+    }
+  })()
+  return propertyRegistryRecoveryPromise
 }
 
 export async function addProperty(property) {
   const props = await getProperties()
-  props.push(property)
-  await updateAppConfig({ properties: props })
+  if (props.some(p => p.id === property.id)) throw new Error('Apartment ID already exists.')
+  const next = [...props, { ...property, createdAt: property.createdAt || Date.now() }]
+  await updateAppConfig({ properties: next })
+  // Keep the in-memory config coherent immediately so the header, More page
+  // and Apartment Operations all see the new apartment without another read.
+  appConfigCache = { ...(appConfigCache || DEFAULTS), properties: next }
+  appConfigCacheAt = Date.now()
+  return next[next.length - 1]
 }
 
 export async function updateProperty(id, fields) {
   const props = await getProperties()
   const idx = props.findIndex(p => p.id === id)
   if (idx !== -1) {
-    props[idx] = { ...props[idx], ...fields }
-    await updateAppConfig({ properties: props })
+    const next = props.map((item, i) => i === idx ? { ...item, ...fields } : item)
+    await updateAppConfig({ properties: next })
+    appConfigCache = { ...(appConfigCache || DEFAULTS), properties: next }
+    appConfigCacheAt = Date.now()
   }
 }
 
@@ -120,4 +163,22 @@ export function getActivePropertyId() {
 
 export function setActivePropertyId(id) {
   localStorage.setItem('activePropertyId', id)
+}
+
+let rentReminderRulesCache = null
+let rentReminderRulesCacheAt = 0
+
+export async function getRentReminderRules() {
+  if (rentReminderRulesCache && Date.now() - rentReminderRulesCacheAt < 15000) return rentReminderRulesCache
+  const rows = await authedFetch('/api/app-config', { action: 'reminder-list' })
+  rentReminderRulesCache = Array.isArray(rows) ? rows : []
+  rentReminderRulesCacheAt = Date.now()
+  return rentReminderRulesCache
+}
+
+export async function updateRentReminderRules(rules) {
+  const rows = await authedFetch('/api/app-config', { action: 'reminder-update', rules })
+  rentReminderRulesCache = Array.isArray(rows) ? rows : []
+  rentReminderRulesCacheAt = Date.now()
+  return rentReminderRulesCache
 }

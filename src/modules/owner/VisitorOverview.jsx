@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { listTodaysVisitors, updateVisitorStatus } from '../../services/visitorService'
+import { listHouses } from '../../services/houseService'
 import { CheckCircle } from 'lucide-react'
 
 export default function VisitorOverview() {
@@ -10,7 +11,8 @@ export default function VisitorOverview() {
   }, [])
 
   async function load() {
-    const data = await listTodaysVisitors()
+    const houses = await listHouses()
+    const data = await listTodaysVisitors(houses.map(h => h.id))
     setVisitors(data)
   }
 

@@ -30,8 +30,6 @@ export async function listAllAgreements() {
 export async function getAgreementViewUrl(agreement) {
   const data = await authedFetch('/api/get-agreement-url', {
     agreementId: agreement.id,
-    publicId: agreement.publicId,
-    resourceType: agreement.resourceType,
   })
   return data.url
 }

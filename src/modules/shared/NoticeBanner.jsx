@@ -18,7 +18,7 @@ export default function NoticeBanner({ notice }) {
         style={{ background: 'linear-gradient(90deg, #dbeafe 50%, #fef9c3 50%)', color: '#1f2937' }}
       >
         <p className="font-mono-tab text-xs font-semibold uppercase tracking-wide mb-1">Water &amp; EB Notice</p>
-        <p className="text-sm">{notice.message}</p>
+        {notice.title && <p className="font-semibold text-sm mb-1">{notice.title}{notice.updateNumber ? <span className="ml-2 text-[10px] opacity-70">{notice.continuationLabel || `Update #${notice.updateNumber}`}</span> : null}</p>}<p className="text-sm">{notice.message}</p>
         {notice.windowText && <p className="text-xs mt-1 opacity-70">{notice.windowText}</p>}
       </div>
     )
@@ -32,7 +32,7 @@ export default function NoticeBanner({ notice }) {
       style={{ background: style.background, color: style.color }}
     >
       <p className="font-mono-tab text-xs font-semibold uppercase tracking-wide mb-1">{style.label}</p>
-      <p className="text-sm">{notice.message}</p>
+      {notice.title && <p className="font-semibold text-sm mb-1">{notice.title}{notice.updateNumber ? <span className="ml-2 text-[10px] opacity-70">{notice.continuationLabel || `Update #${notice.updateNumber}`}</span> : null}</p>}<p className="text-sm">{notice.message}</p>
       {notice.windowText && <p className="text-xs mt-1 opacity-70">{notice.windowText}</p>}
     </div>
   )

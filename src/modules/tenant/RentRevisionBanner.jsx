@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getHouse } from '../../services/houseService'
+import { getTenantHouseProfile } from '../../services/houseService'
 import { useAuth } from '../../context/AuthContext'
 
 export default function RentRevisionBanner() {
@@ -7,7 +7,7 @@ export default function RentRevisionBanner() {
   const [house, setHouse] = useState(null)
 
   useEffect(() => {
-    if (user?.houseId) getHouse(user.houseId).then(setHouse)
+    if (user?.houseId) getTenantHouseProfile().then(setHouse)
   }, [user])
 
   if (!house?.pendingRentAmount) return null

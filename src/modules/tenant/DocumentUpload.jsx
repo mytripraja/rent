@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { uploadResidentDocument, listDocumentsForHouse } from '../../services/documentService'
+import { uploadResidentDocument, listDocumentsForTenantHouse } from '../../services/documentService'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../shared/ui/Toast'
 
 const CONSENT_TEXT = `I confirm the document I'm uploading belongs to a resident of this house and is accurate. I understand this is used only by the property owner for identity verification purposes, will not be shared with anyone else, and I can request its removal at any time by contacting the owner.`
+
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+const ALLOWED_DOCUMENT_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
 
 export default function DocumentUpload() {
   const { user } = useAuth()
@@ -19,7 +22,7 @@ export default function DocumentUpload() {
 
   async function refresh() {
     try {
-      setDocs(await listDocumentsForHouse(user.houseId))
+      setDocs(await listDocumentsForTenantHouse(user.houseId, user.uid))
     } catch (err) {
       console.error(err)
       showToast({ message: "Failed to load documents", type: "error" })
@@ -29,6 +32,14 @@ export default function DocumentUpload() {
   async function submit(e) {
     e.preventDefault()
     if (!file || !form.consentAccepted || form.signatureName.trim().toLowerCase() !== form.residentName.trim().toLowerCase()) return
+    if (!ALLOWED_DOCUMENT_TYPES.has(file.type)) {
+      showToast({ message: 'Only PDF, JPG, PNG, or WebP files are allowed', type: 'error' })
+      return
+    }
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      showToast({ message: 'Document must be 10 MB or smaller', type: 'error' })
+      return
+    }
     setSaving(true)
     try {
       await uploadResidentDocument({

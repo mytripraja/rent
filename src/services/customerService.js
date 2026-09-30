@@ -89,7 +89,12 @@ export async function getCustomer(customerId) {
 
 // Used by the Customer-ID login form, before the user is authenticated.
 export async function resolveEmailFromCustomerId(customerId) {
-  const snap = await getDoc(doc(db, 'customerLookup', customerId))
-  if (!snap.exists()) return null
-  return snap.data().email
+  const res = await fetch('/api/resolve-customer-id', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ customerId: String(customerId || '').trim().toUpperCase() }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) return null
+  return data.email || null
 }

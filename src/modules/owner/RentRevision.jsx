@@ -8,6 +8,7 @@ export default function RentRevision() {
   const [effectiveMonth, setEffectiveMonth] = useState('')
   const [selections, setSelections] = useState({}) // { houseId: newAmount }
   const [saving, setSaving] = useState(false)
+  const [nextIncreaseMonth, setNextIncreaseMonth] = useState('')
 
   useEffect(() => {
     refresh()
@@ -49,11 +50,12 @@ export default function RentRevision() {
     try {
       await Promise.all(
         Object.entries(selections).map(([houseId, amount]) =>
-          announceRentRevision(houseId, Number(amount), effectiveMonth)
+          announceRentRevision(houseId, Number(amount), effectiveMonth, nextIncreaseMonth)
         )
       )
       setSelections({})
       setEffectiveMonth('')
+      setNextIncreaseMonth('')
       showToast({ message: "Rent revision announced successfully", type: "success" })
       refresh()
     } catch (err) {
@@ -125,6 +127,7 @@ export default function RentRevision() {
             className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm mt-1" />
         </div>
 
+        <div><label className="text-xs text-ink-soft">Next planned increase (optional)</label><input type="month" value={nextIncreaseMonth} onChange={e=>setNextIncreaseMonth(e.target.value)} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm mt-1"/><p className="text-[11px] text-ink-soft mt-1">Saved in the tenant's house profile as a reminder/countdown date. It does not change the rent automatically.</p></div>
         <button disabled={saving || selectedCount === 0} className="w-full bg-brand text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
           {saving ? 'Announcing…' : `Announce Revision (${selectedCount} house${selectedCount === 1 ? '' : 's'})`}
         </button>

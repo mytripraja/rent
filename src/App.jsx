@@ -9,6 +9,12 @@ import OwnerDashboard from './modules/owner/OwnerDashboard'
 import TenantDashboard from './modules/tenant/TenantDashboard'
 import PublicHome from './modules/public/PublicHome'
 import LegalPage from './modules/public/LegalPage'
+import NotFoundPage from './modules/public/NotFoundPage'
+import PublicNotice from './modules/public/PublicNotice'
+import LanguagePreferenceGate from './modules/shared/LanguagePreferenceGate'
+import AppLockGate from './modules/shared/AppLockGate'
+import { GlobalErrorBoundary, OfflineStatus } from './modules/shared/AppResilience'
+import AppUpdateBanner from './modules/shared/AppUpdateBanner'
 
 function RootRedirect() {
   const { user, loading } = useAuth()
@@ -22,22 +28,25 @@ function RootRedirect() {
 
 export default function App() {
   return (
-    <AuthProvider>
+    <GlobalErrorBoundary>
+      <AuthProvider>
       <LanguageProvider>
         <ToastProvider>
           <BrowserRouter>
+            <LanguagePreferenceGate />
             <Routes>
               <Route path="/welcome" element={<PublicHome />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/privacy" element={<LegalPage type="privacy" />} />
               <Route path="/terms" element={<LegalPage type="terms" />} />
               <Route path="/acceptable-use" element={<LegalPage type="acceptable-use" />} />
+              <Route path="/notice/:noticeId" element={<PublicNotice />} />
               <Route path="/data-policy" element={<LegalPage type="data-policy" />} />
               <Route
                 path="/owner/*"
                 element={
                   <ProtectedRoute role="owner">
-                    <OwnerDashboard />
+                    <AppLockGate><OwnerDashboard /></AppLockGate>
                   </ProtectedRoute>
                 }
               />
@@ -45,15 +54,19 @@ export default function App() {
                 path="/tenant/*"
                 element={
                   <ProtectedRoute role="tenant">
-                    <TenantDashboard />
+                    <AppLockGate><TenantDashboard /></AppLockGate>
                   </ProtectedRoute>
                 }
               />
               <Route path="/" element={<RootRedirect />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </BrowserRouter>
         </ToastProvider>
       </LanguageProvider>
-    </AuthProvider>
+      <OfflineStatus />
+      <AppUpdateBanner />
+      </AuthProvider>
+    </GlobalErrorBoundary>
   )
 }

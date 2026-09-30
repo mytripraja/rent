@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useToast } from '../shared/ui/Toast'
 import { listHouses, listPastTenants } from '../../services/houseService'
-import { collection, getDocs } from 'firebase/firestore'
-import { db } from '../../services/firebase'
+import { listRentPaymentsForHouses } from '../../services/rentService'
+import { listEbBillCyclesForHouses } from '../../services/ebBillService'
+
+function csvCell(value) {
+  const text = String(value ?? '')
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
 
 export default function DataBackup() {
   const toast = useToast()
@@ -12,12 +17,9 @@ export default function DataBackup() {
     try {
       const houses = await listHouses()
       const tenants = await listPastTenants()
+      const rents = await listRentPaymentsForHouses(houses.map((h) => h.id))
       
-      const rentsSnap = await getDocs(collection(db, 'rentPayments'))
-      const rents = rentsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-      
-      const ebSnap = await getDocs(collection(db, 'ebBills'))
-      const ebBills = ebSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const ebBills = await listEbBillCyclesForHouses(houses.map((h) => h.id))
       
       const data = { houses, tenants, rents, ebBills }
       
@@ -41,12 +43,12 @@ export default function DataBackup() {
 
   async function handleExportCSV() {
     try {
-      const rentsSnap = await getDocs(collection(db, 'rentPayments'))
-      const rents = rentsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const houses = await listHouses()
+      const rents = await listRentPaymentsForHouses(houses.map((h) => h.id))
       
       let csv = 'House ID,Tenant ID,Month,Amount,Status,Date\n'
       rents.forEach(r => {
-        csv += `${r.houseId},${r.tenantId || ''},${r.month},${r.amount},${r.status},${r.dateSent || r.submittedAt}\n`
+        csv += [r.houseId, r.tenantId, r.month, r.amount, r.status, r.dateSent || r.submittedAt].map(csvCell).join(',') + '\n'
       })
       
       const blob = new Blob([csv], { type: 'text/csv' })
@@ -69,7 +71,7 @@ export default function DataBackup() {
       <h2 className="text-lg font-semibold text-ink">Data Backup</h2>
       <div className="bg-paper-raised p-5 rounded-xl border border-brass/20 shadow-sm space-y-4">
         <p className="text-sm text-ink-soft">
-          Download a full backup of all your houses, tenants, rent payments, and EB bills in JSON format.
+          Download a backup of the currently selected apartment's houses, tenants, rent payments, and EB bills in JSON format.
         </p>
         <p className="text-xs text-ink-soft/80">Last backup: {lastExport}</p>
         

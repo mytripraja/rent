@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { collection, getDocs } from 'firebase/firestore'
-import { db } from '../../services/firebase'
+import { listRentPaymentsForHouses } from '../../services/rentService'
+import { listAllComplaints } from '../../services/complaintService'
 import { listHouses } from '../../services/houseService'
 import { useToast } from '../shared/ui/Toast'
 
@@ -33,10 +33,8 @@ export default function EmailReport() {
     setLoading(true)
     try {
       const houses = await listHouses()
-      const rentSnap = await getDocs(collection(db, 'rentPayments'))
-      const allRents = rentSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-      const complaintsSnap = await getDocs(collection(db, 'complaints'))
-      const complaints = complaintsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const allRents = await listRentPaymentsForHouses(houses.map((h) => h.id))
+      const complaints = await listAllComplaints(houses.map((h) => h.id), houses[0]?.propertyId || null)
 
       const currentMonth = new Date().toISOString().substring(0, 7) // YYYY-MM
 

@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { DoorOpen, Phone, X, Users, IndianRupee, CalendarDays, History, ChevronRight, MoreHorizontal, ShieldCheck } from 'lucide-react'
+import { DoorOpen, Phone, X, Users, IndianRupee, CalendarDays, History, ChevronRight, MoreHorizontal, ShieldCheck, UserRoundPlus, UserRound, Share2 } from 'lucide-react'
 import TextField from '../shared/ui/TextField'
 import SelectField from '../shared/ui/SelectField'
 import Button from '../shared/ui/Button'
 import IconButton from '../shared/ui/IconButton'
-import { listHouses, getHouseHistory, bookHouse, vacateHouse } from '../../services/houseService'
-import { createTenantAccount } from '../../services/authService'
+import { listHouses, getHouseHistory, bookHouse, vacateHouse, updateHouseDetails, updateHouseholdMembers } from '../../services/houseService'
+import { getDeviceSecurity, unlockWithBiometric } from '../../services/deviceSecurityService'
+import { createTenantAccount, correctRentPaymentSecure } from '../../services/authService'
 import { addAdvancePayment } from '../../services/advanceLedgerService'
-import { uploadUnsigned } from '../../services/cloudinaryService'
+import { uploadSigned } from '../../services/cloudinaryService'
 import { getCashReceivers } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../shared/ui/Toast'
@@ -18,6 +19,7 @@ import { useNavigate } from 'react-router-dom'
 import { createNotification } from '../../services/notificationService'
 import { listRentHistory } from '../../services/rentService'
 import { listHouseTenantAccounts } from '../../services/tenantAccountService'
+import HouseShareModal from './HouseShareModal'
 
 export default function HouseManager() {
   const { user } = useAuth()
@@ -28,6 +30,7 @@ export default function HouseManager() {
   const [detailHouse, setDetailHouse] = useState(null)
   const [bulkMode, setBulkMode] = useState(false)
   const [selectedHouseIds, setSelectedHouseIds] = useState(new Set())
+  const [shareHouses, setShareHouses] = useState(null)
   const toast = useToast()
 
   useEffect(() => {
@@ -61,6 +64,8 @@ export default function HouseManager() {
     const selected = houses.filter(h => selectedHouseIds.has(h.id))
     if (action === 'notice') {
       navigate('/owner/notices', { state: { preselectHouses: selected.map(h => h.id) } })
+    } else if (action === 'share') {
+      setShareHouses(selected)
     } else if (action === 'reminder') {
       try {
         let count = 0
@@ -204,17 +209,32 @@ export default function HouseManager() {
         onAction={handleBulkAction}
         onClear={() => setSelectedHouseIds(new Set())}
       />
+      {shareHouses && <HouseShareModal houses={shareHouses} onClose={() => setShareHouses(null)} />}
     </div>
   )
 }
 
 
 function HouseDetailModal({ house, user, onClose, onVacate, onBook }) {
+  const { showToast } = useToast()
   const [tab, setTab] = useState('overview')
   const [history, setHistory] = useState([])
   const [payments, setPayments] = useState([])
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [detailSaving, setDetailSaving] = useState(false)
+  const [houseColors, setHouseColors] = useState({ exterior:'#172033', hall:'#f5f5f5', kitchen:'#f5f5f5', bathroom:'#f5f5f5', bedroom:'#f5f5f5' })
+  const [fixtures, setFixtures] = useState([])
+  const [ownerNotes, setOwnerNotes] = useState('')
+  const [correctingPayment, setCorrectingPayment] = useState(null)
+  const [members, setMembers] = useState(Array.isArray(house.householdMembers) ? house.householdMembers : [])
+
+  useEffect(() => {
+    setHouseColors({ exterior:'#172033', hall:'#f5f5f5', kitchen:'#f5f5f5', bathroom:'#f5f5f5', bedroom:'#f5f5f5', ...(house.houseColors || {}) })
+    setFixtures(Array.isArray(house.providedFixtures) ? house.providedFixtures : [])
+    setOwnerNotes(house.ownerNotes || '')
+    setMembers(Array.isArray(house.householdMembers) ? house.householdMembers : [])
+  }, [house.id])
 
   useEffect(() => {
     let live = true
@@ -229,6 +249,17 @@ function HouseDetailModal({ house, user, onClose, onVacate, onBook }) {
   const currentAccountCount = accounts.length
   const currentMembers = Number(house.memberCount || house.familyMemberCount || currentAccountCount || 1)
   const currentHistory = history.find(h => !h.movedOutAt)
+  async function saveHouseDetails() {
+    setDetailSaving(true)
+    try { await updateHouseDetails(house.id, { colors: houseColors, fixtures, notes: ownerNotes }); window.dispatchEvent(new CustomEvent('rm:house-details-updated', { detail: { houseId: house.id, colors: houseColors, fixtures } })) }
+    catch (e) { console.error(e) }
+    finally { setDetailSaving(false) }
+  }
+  async function saveMembers() { try { await updateHouseholdMembers(house.id, members); showToast({message:'Household members updated',type:'success'}) } catch(e) { showToast({message:e.message||'Could not update household',type:'error'}) } }
+  function addMember() { setMembers(v => [...v, { name:'', age:'', gender:'', relationship:'' }]) }
+  function patchMember(index, patch) { setMembers(v => v.map((m,i)=>i===index?{...m,...patch}:m)) }
+  function addFixture() { setFixtures(v => [...v, { name:'', quantity:1, notes:'' }]) }
+  function patchFixture(index, patch) { setFixtures(v => v.map((x,i)=>i===index?{...x,...patch}:x)) }
 
   return (
     <div className="fixed inset-0 z-[70] bg-black/55 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -265,37 +296,65 @@ function HouseDetailModal({ house, user, onClose, onVacate, onBook }) {
                     {house.status === 'occupied' ? <>
                       <p className="font-semibold text-ink">{house.tenantName}</p>
                       <p className="text-sm text-ink-soft mt-1">{house.tenantPhone || 'No phone'} · {house.tenantEmail || 'No email'}</p>
-                      <p className="text-xs text-ink-soft mt-3">Move-in: {house.moveInDate || 'Not recorded'}</p>
-                      <p className="text-xs text-ink-soft">Members: {currentMembers}</p>
+                      <p className="text-xs text-ink-soft mt-3">Move-in: {house.moveInDate || 'Not recorded'} {house.moveInDateApproximate ? '(approx.)' : ''}</p>
+                      <p className="text-xs text-ink-soft">Members: {currentMembers}</p>{Array.isArray(house.householdMembers) && house.householdMembers.length > 0 && <div className="mt-3 space-y-1.5">{house.householdMembers.map((m,i)=><div key={i} className="flex items-center justify-between gap-2 rounded-lg bg-paper-raised border border-[var(--rm-border)] px-2.5 py-2"><span className="text-xs font-semibold text-ink">{m.name || `Member ${i+1}`} {m.relationship ? `· ${m.relationship}` : ''}</span><span className="text-[11px] text-ink-soft">{m.age !== undefined ? `${m.age} yrs` : 'Age —'} {m.ageBandLabel ? `· ${m.ageBandLabel}` : ''} {m.gender ? `· ${m.gender}` : ''}</span></div>)}</div>}
                     </> : <p className="text-sm text-ink-soft">Currently vacant. Previous residents remain available in Occupancy history.</p>}
                   </DetailCard>
                   <DetailCard title="Property details" icon={DoorOpen}>
                     <p className="text-sm text-ink-soft">Floor: <span className="text-ink font-medium">{house.floor || '—'}</span></p>
+                    {house.roomCounts && <p className="text-sm text-ink-soft mt-2">Rooms: <span className="text-ink font-medium">{Number(house.roomCounts.bedrooms||0)} bed · {Number(house.roomCounts.halls||0)} hall · {Number(house.roomCounts.kitchens||0)} kitchen · {Number(house.roomCounts.bathrooms||0)} bath · {Number(house.roomCounts.dressingRooms||0)} dressing</span></p>}
                     <p className="text-sm text-ink-soft mt-2">EB number: <span className="text-ink font-medium">{house.ebNumber || '—'}</span></p>
                     <p className="text-sm text-ink-soft mt-2">Advance: <span className="text-ink font-medium">{house.status === 'occupied' ? `₹${Number(house.advanceAmount || 0).toLocaleString('en-IN')}` : '—'}</span></p>
                     <p className="text-sm text-ink-soft mt-2">Total approved rent recorded: <span className="text-ink font-medium">₹{paidTotal.toLocaleString('en-IN')}</span></p>
                   </DetailCard>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
-                  {house.status === 'occupied' ? <button onClick={onVacate} className="px-4 py-2.5 rounded-xl border border-stamp-red/30 text-stamp-red text-sm font-semibold hover:bg-stamp-red/5">More actions · Vacate house</button> : <button onClick={onBook} className="px-4 py-2.5 rounded-xl bg-brand text-white text-sm font-semibold">Book this house</button>}
+                  {house.status === 'occupied' ? <button onClick={onVacate} className="px-4 py-2.5 rounded-xl border border-stamp-red/30 text-stamp-red text-sm font-semibold hover:bg-stamp-red/5">More actions · Vacate house</button> : <button onClick={onBook} className="px-4 py-2.5 rounded-xl bg-brand !text-white text-sm font-semibold">Book this house</button>}
                   <span className="px-4 py-2.5 rounded-xl bg-paper border border-[var(--rm-border)] text-sm text-ink-soft">Created {house.createdAt ? new Date(house.createdAt).toLocaleDateString('en-IN') : '—'}</span>
                 </div>
+                <DetailCard title="Paint & room colours" icon={DoorOpen}>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">{[['exterior','Exterior'],['hall','Hall'],['kitchen','Kitchen'],['bathroom','Bathroom'],['bedroom','Bedroom']].map(([key,label])=><label key={key} className="text-xs font-semibold text-ink-soft">{label}<div className="flex items-center gap-2 mt-1"><input type="color" value={houseColors[key] || '#f5f5f5'} onChange={e=>setHouseColors(v=>({...v,[key]:e.target.value}))} className="h-10 w-10 p-1 rounded-lg"/><input value={houseColors[key] || ''} onChange={e=>setHouseColors(v=>({...v,[key]:e.target.value}))} className="min-w-0 text-xs" placeholder="#RRGGBB"/></div></label>)}</div>
+                  <p className="text-xs text-ink-soft mt-3">Keep these saved so repainting or repair work can match each room later.</p>
+                </DetailCard>
+                <DetailCard title="Items provided with this house" icon={DoorOpen}>
+                  <div className="space-y-2">{fixtures.map((item,index)=><div key={index} className="grid grid-cols-1 sm:grid-cols-[1fr_70px_1fr_auto] gap-2 items-center"><input value={item.name} onChange={e=>patchFixture(index,{name:e.target.value})} placeholder="Fan / light / calling bell"/><input type="number" min="1" value={item.quantity} onChange={e=>patchFixture(index,{quantity:Number(e.target.value||1)})}/><input value={item.notes||''} onChange={e=>patchFixture(index,{notes:e.target.value})} placeholder="Notes"/><button onClick={()=>setFixtures(v=>v.filter((_,i)=>i!==index))} className="text-red-600">×</button></div>)}<button onClick={addFixture} className="text-sm font-bold text-brand">+ Add item</button></div>
+                </DetailCard>
+                <DetailCard title="Owner notes" icon={DoorOpen}><textarea value={ownerNotes} onChange={e=>setOwnerNotes(e.target.value)} placeholder="Repair notes, special fittings, repaint notes…" className="w-full min-h-24"/><button disabled={detailSaving} onClick={saveHouseDetails} className="mt-3 rounded-xl bg-brand text-white px-4 py-2.5 text-sm font-bold disabled:opacity-60">{detailSaving?'Saving…':'Save house details'}</button></DetailCard>
               </div>}
 
-              {tab === 'residents' && <div className="space-y-3">
-                <div className="flex items-center justify-between mb-2"><div><h3 className="font-display text-lg font-bold text-ink">Accounts & household</h3><p className="text-sm text-ink-soft">{accounts.length} login account{accounts.length === 1 ? '' : 's'} · up to 5 family accounts</p></div><ShieldCheck className="text-brand"/></div>
-                {accounts.length ? accounts.map(a => <div key={a.uid} className="rounded-2xl border border-[var(--rm-border)] bg-paper p-4 flex items-center gap-3"><div className="w-11 h-11 rounded-xl bg-brand/10 text-brand flex items-center justify-center font-bold">{(a.name || '?')[0]}</div><div className="min-w-0 flex-1"><p className="font-semibold text-ink truncate">{a.name}</p><p className="text-xs text-ink-soft truncate">{a.accountType === 'sub' ? `${a.relationship || 'Family member'} · Family account` : 'Main tenant account'}</p><p className="text-xs text-ink-soft truncate">{a.email || 'No email'}</p></div><span className="text-xs rounded-full px-2.5 py-1 bg-brand/10 text-brand font-semibold">{a.accountType === 'sub' ? 'Sub account' : 'Main'}</span></div>) : <p className="text-sm text-ink-soft py-8 text-center">No tenant accounts found.</p>}
+              {tab === 'residents' && <div className="space-y-4">
+                <div className="flex items-center justify-between mb-2"><div><h3 className="font-display text-lg font-bold text-ink">Accounts & household</h3><p className="text-sm text-ink-soft">Adjust the real household after move-in without changing login accounts.</p></div><ShieldCheck className="text-brand"/></div>
+                <div className="rounded-2xl border border-[var(--rm-border)] bg-paper p-4 space-y-3"><div className="flex items-center justify-between"><div><p className="font-semibold text-ink">Household members</p><p className="text-xs text-ink-soft">Age bands are calculated automatically: Baby 0–2, Kid 3–17, Adult 18–59, Senior 60–74, Super Senior 75+.</p></div><button type="button" onClick={addMember} className="text-xs font-bold text-brand">+ Add member</button></div>{members.map((m,i)=><div key={i} className="grid grid-cols-1 sm:grid-cols-[1.4fr_.7fr_1fr_1fr_auto] gap-2 rounded-xl border border-[var(--rm-border)] p-3"><input value={m.name||''} onChange={e=>patchMember(i,{name:e.target.value})} placeholder="Name"/><input type="number" min="0" value={m.age ?? ''} onChange={e=>patchMember(i,{age:e.target.value})} placeholder="Age" onWheel={e=>e.currentTarget.blur()}/><select value={m.gender||''} onChange={e=>patchMember(i,{gender:e.target.value})}><option value="">Gender</option>{GENDERS.map(g=><option key={g}>{g}</option>)}</select><select value={m.relationship||''} onChange={e=>patchMember(i,{relationship:e.target.value})}><option value="">Relationship</option>{RELATIONSHIPS.map(r=><option key={r}>{r}</option>)}</select><button type="button" onClick={()=>setMembers(v=>v.filter((_,idx)=>idx!==i))} className="text-red-600 font-bold">×</button></div>)}{members.length===0&&<p className="text-sm text-ink-soft">No household members recorded.</p>}<button type="button" onClick={saveMembers} className="rounded-xl bg-brand text-white px-4 py-2.5 text-sm font-bold">Save household</button></div>
+                <div className="space-y-2">{accounts.length ? accounts.map(a => <div key={a.uid} className="rounded-2xl border border-[var(--rm-border)] bg-paper p-4 flex items-center gap-3"><div className="w-11 h-11 rounded-xl bg-brand/10 text-brand flex items-center justify-center font-bold">{(a.name || '?')[0]}</div><div className="min-w-0 flex-1"><p className="font-semibold text-ink truncate">{a.name}</p><p className="text-xs text-ink-soft truncate">{a.accountType === 'sub' ? `${a.relationship || 'Family member'} · Family account` : 'Main tenant account'}</p><p className="text-xs text-ink-soft truncate">{a.email || 'No email'}</p></div><span className="text-xs rounded-full px-2.5 py-1 bg-brand/10 text-brand font-semibold">{a.accountType === 'sub' ? 'Sub account' : 'Main'}</span></div>) : <p className="text-sm text-ink-soft py-4 text-center">No tenant login accounts found.</p>}</div>
               </div>}
 
-              {tab === 'rent' && <div><div className="grid grid-cols-2 gap-3 mb-4"><InfoStat icon={IndianRupee} label="Approved total" value={`₹${paidTotal.toLocaleString('en-IN')}`} /><InfoStat icon={History} label="Payments" value={payments.length} /></div><div className="space-y-2">{payments.slice(0, 30).map(p => <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-paper border border-[var(--rm-border)]"><div className="flex-1"><p className="text-sm font-semibold text-ink">{p.month}</p><p className="text-xs text-ink-soft">{p.mode || '—'} · {p.tenantId === house.currentTenantId ? 'Current tenant' : 'House account'}</p></div><p className="font-mono-tab text-sm text-ink">₹{Number(p.amount || 0).toLocaleString('en-IN')}</p><span className={`text-[10px] px-2 py-1 rounded-full font-bold ${p.status==='approved'?'bg-emerald-100 text-emerald-700':p.status==='waiting_approval'?'bg-amber-100 text-amber-700':'bg-red-100 text-red-700'}`}>{p.status.replace('_',' ')}</span></div>)}{payments.length===0 && <p className="text-sm text-ink-soft py-8 text-center">No rent payments recorded yet.</p>}</div></div>}
+              {tab === 'rent' && <div><div className="grid grid-cols-2 gap-3 mb-4"><InfoStat icon={IndianRupee} label="Approved total" value={`₹${paidTotal.toLocaleString('en-IN')}`} /><InfoStat icon={History} label="Payments" value={payments.length} /></div><div className="space-y-2">{payments.slice(0, 30).map(p => <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-xl bg-paper border border-[var(--rm-border)]"><div className="flex-1"><p className="text-sm font-semibold text-ink">{p.month}</p><p className="text-xs text-ink-soft">{p.mode || '—'} · {p.tenantId === house.currentTenantId ? 'Current tenant' : 'House account'}</p></div><p className="font-mono-tab text-sm text-ink">₹{Number(p.amount || 0).toLocaleString('en-IN')}</p><span className={`text-[10px] px-2 py-1 rounded-full font-bold ${p.status==='approved'?'bg-emerald-100 text-emerald-700':p.status==='waiting_approval'?'bg-amber-100 text-amber-700':'bg-red-100 text-red-700'}`}>{p.status.replace('_',' ')}</span>{p.status === 'approved' && <button onClick={()=>setCorrectingPayment(p)} className="text-[11px] font-bold text-amber-700 border border-amber-300 rounded-lg px-2.5 py-1.5">Secure correction</button>}</div>)}{payments.length===0 && <p className="text-sm text-ink-soft py-8 text-center">No rent payments recorded yet.</p>}</div>{correctingPayment && <SecurePaymentCorrection payment={correctingPayment} onClose={()=>setCorrectingPayment(null)} onSaved={()=>{setCorrectingPayment(null);load()}} />}</div>}
 
-              {tab === 'history' && <div className="space-y-3">{history.map((h, i) => <div key={h.id} className="relative pl-7 pb-3"><div className="absolute left-1.5 top-1.5 w-3 h-3 rounded-full bg-brand ring-4 ring-brand/10"/><div className="rounded-2xl border border-[var(--rm-border)] bg-paper p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-ink">{h.name || 'Resident'}</p><p className="text-xs text-ink-soft mt-1">Moved in {h.moveInDate || (h.movedInAt ? new Date(h.movedInAt).toLocaleDateString('en-IN') : '—')}</p></div><span className="text-xs rounded-full px-2.5 py-1 bg-paper-raised border border-[var(--rm-border)] text-ink-soft">{h.movedOutAt ? 'Past resident' : 'Current'}</span></div>{h.movedOutAt && <p className="text-xs text-ink-soft mt-3">Moved out {new Date(h.movedOutAt).toLocaleDateString('en-IN')} · Advance deducted ₹{Number(h.advanceDeducted || 0).toLocaleString('en-IN')} · Returned ₹{Number(h.balanceReturned || 0).toLocaleString('en-IN')}</p>}</div></div>)}{history.length===0 && <p className="text-sm text-ink-soft py-8 text-center">No occupancy history yet.</p>}</div>}
+              {tab === 'history' && <div className="space-y-3">{history.map((h, i) => <div key={h.id} className="relative pl-7 pb-3"><div className="absolute left-1.5 top-1.5 w-3 h-3 rounded-full bg-brand ring-4 ring-brand/10"/><div className="rounded-2xl border border-[var(--rm-border)] bg-paper p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-ink">{h.name || 'Resident'}</p><p className="text-xs text-ink-soft mt-1">Moved in {h.moveInDate || (h.movedInAt ? new Date(h.movedInAt).toLocaleDateString('en-IN') : '—')} {h.moveInDateApproximate ? '(approx.)' : ''}</p></div><span className="text-xs rounded-full px-2.5 py-1 bg-paper-raised border border-[var(--rm-border)] text-ink-soft">{h.movedOutAt ? 'Past resident' : 'Current'}</span></div>{h.movedOutAt && <p className="text-xs text-ink-soft mt-3">Moved out {new Date(h.movedOutAt).toLocaleDateString('en-IN')} · Advance deducted ₹{Number(h.advanceDeducted || 0).toLocaleString('en-IN')} · Returned ₹{Number(h.balanceReturned || 0).toLocaleString('en-IN')}</p>}</div></div>)}{history.length===0 && <p className="text-sm text-ink-soft py-8 text-center">No occupancy history yet.</p>}</div>}
             </>
           )}
         </div>
       </motion.div>
     </div>
   )
+}
+
+function SecurePaymentCorrection({ payment, onClose, onSaved }) {
+  const { user } = useAuth()
+  const [key, setKey] = useState('')
+  const [reason, setReason] = useState('')
+  const [replacementAmount, setReplacementAmount] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  async function submit(e) {
+    e.preventDefault(); setError('')
+    if (!key || !reason.trim()) return setError('Critical change password and reason are required.')
+    setBusy(true)
+    try { const device = getDeviceSecurity(user?.uid); if (device.method === 'biometric') await unlockWithBiometric(user.uid); await correctRentPaymentSecure({ paymentId: payment.id, criticalKey:key, reason:reason.trim(), replacementAmount:replacementAmount === '' ? null : Number(replacementAmount) }); onSaved() }
+    catch (e) { setError(e.message || 'Could not correct this payment.') }
+    finally { setBusy(false) }
+  }
+  return <div className="fixed inset-0 z-[100] bg-black/55 p-4 grid place-items-center"><form onSubmit={submit} className="w-full max-w-md rounded-2xl bg-paper-raised border border-amber-300/50 shadow-2xl p-5 space-y-3"><div><h3 className="font-display text-lg font-bold text-ink">Secure rent correction</h3><p className="text-xs text-ink-soft mt-1">This action changes an approved record and is deliberately protected by the critical change password. If face/fingerprint security is enabled on this device, it is also required.</p></div><div className="rounded-xl bg-paper border border-[var(--rm-border)] p-3 text-sm"><b>{payment.month}</b> · ₹{Number(payment.amount||0).toLocaleString('en-IN')}</div><input type="password" required minLength={8} value={key} onChange={e=>setKey(e.target.value)} placeholder="Critical change password" autoComplete="current-password"/><textarea required rows={3} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Why does this approved payment need correction?"/><input type="number" min="1" value={replacementAmount} onChange={e=>setReplacementAmount(e.target.value)} placeholder="Replacement amount (optional)"/><p className="text-[11px] text-ink-soft">The original amount is preserved in the audit trail. A corrected payment is removed from approved totals; use the replacement amount when a new approved entry should be recorded separately.</p>{error&&<p className="text-sm text-red-600" role="alert">{error}</p>}<div className="flex gap-2"><button type="submit" disabled={busy} className="flex-1 rounded-xl bg-amber-700 text-white py-2.5 text-sm font-bold">{busy?'Verifying…':'Correct securely'}</button><button type="button" onClick={onClose} className="flex-1 rm-secondary-button justify-center">Cancel</button></div></form></div>
 }
 
 function InfoStat({ icon: Icon, label, value }) {
@@ -307,11 +366,26 @@ function DetailCard({ title, icon: Icon, children }) {
 }
 
 
+const AGE_BANDS = [
+  { id: 'baby', label: 'Baby', range: '0–2 years', min: 0, max: 2 },
+  { id: 'kid', label: 'Kid', range: '3–17 years', min: 3, max: 17 },
+  { id: 'adult', label: 'Adult', range: '18–59 years', min: 18, max: 59 },
+  { id: 'senior', label: 'Senior Citizen', range: '60–74 years', min: 60, max: 74 },
+  { id: 'super-senior', label: 'Super Senior Citizen', range: '75+ years', min: 75, max: 200 },
+]
+const RELATIONSHIPS = ['Self', 'Spouse', 'Parent', 'Uncle / Aunt', 'Child', 'Sibling', 'Other']
+const GENDERS = ['Male', 'Female', 'Other', 'Prefer not to say']
+function ageBandFor(age) {
+  const n = Number(age)
+  return Number.isFinite(n) && n >= 0 ? (AGE_BANDS.find(b => n >= b.min && n <= b.max) || AGE_BANDS[4]) : null
+}
+function blankHouseholdMember() { return { name: '', age: '', gender: '', relationship: '' } }
+
 function BookHouseModal({ house, user, onClose, onDone }) {
   const { showToast } = useToast()
   const [form, setForm] = useState({
-    name: '', phone: '', email: '', password: '', rentAmount: '', advanceAmount: '', aadhaarNumber: '', phoneVisibleToNeighbors: true,
-    moveInDate: '', advancePaidNow: '', memberCount: '1',
+    name: '', phone: '', email: '', rentAmount: '', advanceAmount: '', aadhaarNumber: '', phoneVisibleToNeighbors: true,
+    moveInDate: '', moveInDateApproximate: false, advancePaidNow: '', memberCount: '1', householdMembers: [blankHouseholdMember()],
   })
   const [touched, setTouched] = useState({})
   const [photoFile, setPhotoFile] = useState(null)
@@ -331,8 +405,6 @@ function BookHouseModal({ house, user, onClose, onDone }) {
       ? 'Enter a valid email address.' : '',
     phone: touched.phone && form.phone && form.phone.replace(/\D/g, '').length < 10
       ? 'Enter a valid 10-digit phone number.' : '',
-    password: touched.password && form.password && form.password.length < 6
-      ? 'Password should be at least 6 characters.' : '',
     rentAmount: touched.rentAmount && form.rentAmount && Number(form.rentAmount) <= 0
       ? 'Rent must be greater than ₹0.' : '',
     memberCount: touched.memberCount && (Number(form.memberCount) < 1 || Number(form.memberCount) > 20) ? 'Enter 1–20 household members.' : '',
@@ -341,9 +413,22 @@ function BookHouseModal({ house, user, onClose, onDone }) {
   }
   const hasErrors = Object.values(errors).some(Boolean)
 
+  function patchHouseholdMember(index, patch) {
+    setForm(f => ({ ...f, householdMembers: f.householdMembers.map((m, i) => i === index ? { ...m, ...patch } : m) }))
+  }
+  function syncMemberCount(nextCount) {
+    const count = Math.max(1, Math.min(20, Number(nextCount || 1)))
+    setForm(f => {
+      const members = [...f.householdMembers]
+      while (members.length < count) members.push(blankHouseholdMember())
+      while (members.length > count) members.pop()
+      return { ...f, memberCount: String(count), householdMembers: members }
+    })
+  }
+
   async function submit(e) {
     e.preventDefault()
-    setTouched({ email: true, phone: true, password: true, rentAmount: true, advancePaidNow: true, memberCount: true })
+    setTouched({ email: true, phone: true, rentAmount: true, advancePaidNow: true, memberCount: true })
     if (hasErrors) return
 
     setSubmitting(true)
@@ -352,12 +437,11 @@ function BookHouseModal({ house, user, onClose, onDone }) {
       const recordedBy = { uid: user.uid, name: user.name }
       let photoUrl = null
       if (photoFile) {
-        const uploaded = await uploadUnsigned(photoFile, `tenant-photos/${house.id}`)
+        const uploaded = await uploadSigned(photoFile, `tenant-photos/${house.id}`, { visibility: 'upload' })
         photoUrl = uploaded.url
       }
       const tenant = await createTenantAccount({
-        email: form.email,
-        password: form.password,
+        email: form.email || undefined,
         name: form.name,
         phone: form.phone,
         houseId: house.id,
@@ -367,12 +451,14 @@ function BookHouseModal({ house, user, onClose, onDone }) {
         tenantId: tenant.uid,
         name: form.name,
         phone: form.phone,
-        email: form.email,
+        email: form.email || '',
         rentAmount: Number(form.rentAmount),
         advanceAmount: Number(form.advanceAmount),
         phoneVisibleToNeighbors: form.phoneVisibleToNeighbors,
         moveInDate: form.moveInDate,
+        moveInDateApproximate: !!form.moveInDateApproximate,
         memberCount: Number(form.memberCount || 1),
+        householdMembers: form.householdMembers.slice(0, Number(form.memberCount || 1)).map((m, index) => ({ ...m, age: Number(m.age), ageBand: ageBandFor(m.age)?.id || null, ageBandLabel: ageBandFor(m.age)?.label || null, ageBandRange: ageBandFor(m.age)?.range || null, order: index + 1 })),
         recordedBy,
         photoUrl,
       })
@@ -405,9 +491,9 @@ function BookHouseModal({ house, user, onClose, onDone }) {
     return (
       <Modal title="House Booked" onClose={onClose}>
         <div className="text-center space-y-2 py-2">
-          <p className="text-sm text-ink-soft">Tenant login created. Share this Customer ID with them —</p>
+          <p className="text-sm text-ink-soft">Tenant record created. Share this Customer ID with them —</p>
           <p className="text-2xl font-semibold text-brand">{customerId}</p>
-          <p className="text-xs text-ink-soft">They can sign in with this ID + the password you set, with their email + password, or with Google.</p>
+          <p className="text-xs text-ink-soft">Login access is created later: link their email from the tenant profile and send the secure login setup link.</p>
           <Button onClick={onClose} fullWidth className="mt-4">Done</Button>
         </div>
       </Modal>
@@ -424,15 +510,11 @@ function BookHouseModal({ house, user, onClose, onDone }) {
           error={errors.phone}
         />
         <TextField
-          label="Email" hint="Used as their login" type="email" required value={form.email}
+          label="Email" hint="Optional now. You can link their email later when you give them login access." type="email" value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })} onBlur={() => touch('email')}
           error={errors.email}
         />
-        <TextField
-          label="Temporary password" type="password" required value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })} onBlur={() => touch('password')}
-          error={errors.password}
-        />
+        <p className="text-xs text-ink-soft rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">No password is created here. Add an email later from the tenant profile, then send the secure login setup link so the tenant creates their own password.</p>
         <TextField
           label="Aadhaar number" hint="Optional — links repeat tenants to one Customer ID"
           value={form.aadhaarNumber} onChange={(e) => setForm({ ...form, aadhaarNumber: e.target.value })}
@@ -441,26 +523,49 @@ function BookHouseModal({ house, user, onClose, onDone }) {
           <label className="text-sm text-ink-soft" htmlFor="tenant-photo">Profile photo (optional)</label>
           <input id="tenant-photo" type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files[0])} className="w-full text-sm mt-1" />
         </div>
-        <TextField
-          label="Move-in date" type="date" required value={form.moveInDate}
-          onChange={(e) => setForm({ ...form, moveInDate: e.target.value })}
-        />
+        <div className="rounded-xl border border-[var(--rm-border)] bg-paper p-3 space-y-2">
+          <label className="text-xs font-semibold text-ink-soft block">Move-in date <span className="text-red-600">*</span>
+            <input type="date" required value={form.moveInDate} onChange={(e) => setForm({ ...form, moveInDate: e.target.value })} className="mt-1 w-full border border-[var(--rm-border)] rounded-lg px-3 py-2.5 text-sm" />
+          </label>
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input type="checkbox" checked={form.moveInDateApproximate} onChange={(e) => setForm({ ...form, moveInDateApproximate: e.target.checked })} className="mt-0.5" />
+            <span><span className="font-semibold">Date is approximate</span><span className="block text-xs text-ink-soft mt-0.5">Use this when the tenant knows only an approximate move-in date.</span></span>
+          </label>
+        </div>
         <TextField
           label="Rent amount" type="number" required value={form.rentAmount}
           onChange={(e) => setForm({ ...form, rentAmount: e.target.value })} onBlur={() => touch('rentAmount')}
-          error={errors.rentAmount}
+          onWheel={(e) => e.currentTarget.blur()} error={errors.rentAmount}
         />
         <TextField
           label="Advance amount agreed (target)" type="number" required value={form.advanceAmount}
-          onChange={(e) => setForm({ ...form, advanceAmount: e.target.value })}
+          onChange={(e) => setForm({ ...form, advanceAmount: e.target.value })} onWheel={(e) => e.currentTarget.blur()}
         />
         <TextField
           label="Advance actually paid now" hint="Can be less — add the rest later from their profile"
           type="number" placeholder="e.g. 5000" value={form.advancePaidNow}
-          onChange={(e) => setForm({ ...form, advancePaidNow: e.target.value })} onBlur={() => touch('advancePaidNow')}
+          onChange={(e) => setForm({ ...form, advancePaidNow: e.target.value })} onBlur={() => touch('advancePaidNow')} onWheel={(e) => e.currentTarget.blur()}
           error={errors.advancePaidNow}
         />
-        <TextField label="Household members" hint="Used for the house profile. You can create separate family logins after booking." type="number" min="1" max="20" value={form.memberCount} onChange={(e) => setForm({ ...form, memberCount: e.target.value })} onBlur={() => touch('memberCount')} error={errors.memberCount} />
+        <div className="rounded-2xl border border-[var(--rm-border)] bg-paper p-3 space-y-3">
+          <div className="flex items-start gap-2"><UserRoundPlus size={18} className="text-brand mt-0.5"/><div><p className="text-sm font-bold text-ink">Household members</p><p className="text-xs text-ink-soft">Enter the household count, then add each person's age and gender. Age band is calculated automatically.</p></div></div>
+          <TextField label="Number of household members" hint="1–20 people" type="number" min="1" max="20" value={form.memberCount} onChange={(e) => syncMemberCount(e.target.value)} onBlur={() => touch('memberCount')} onWheel={(e) => e.currentTarget.blur()} error={errors.memberCount} />
+          <div className="space-y-2">
+            {form.householdMembers.map((member, index) => {
+              const band = ageBandFor(member.age)
+              return <div key={index} className="rounded-xl border border-[var(--rm-border)] bg-paper-raised p-3 space-y-2">
+                <div className="flex items-center justify-between"><p className="text-xs font-bold text-ink">Member {index + 1}</p>{band && <span className="text-[11px] rounded-full bg-brand/10 text-brand px-2 py-1 font-semibold">{band.label} · {band.range}</span>}</div>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <input value={member.name} onChange={e=>patchHouseholdMember(index,{name:e.target.value})} placeholder="Name (optional)" className="w-full border border-[var(--rm-border)] rounded-lg px-3 py-2 text-sm" />
+                  <input type="number" min="0" max="120" value={member.age} onChange={e=>patchHouseholdMember(index,{age:e.target.value})} onWheel={e=>e.currentTarget.blur()} placeholder="Age" className="w-full border border-[var(--rm-border)] rounded-lg px-3 py-2 text-sm" />
+                  <select value={member.gender} onChange={e=>patchHouseholdMember(index,{gender:e.target.value})} className="w-full border border-[var(--rm-border)] rounded-lg px-3 py-2 text-sm"><option value="">Gender</option>{GENDERS.map(g=><option key={g}>{g}</option>)}</select>
+                  <select value={member.relationship} onChange={e=>patchHouseholdMember(index,{relationship:e.target.value})} className="w-full border border-[var(--rm-border)] rounded-lg px-3 py-2 text-sm"><option value="">Relationship</option>{RELATIONSHIPS.map(r=><option key={r}>{r}</option>)}</select>
+                </div>
+              </div>
+            })}
+          </div>
+          <p className="text-[11px] text-ink-soft">Age bands: Baby (0–2) · Kid (3–17) · Adult (18–59) · Senior Citizen (60–74) · Super Senior Citizen (75+).</p>
+        </div>
         <label className="flex items-center gap-2 text-sm text-ink-soft">
           <input type="checkbox" checked={form.phoneVisibleToNeighbors} onChange={(e) => setForm({ ...form, phoneVisibleToNeighbors: e.target.checked })} />
           Show phone number to neighbors in directory

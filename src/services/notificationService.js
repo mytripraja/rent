@@ -31,24 +31,17 @@ export async function createBulkNotifications(notifications) {
 }
 
 export async function listNotifications(userId, limitCount = 50) {
-  const q = query(
-    notificationsRef,
-    where('recipientId', '==', userId),
-    orderBy('createdAt', 'desc'),
-    fsLimit(limitCount)
-  );
+  const q = query(notificationsRef, where('recipientId', '==', userId), fsLimit(limitCount));
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
 }
 
 export async function getUnreadCount(userId) {
-  const q = query(
-    notificationsRef,
-    where('recipientId', '==', userId),
-    where('read', '==', false)
-  );
+  // Keep this query single-field so unread-count retrieval does not require a
+  // recipientId+read composite index.
+  const q = query(notificationsRef, where('recipientId', '==', userId));
   const snap = await getDocs(q);
-  return snap.docs.length;
+  return snap.docs.reduce((count, d) => count + (d.data().read === false ? 1 : 0), 0);
 }
 
 export async function markAsRead(notificationId) {
@@ -58,30 +51,24 @@ export async function markAsRead(notificationId) {
 }
 
 export async function markAllAsRead(userId) {
-  const q = query(
-    notificationsRef,
-    where('recipientId', '==', userId),
-    where('read', '==', false)
-  );
+  // Query by recipient only and filter unread notifications locally to avoid a
+  // composite-index requirement.
+  const q = query(notificationsRef, where('recipientId', '==', userId));
   const snap = await getDocs(q);
-  if (snap.empty) return;
+  const unreadDocs = snap.docs.filter(d => d.data().read === false);
+  if (unreadDocs.length === 0) return;
   
   const batch = writeBatch(db);
-  snap.docs.forEach(d => {
+  unreadDocs.forEach(d => {
     batch.update(d.ref, { read: true });
   });
   await batch.commit();
 }
 
 export function subscribeToNotifications(userId, callback, limitCount = 50) {
-  const q = query(
-    notificationsRef,
-    where('recipientId', '==', userId),
-    orderBy('createdAt', 'desc'),
-    fsLimit(limitCount)
-  );
+  const q = query(notificationsRef, where('recipientId', '==', userId), fsLimit(limitCount));
   return onSnapshot(q, (snap) => {
-    const notifs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const notifs = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
     callback(notifs);
   });
 }

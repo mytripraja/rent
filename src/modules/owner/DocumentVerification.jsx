@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { listAllDocuments, getDocumentViewUrl, verifyDocument, requestReupload, getExpiringDocuments } from '../../services/documentService'
-import { listHouses } from '../../services/houseService'
+import { listDocumentsForHouses, getDocumentViewUrl, verifyDocument, requestReupload, getExpiringDocumentsForHouses } from '../../services/documentService'
+import { listOwnerHousesSecure } from '../../services/houseService'
 import { useToast } from '../shared/ui/Toast'
 
 export default function DocumentVerification() {
@@ -17,15 +17,19 @@ export default function DocumentVerification() {
   }, [])
 
   async function refresh() {
-    listAllDocuments().then(setDocs).catch((err) => {
-      console.error(err)
-      showToast({ message: "Failed to load documents", type: "error" })
-    })
-    listHouses().then(setHouses).catch((err) => {
+    listOwnerHousesSecure().then(async (accessibleHouses) => {
+      setHouses(accessibleHouses)
+      const houseIds = accessibleHouses.map((h) => h.id)
+      const [documents, expiring] = await Promise.all([
+        listDocumentsForHouses(houseIds),
+        getExpiringDocumentsForHouses(houseIds)
+      ])
+      setDocs(documents)
+      setExpiringDocs(expiring)
+    }).catch((err) => {
       console.error(err)
       showToast({ message: "Failed to load houses", type: "error" })
     })
-    getExpiringDocuments().then(setExpiringDocs).catch(console.error)
   }
 
   function houseLabel(houseId) {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { listActivities } from '../../services/activityLogService'
+import { getActivePropertyId } from '../../services/configService'
 import { FileText, Home, DollarSign, Bell, MessageSquareWarning, Settings, Zap } from 'lucide-react'
 
 function timeAgo(timestamp) {
@@ -40,7 +41,7 @@ export default function ActivityLog() {
   async function load() {
     setLoading(true)
     try {
-      const data = await listActivities(100)
+      const data = await listActivities(100, getActivePropertyId() || null)
       setActivities(data)
     } catch (err) {
       console.error(err)

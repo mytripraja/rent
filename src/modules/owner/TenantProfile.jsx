@@ -2,17 +2,20 @@ import { useEffect, useState } from 'react'
 import { getHouse, getHouseHistory } from '../../services/houseService'
 import { listRentHistory } from '../../services/rentService'
 import { listAdvanceLedger, addAdvancePayment, getAdvanceCollected } from '../../services/advanceLedgerService'
-import { updateTenantContact } from '../../services/authService'
+import { updateTenantContact, getUserProfile, sendTenantLoginSetup } from '../../services/authService'
+import { ALL_TENANT_PERMISSIONS, TENANT_PERMISSION_LABELS, updateTenantPermissions } from '../../services/tenantAccountService'
 import { uploadAgreement, getAgreementForHouse, getAgreementViewUrl } from '../../services/agreementService'
 import ApprovalStatusBadge from '../shared/ApprovalStatusBadge'
 import TextField from '../shared/ui/TextField'
 import SelectField from '../shared/ui/SelectField'
 import Button from '../shared/ui/Button'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../shared/ui/Toast'
 import FamilyAccounts from '../tenant/FamilyAccounts'
 
 export default function TenantProfile({ houseId, onBack }) {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [house, setHouse] = useState(null)
   const [rentHistory, setRentHistory] = useState([])
   const [pastOccupants, setPastOccupants] = useState([])
@@ -20,8 +23,12 @@ export default function TenantProfile({ houseId, onBack }) {
   const [collected, setCollected] = useState(0)
   const [agreement, setAgreement] = useState(null)
   const [editingContact, setEditingContact] = useState(false)
+  const [sendingLogin, setSendingLogin] = useState(false)
   const [addingAdvance, setAddingAdvance] = useState(false)
   const [uploadingAgreement, setUploadingAgreement] = useState(false)
+  const [tenantPermissions, setTenantPermissions] = useState({})
+  const [savingPermissions, setSavingPermissions] = useState(false)
+  const [permissionError, setPermissionError] = useState('')
 
   useEffect(() => {
     load()
@@ -30,6 +37,9 @@ export default function TenantProfile({ houseId, onBack }) {
   async function load() {
     const h = await getHouse(houseId)
     setHouse(h)
+    if (h?.currentTenantId) {
+      try { const profile = await getUserProfile(h.currentTenantId); setTenantPermissions(profile?.tenantPermissions || {}) } catch (e) { console.warn('Tenant permissions unavailable', e) }
+    }
     setRentHistory(await listRentHistory(houseId))
     setPastOccupants((await getHouseHistory(houseId)).filter((entry) => entry.movedOutAt))
     if (h?.status === 'occupied') {
@@ -59,17 +69,55 @@ export default function TenantProfile({ houseId, onBack }) {
 
       {!isVacant && <FamilyAccounts houseId={houseId} ownerMode />}
 
-      {!isVacant && (
-        <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-ink text-sm">Contact Info</h3>
-            <button onClick={() => setEditingContact(true)} className="text-xs text-brand hover:underline">Edit</button>
+      {!isVacant && user?.role === 'admin' && (
+        <div className="bg-paper-raised rounded-2xl border border-brand/20 shadow-sm p-5 space-y-4">
+          <div><h3 className="font-semibold text-ink text-sm">Tenant access controls</h3><p className="text-xs text-ink-soft mt-1">Choose exactly what this tenant can see or do. Rent status/details can be read-only, while payment submission is controlled separately.</p></div>
+          {permissionError && <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700">{permissionError}</div>}
+          <div className="grid sm:grid-cols-2 gap-2">
+            {ALL_TENANT_PERMISSIONS.map(permission => {
+              const enabled = tenantPermissions[permission] !== false
+              return <label key={permission} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--rm-border)] bg-paper p-3 cursor-pointer">
+                <span><span className="block text-sm font-semibold text-ink">{TENANT_PERMISSION_LABELS[permission]}</span><span className="block text-[11px] text-ink-soft mt-0.5">{enabled ? 'Allowed' : 'Blocked'}</span></span>
+                <input type="checkbox" checked={enabled} onChange={e => setTenantPermissions(prev => ({ ...prev, [permission]: e.target.checked }))} aria-label={`Allow ${TENANT_PERMISSION_LABELS[permission]}`} />
+              </label>
+            })}
           </div>
-          <p className="text-sm text-ink-soft">Phone: {house.tenantPhone}</p>
-          <p className="text-sm text-ink-soft">Email: {house.tenantEmail}</p>
-          <p className="text-sm text-ink-soft">Move-in date: {house.moveInDate || '—'}</p>
-          <p className="text-sm text-ink-soft">EB Number: {house.ebNumber || '—'}</p>
-          <p className="text-sm text-ink-soft">Rent: ₹{house.rentAmount}</p>
+          <button disabled={savingPermissions || !house.currentTenantId} onClick={async () => {
+            setSavingPermissions(true); setPermissionError('')
+            try { await updateTenantPermissions(house.currentTenantId, tenantPermissions); setPermissionError(''); } catch (e) { setPermissionError(e.message || 'Could not save access controls.') } finally { setSavingPermissions(false) }
+          }} className="w-full rounded-xl bg-brand text-white py-3 text-sm font-bold disabled:opacity-60">{savingPermissions ? 'Saving access…' : 'Save tenant access'}</button>
+          <p className="text-[11px] text-ink-soft">Changes apply to the tenant's account immediately. Existing accounts without a saved permission value remain enabled.</p>
+        </div>
+      )}
+
+      {!isVacant && (
+        <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold text-ink text-sm">Contact & login</h3>
+              <p className="text-sm text-ink-soft">Phone: {house.tenantPhone || 'Not provided'}</p>
+              <p className="text-sm text-ink-soft truncate">Email: {house.tenantEmail || 'Not linked yet'}</p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <button onClick={() => setEditingContact(true)} className="rm-secondary-button px-3 py-2 text-xs">Edit</button>
+              {house.currentTenantId && house.tenantEmail && <button type="button" disabled={sendingLogin} onClick={async () => { setSendingLogin(true); try { await sendTenantLoginSetup({ tenantUid: house.currentTenantId, houseId: house.id }); showToast({ message: 'Login setup email sent', type: 'success' }) } catch (e) { showToast({ message: e.message || 'Could not send login setup', type: 'error' }) } finally { setSendingLogin(false) } }} className="rm-hero-button px-3 py-2 text-xs">{sendingLogin ? 'Sending…' : 'Send login setup'}</button>}
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-2 text-sm text-ink-soft">
+            <p>Move-in: {house.moveInDate || '—'}{house.moveInDateApproximate ? ' (approx.)' : ''}</p><p>EB: {house.ebNumber || '—'}</p><p>Rent: ₹{house.rentAmount || 0}</p>
+          </div>
+          {!house.tenantEmail && <p className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">Email is optional when creating the tenant. Add it when you are ready to give this tenant login access.</p>}
+        </div>
+      )}
+
+      {!isVacant && (
+        <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-ink text-sm">Rent increase history</h3>
+            <span className="text-[11px] text-ink-soft">Saved in tenant profile</span>
+          </div>
+          {Array.isArray(house.rentIncreaseHistory) && house.rentIncreaseHistory.length ? <div className="space-y-2">{house.rentIncreaseHistory.slice().reverse().map((r,i)=><div key={i} className="rounded-xl bg-paper border border-[var(--rm-border)] p-3"><p className="text-sm font-semibold text-ink">₹{Number(r.fromAmount||0).toLocaleString('en-IN')} → ₹{Number(r.toAmount||0).toLocaleString('en-IN')}</p><p className="text-xs text-ink-soft mt-1">Effective from {r.effectiveMonth || '—'}</p></div>)}</div> : <p className="text-xs text-ink-soft">No rent increases recorded yet.</p>}
+          {house.nextRentIncreaseMonth && <p className="text-xs font-semibold text-amber-700">Next planned increase: {house.nextRentIncreaseMonth} · {Math.max(0, Math.ceil((new Date(`${house.nextRentIncreaseMonth}-01T00:00:00`).getTime()-Date.now())/86400000))} day(s) remaining</p>}
         </div>
       )}
 
@@ -369,6 +417,11 @@ function RentAgreementCard({ house, agreement, onChanged, uploading, setUploadin
 }
 
 function EditContactModal({ house, onClose, onSaved }) {
+  const [name, setName] = useState(house.tenantName || '')
+  const [moveInDate, setMoveInDate] = useState(house.moveInDate || '')
+  const [approximate, setApproximate] = useState(!!house.moveInDateApproximate)
+  const [ebNumber, setEbNumber] = useState(house.ebNumber || '')
+  const [rentAmount, setRentAmount] = useState(String(house.rentAmount || 0))
   const [email, setEmail] = useState(house.tenantEmail || '')
   const [phone, setPhone] = useState(house.tenantPhone || '')
   const [saving, setSaving] = useState(false)
@@ -383,7 +436,7 @@ function EditContactModal({ house, onClose, onSaved }) {
   async function submit(e) {
     e.preventDefault()
     setTouched({ email: true, phone: true })
-    if (emailError || phoneError) return
+    if (emailError || phoneError || !name.trim() || !Number.isFinite(Number(rentAmount)) || Number(rentAmount) < 0) { setError('Enter a valid tenant name, phone, email and rent amount.'); return }
 
     setSaving(true)
     setError('')
@@ -393,6 +446,11 @@ function EditContactModal({ house, onClose, onSaved }) {
         houseId: house.id,
         newEmail: email !== house.tenantEmail ? email : undefined,
         newPhone: phone !== house.tenantPhone ? phone : undefined,
+        newName: name !== house.tenantName ? name.trim() : undefined,
+        moveInDate: moveInDate !== (house.moveInDate || '') ? moveInDate : undefined,
+        moveInDateApproximate: approximate !== !!house.moveInDateApproximate ? approximate : undefined,
+        ebNumber: ebNumber !== (house.ebNumber || '') ? ebNumber : undefined,
+        newRentAmount: Number(rentAmount) !== Number(house.rentAmount || 0) ? Number(rentAmount) : undefined,
       })
       onSaved()
       onClose()
@@ -406,12 +464,17 @@ function EditContactModal({ house, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-labelledby="edit-contact-title">
       <form onSubmit={submit} className="bg-paper-raised rounded-2xl shadow-lg w-full max-w-sm p-6 space-y-3" noValidate>
-        <h3 id="edit-contact-title" className="font-semibold text-ink font-display text-lg">Edit Contact Info</h3>
+        <h3 id="edit-contact-title" className="font-semibold text-ink font-display text-lg">Edit Tenant Details</h3>
+        <TextField label="Tenant name" value={name} onChange={e => setName(e.target.value)} required />
+        <TextField label="Move-in date" type="date" value={moveInDate} onChange={e => setMoveInDate(e.target.value)} />
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={approximate} onChange={e => setApproximate(e.target.checked)} /> Approximate move-in date</label>
+        <TextField label="EB number" value={ebNumber} onChange={e => setEbNumber(e.target.value)} />
+        <TextField label="Monthly rent (₹)" type="number" min="0" value={rentAmount} onChange={e => setRentAmount(e.target.value)} onWheel={e => e.currentTarget.blur()} />
         <TextField
           label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
           onBlur={() => setTouched((t) => ({ ...t, email: true }))}
           error={emailError}
-          hint={email !== house.tenantEmail && !emailError ? 'Changing the email also changes their login.' : undefined}
+          hint={email !== house.tenantEmail && !emailError ? 'This email becomes their login address. You can link it later when you give them login access.' : 'Optional until login access is needed.'}
         />
         <TextField
           label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)}
@@ -429,7 +492,7 @@ function EditContactModal({ house, onClose, onSaved }) {
 }
 
 function AddAdvanceModal({ house, user, onClose, onSaved }) {
-  const [form, setForm] = useState({ amount: '', date: '', mode: 'cash', note: '' })
+  const [form, setForm] = useState({ amount: '', date: '', mode: 'cash', note: '', entryType: 'additional' })
   const [saving, setSaving] = useState(false)
   const [touched, setTouched] = useState(false)
 
@@ -447,7 +510,8 @@ function AddAdvanceModal({ house, user, onClose, onSaved }) {
         amount: Number(form.amount),
         date: form.date,
         mode: form.mode,
-        note: form.note,
+        note: `${form.entryType === 'initial' ? 'Initial advance' : 'Additional advance'}${form.note ? ` — ${form.note}` : ''}`,
+        entryType: form.entryType,
         recordedBy: { uid: user.uid, name: user.name },
       })
       onSaved()
@@ -468,6 +532,7 @@ function AddAdvanceModal({ house, user, onClose, onSaved }) {
           error={amountError}
         />
         <TextField label="Date" type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+        <SelectField label="Advance type" value={form.entryType} onChange={e=>setForm({...form,entryType:e.target.value})}><option value="initial">Initial advance collected at move-in</option><option value="additional">Additional advance collected later</option></SelectField>
         <SelectField label="Mode" value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
           <option value="cash">Cash</option>
           <option value="upi">UPI</option>
