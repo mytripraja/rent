@@ -25,18 +25,22 @@ export default function EBBillShare() {
   }, [user?.houseId])
 
   async function refresh() {
-    try {
-      const [billRows, paymentRows, readingRows] = await Promise.all([
-        listEbBillCycles(user.houseId),
-        listEbPaymentsForHouse(user.houseId),
-        listEbMeterReadings(user.houseId),
-      ])
-      setCycles(billRows)
-      setPayments(paymentRows)
-      setMeterReadings(readingRows)
-    } catch (err) {
-      console.error(err)
-      showToast({ message: 'Failed to load EB bills', type: 'error' })
+    // Load each EB data source independently. A permission/index/network issue
+    // in one query must not hide the other information tenants can still view.
+    const results = await Promise.allSettled([
+      listEbBillCycles(user.houseId),
+      listEbPaymentsForHouse(user.houseId),
+      listEbMeterReadings(user.houseId),
+    ])
+    const [billResult, paymentResult, readingResult] = results
+    if (billResult.status === 'fulfilled') setCycles(billResult.value)
+    else console.error('EB bill cycles failed to load:', billResult.reason)
+    if (paymentResult.status === 'fulfilled') setPayments(paymentResult.value)
+    else console.error('EB payment history failed to load:', paymentResult.reason)
+    if (readingResult.status === 'fulfilled') setMeterReadings(readingResult.value)
+    else console.error('EB meter history failed to load:', readingResult.reason)
+    if (results.some(result => result.status === 'rejected')) {
+      showToast({ message: 'Some EB information could not be loaded. Other available records are still shown.', type: 'error' })
     }
   }
 

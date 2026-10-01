@@ -117,7 +117,7 @@ export async function listEbBillCycles(houseId = null) {
 }
 
 export function houseShareFromBill(bill, houseId) {
-  return bill.shares.find((s) => s.houseId === houseId) || null
+  return (Array.isArray(bill?.shares) ? bill.shares : []).find((s) => s.houseId === houseId) || null
 }
 
 
