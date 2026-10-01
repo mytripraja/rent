@@ -267,6 +267,9 @@ async function sensitiveKey(req, res) {
   if (action === 'reset-confirm') {
     const code = String(req.body?.code || '')
     const key = String(req.body?.key || '')
+    // Validate the one-time code before hashing it. This keeps the endpoint
+    // bounded even when a malformed or oversized value is submitted.
+    if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Enter the 6-digit reset code from your email.' })
     if (key.length < 8 || key.length > 128) return res.status(400).json({ error: 'Critical change password must be 8 to 128 characters.' })
     const salt = crypto.randomBytes(16).toString('hex')
     const now = Date.now()
@@ -297,18 +300,47 @@ async function sensitiveKey(req, res) {
 async function linkNotices(req, res) {
   const decoded = await requireOwnerLevel(req)
   const noticeId = String(req.body?.noticeId || '')
-  const ids = [...new Set(Array.isArray(req.body?.linkedNoticeIds) ? req.body.linkedNoticeIds.map(String).filter(Boolean) : [])].slice(0, 20)
+  const rawIds = Array.isArray(req.body?.linkedNoticeIds) ? req.body.linkedNoticeIds.map(String).filter(Boolean) : []
   if (!noticeId) return res.status(400).json({ error:'Notice ID is required.' })
-  const baseSnap = await db.collection('notices').doc(noticeId).get()
-  if (!baseSnap.exists) return res.status(404).json({ error:'Announcement not found.' })
-  const base = baseSnap.data() || {}; const propertyId = String(base.propertyId || 'default')
+  if (rawIds.some(id => id === noticeId)) return res.status(400).json({ error:'An announcement cannot be linked to itself.' })
+  if (rawIds.length > 20) return res.status(400).json({ error:'You can link up to 20 announcements at a time.' })
+  const ids = [...new Set(rawIds)]
+  const baseRef = db.collection('notices').doc(noticeId)
   const profileSnap = await db.collection('users').doc(decoded.uid).get(); const profile = profileSnap.data() || {}
-  const { isAdmin, unrestricted, allowed } = ownerScope(profile)
-  if (!(isAdmin || unrestricted || allowed.has(propertyId))) return res.status(403).json({ error:'You do not have access to this announcement.' })
-  const refs = ids.map(id => db.collection('notices').doc(id)); const snaps = refs.length ? await db.getAll(...refs) : []
-  for (let i=0;i<snaps.length;i++) { if (!snaps[i].exists) return res.status(404).json({ error:`Linked announcement ${ids[i]} was not found.` }); const linked = snaps[i].data() || {}; if (String(linked.propertyId || 'default') !== propertyId) return res.status(403).json({ error:'Announcements can only be linked within the same apartment/property.' }) }
-  await db.collection('notices').doc(noticeId).update({ linkedNoticeIds: ids, linksUpdatedAt: Date.now(), linksUpdatedBy: decoded.uid })
-  return res.status(200).json({ ok:true, linkedNoticeIds:ids })
+  const result = await db.runTransaction(async tx => {
+    const baseSnap = await tx.get(baseRef)
+    if (!baseSnap.exists) return { error:'missing-base' }
+    const base = baseSnap.data() || {}; const propertyId = String(base.propertyId || 'default')
+    const { isAdmin, unrestricted, allowed } = ownerScope(profile)
+    if (!(isAdmin || unrestricted || allowed.has(propertyId))) return { error:'forbidden' }
+    const previousIds = [...new Set((Array.isArray(base.linkedNoticeIds) ? base.linkedNoticeIds : []).map(String).filter(id => id && id !== noticeId))]
+    const affectedIds = [...new Set([...previousIds, ...ids])]
+    const refs = affectedIds.map(id => db.collection('notices').doc(id))
+    const snaps = refs.length ? await Promise.all(refs.map(ref => tx.get(ref))) : []
+    const linkedData = new Map()
+    for (let i = 0; i < snaps.length; i++) {
+      if (!snaps[i].exists) return { error: ids.includes(affectedIds[i]) ? 'missing-linked' : 'missing-old-link' }
+      const linked = snaps[i].data() || {}
+      if (String(linked.propertyId || 'default') !== propertyId) return { error:'cross-property' }
+      linkedData.set(affectedIds[i], linked)
+    }
+    const now = Date.now()
+    tx.update(baseRef, { linkedNoticeIds: ids, linksUpdatedAt: now, linksUpdatedBy: decoded.uid })
+    for (const id of affectedIds) {
+      const linked = linkedData.get(id)
+      const current = [...new Set((Array.isArray(linked.linkedNoticeIds) ? linked.linkedNoticeIds : []).map(String).filter(value => value && value !== id))]
+      const next = ids.includes(id)
+        ? [...new Set([...current.filter(value => value !== noticeId), noticeId])]
+        : current.filter(value => value !== noticeId)
+      tx.update(db.collection('notices').doc(id), { linkedNoticeIds: next, linksUpdatedAt: now, linksUpdatedBy: decoded.uid })
+    }
+    return { linkedNoticeIds: ids }
+  })
+  if (result.error === 'missing-base') return res.status(404).json({ error:'Announcement not found.' })
+  if (result.error === 'forbidden') return res.status(403).json({ error:'You do not have access to this announcement.' })
+  if (result.error === 'missing-linked' || result.error === 'missing-old-link') return res.status(404).json({ error:'A linked announcement could not be found. Refresh and try again.' })
+  if (result.error === 'cross-property') return res.status(403).json({ error:'Announcements can only be linked within the same apartment/property.' })
+  return res.status(200).json({ ok:true, linkedNoticeIds:result.linkedNoticeIds })
 }
 
 async function correctRentPayment(req, res) {

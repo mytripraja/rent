@@ -39,6 +39,26 @@ export async function submitRentPayment({
   uploadedByOwner = false,
   recordedBy,
 }) {
+  // Validate before uploading proof files or writing anything to Firestore.
+  // This keeps malformed submissions from creating orphaned private uploads.
+  const cleanHouseId = String(houseId || '').trim()
+  const cleanTenantId = String(tenantId || '').trim()
+  const cleanMonth = String(month || '').trim()
+  const cleanMode = String(mode || '').trim().toLowerCase()
+  const numericAmount = Number(amount)
+  const cleanDateSent = String(dateSent || '').trim()
+  const allowedModes = new Set(['upi', 'bank', 'cash', 'neighbor'])
+  if (!cleanHouseId) throw new Error('Select a house before submitting rent.')
+  if (!cleanTenantId) throw new Error('Tenant information is missing. Refresh and try again.')
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(cleanMonth)) throw new Error('Select a valid rent month.')
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) throw new Error('Enter a valid rent amount greater than zero.')
+  const dateParts = cleanDateSent.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const parsedDate = dateParts ? new Date(Date.UTC(Number(dateParts[1]), Number(dateParts[2]) - 1, Number(dateParts[3]))) : null
+  if (!parsedDate || parsedDate.getUTCFullYear() !== Number(dateParts[1]) || parsedDate.getUTCMonth() + 1 !== Number(dateParts[2]) || parsedDate.getUTCDate() !== Number(dateParts[3])) throw new Error('Enter a valid payment date.')
+  if (!allowedModes.has(cleanMode)) throw new Error('Select a valid payment method.')
+  if (cleanMode === 'neighbor' && !String(neighborHouseId || '').trim()) throw new Error('Select the house that collected the payment.')
+  if (cleanMode === 'cash' && !String(cashReceivedBy || '').trim()) throw new Error('Select who received the cash payment.')
+
   let proofUrl = null
   let proofPublicId = null
   let proofResourceType = null
@@ -52,14 +72,14 @@ export async function submitRentPayment({
   const applicationNumber = generateApplicationNumber()
 
   await addDoc(paymentsRef, {
-    houseId,
-    tenantId,
-    month,
-    amount,
-    dateSent,
-    mode,
-    cashReceivedBy: mode === 'cash' ? cashReceivedBy : null,
-    neighborHouseId: mode === 'neighbor' ? neighborHouseId : null,
+    houseId: cleanHouseId,
+    tenantId: cleanTenantId,
+    month: cleanMonth,
+    amount: numericAmount,
+    dateSent: cleanDateSent,
+    mode: cleanMode,
+    cashReceivedBy: cleanMode === 'cash' ? String(cashReceivedBy).trim() : null,
+    neighborHouseId: cleanMode === 'neighbor' ? String(neighborHouseId).trim() : null,
     neighborCollectedBy: null, // owner fills this in on approval if mode === neighbor
     proofUrl,
     proofPublicId: proofPublicId || null,
