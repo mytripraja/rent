@@ -16,11 +16,9 @@ export default function NoticeFeed() {
 
   return (
     <div>
-      {notices.map((n) => {
-        const linkedIds = Array.isArray(n.linkedNoticeIds) ? n.linkedNoticeIds : []
-        const relatedNotices = notices.filter(item => item.id !== n.id && linkedIds.includes(item.id))
-        return <NoticeBanner key={n.id} notice={n} relatedNotices={relatedNotices} />
-      })}
+      {notices.map((n) => (
+        <NoticeBanner key={n.id} notice={n} />
+      ))}
     </div>
   )
 }

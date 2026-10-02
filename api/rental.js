@@ -98,6 +98,89 @@ async function ownerHouses(req, res) {
 }
 
 
+async function approveRentPayment(req, res) {
+  const decoded = await requireOwnerLevel(req)
+  const paymentId = String(req.body?.paymentId || '')
+  const neighborCollectedBy = String(req.body?.neighborCollectedBy || '').trim()
+  if (!paymentId || paymentId.includes('/') || paymentId.length > 150) {
+    return res.status(400).json({ error: 'Invalid payment ID' })
+  }
+  if (neighborCollectedBy.length > 120) return res.status(400).json({ error: 'Collector name is too long' })
+
+  const profileSnap = await db.collection('users').doc(decoded.uid).get()
+  const profile = profileSnap.data() || {}
+  const paymentRef = db.collection('rentPayments').doc(paymentId)
+  const result = await db.runTransaction(async tx => {
+    const paymentSnap = await tx.get(paymentRef)
+    if (!paymentSnap.exists) throw Object.assign(new Error('Rent payment not found'), { statusCode: 404 })
+    const payment = paymentSnap.data() || {}
+    const houseId = String(payment.houseId || '')
+    if (!houseId) throw Object.assign(new Error('Payment has no house assigned'), { statusCode: 409 })
+    const houseRef = db.collection('houses').doc(houseId)
+    const houseSnap = await tx.get(houseRef)
+    if (!houseSnap.exists) throw Object.assign(new Error('House not found'), { statusCode: 404 })
+    const house = houseSnap.data() || {}
+    const propertyId = String(house.propertyId || 'default')
+    const { isAdmin, unrestricted, allowed } = ownerScope(profile)
+    if (!(isAdmin || unrestricted || allowed.has(propertyId))) {
+      throw Object.assign(new Error('You do not have access to this property'), { statusCode: 403 })
+    }
+
+    const amount = Number(payment.amount)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw Object.assign(new Error('Payment amount must be greater than zero'), { statusCode: 409 })
+    }
+    const journalId = `RENT-${paymentId}`
+    const debitRef = db.collection('accountingTransactions').doc(`rent-approval-${paymentId}-debit`)
+    const creditRef = db.collection('accountingTransactions').doc(`rent-approval-${paymentId}-credit`)
+    const [debitSnap, creditSnap] = await Promise.all([tx.get(debitRef), tx.get(creditRef)])
+
+    if (payment.status === 'approved' && payment.approvalJournalId === journalId) {
+      const debit = debitSnap.data() || {}
+      const credit = creditSnap.data() || {}
+      const pairValid = debitSnap.exists && creditSnap.exists &&
+        debit.journalId === journalId && credit.journalId === journalId &&
+        debit.paymentId === paymentId && credit.paymentId === paymentId &&
+        debit.account === 'Cash / Bank' && credit.account === 'Rental Income' &&
+        Number(debit.debit) === amount && Number(debit.credit) === 0 &&
+        Number(credit.debit) === 0 && Number(credit.credit) === amount &&
+        String(debit.propertyId || '') === propertyId && String(credit.propertyId || '') === propertyId
+      if (!pairValid) {
+        throw Object.assign(new Error('Approved payment has incomplete or inconsistent linked journal entries. Review accounting before retrying.'), { statusCode: 409 })
+      }
+      return { created: false, payment, house, propertyId, journalId }
+    }
+    if (payment.status !== 'waiting_approval') {
+      throw Object.assign(new Error('This payment is no longer awaiting approval. Refresh and review its current status.'), { statusCode: 409 })
+    }
+    if (debitSnap.exists || creditSnap.exists) {
+      throw Object.assign(new Error('Linked rent journal records already exist for this pending payment. Review accounting before approving.'), { statusCode: 409 })
+    }
+
+    const now = Date.now()
+    const description = `Approved rent ${payment.month || ''} for ${house.internalDoorNumber || houseId}`
+    const base = {
+      propertyId, createdBy: decoded.uid, journalId,
+      date: payment.month ? `${payment.month}-01` : new Date(now).toISOString().slice(0, 10),
+      description, category: 'Rent', houseId, paymentId, entryType: 'journal-line',
+      amount, createdAt: now, updatedAt: now,
+    }
+    tx.create(debitRef, { ...base, account: 'Cash / Bank', debit: amount, credit: 0 })
+    tx.create(creditRef, { ...base, account: 'Rental Income', debit: 0, credit: amount })
+    tx.update(paymentRef, {
+      status: 'approved', approvedAt: now, actionedBy: decoded.uid,
+      approvalJournalId: journalId,
+      ...(neighborCollectedBy ? { neighborCollectedBy } : {}),
+    })
+    return { created: true, payment, house, propertyId, journalId }
+  })
+  return res.status(200).json({
+    ok: true, created: result.created, journalId: result.journalId,
+    payment: { tenantId: result.payment?.tenantId || null, month: result.payment?.month || null },
+    propertyId: result.propertyId,
+  })
+}
+
 async function pendingRentApprovals(req, res) {
   const decoded = await requireOwnerLevel(req)
   const profileSnap = await db.collection('users').doc(decoded.uid).get()
@@ -164,31 +247,6 @@ function safeEqualHex(a, b) {
   if (!a || !b || a.length !== b.length) return false
   return crypto.timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'))
 }
-
-// Rate-limit critical-key guesses across both the settings verifier and
-// sensitive correction endpoints. The counter is stored per authenticated owner.
-async function verifyCriticalKey(uid, key) {
-  const ref = db.collection('users').doc(uid)
-  const now = Date.now()
-  return db.runTransaction(async tx => {
-    const snap = await tx.get(ref)
-    const profile = snap.data() || {}
-    const lockedUntil = Number(profile.sensitiveKeyVerifyLockedUntil || 0)
-    if (lockedUntil > now) return 'locked'
-    if (!profile.sensitiveKeyHash || !profile.sensitiveKeySalt) return 'unconfigured'
-    const valid = key.length <= 128 && safeEqualHex(hashSensitiveKey(key, profile.sensitiveKeySalt), profile.sensitiveKeyHash)
-    if (valid) {
-      if (Number(profile.sensitiveKeyVerifyAttempts || 0) || lockedUntil) {
-        tx.set(ref, { sensitiveKeyVerifyAttempts: 0, sensitiveKeyVerifyLockedUntil: 0 }, { merge: true })
-      }
-      return 'ok'
-    }
-    const attempts = Number(profile.sensitiveKeyVerifyAttempts || 0) + 1
-    const lock = attempts >= 5 ? now + 15 * 60 * 1000 : 0
-    tx.set(ref, { sensitiveKeyVerifyAttempts: lock ? 0 : attempts, sensitiveKeyVerifyLockedUntil: lock }, { merge: true })
-    return lock ? 'locked' : 'incorrect'
-  })
-}
 async function sensitiveKey(req, res) {
   const decoded = await requireOwnerLevel(req)
   const action = String(req.body?.action || '')
@@ -202,96 +260,37 @@ async function sensitiveKey(req, res) {
     const key = String(req.body?.key || '')
     if (key.length < 8 || key.length > 128) return res.status(400).json({ error: 'Critical change password must be 8 to 128 characters.' })
     const salt = crypto.randomBytes(16).toString('hex')
-    const now = Date.now()
-    const created = await db.runTransaction(async tx => {
-      const currentSnap = await tx.get(ref)
-      const current = currentSnap.data() || {}
-      // Initial setup only. Once configured, changing the key must use the
-      // email-confirmed reset flow; this also prevents concurrent setup races.
-      if (current.sensitiveKeyHash || current.sensitiveKeySalt) return false
-      tx.set(ref, { sensitiveKeyHash: hashSensitiveKey(key, salt), sensitiveKeySalt: salt, sensitiveKeyUpdatedAt: now }, { merge: true })
-      return true
-    })
-    if (!created) return res.status(409).json({ error: 'A critical change password is already configured. Use the email reset flow to change it.' })
+    await ref.set({ sensitiveKeyHash: hashSensitiveKey(key, salt), sensitiveKeySalt: salt, sensitiveKeyUpdatedAt: Date.now() }, { merge: true })
     return res.status(200).json({ ok: true })
   }
   if (action === 'verify') {
     const key = String(req.body?.key || '')
-    if (!key || key.length > 128) return res.status(400).json({ error: 'Enter a valid critical change password.' })
-    const result = await verifyCriticalKey(decoded.uid, key)
-    if (result === 'unconfigured') return res.status(400).json({ error: 'Set the critical change password in Security Settings first.' })
-    if (result === 'locked') return res.status(429).json({ error: 'Too many incorrect attempts. Try again in 15 minutes.' })
-    if (result !== 'ok') return res.status(403).json({ error: 'Incorrect critical change password.' })
+    if (!profile.sensitiveKeyHash || !profile.sensitiveKeySalt) return res.status(400).json({ error: 'Set the critical change password in Security Settings first.' })
+    const ok = safeEqualHex(hashSensitiveKey(key, profile.sensitiveKeySalt), profile.sensitiveKeyHash)
+    if (!ok) return res.status(403).json({ error: 'Incorrect critical change password.' })
     return res.status(200).json({ ok: true })
   }
   if (action === 'reset-request') {
     const email = String(decoded.email || profile.email || '').trim().toLowerCase()
     if (!email) return res.status(400).json({ error: 'No email address is available for password recovery.' })
+    const code = String(Math.floor(100000 + Math.random() * 900000))
+    const salt = crypto.randomBytes(16).toString('hex')
+    await ref.set({ sensitiveKeyResetHash: hashSensitiveKey(code, salt), sensitiveKeyResetSalt: salt, sensitiveKeyResetExpiresAt: Date.now() + RESET_TTL_MS }, { merge: true })
     const apiKey = process.env.RESEND_API_KEY
     const from = process.env.EMAIL_FROM
     if (!apiKey || !from) return res.status(503).json({ error: 'Email delivery is not configured. Configure RESEND_API_KEY and EMAIL_FROM.' })
-    const now = Date.now()
-    const code = String(crypto.randomInt(100000, 1000000))
-    const salt = crypto.randomBytes(16).toString('hex')
-    const requestResult = await db.runTransaction(async tx => {
-      const currentSnap = await tx.get(ref)
-      const current = currentSnap.data() || {}
-      if (Number(current.sensitiveKeyResetRequestedAt || 0) > now - 60 * 1000) return false
-      tx.set(ref, { sensitiveKeyResetHash: hashSensitiveKey(code, salt), sensitiveKeyResetSalt: salt,
-        sensitiveKeyResetExpiresAt: now + RESET_TTL_MS, sensitiveKeyResetAttempts: 0,
-        sensitiveKeyResetRequestedAt: now }, { merge: true })
-      return true
-    })
-    if (!requestResult) return res.status(429).json({ error: 'Please wait one minute before requesting another reset code.' })
-    let response = null
-    try {
-      response = await fetch('https://api.resend.com/emails', { method:'POST', headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'}, body:JSON.stringify({from,to:[email],subject:'Rental Manager — critical change password reset',text:`Your critical change password reset code is ${code}. It expires in 10 minutes. If you did not request this, ignore this email.`,html:`<p>Your Rental Manager critical change password reset code is:</p><h2 style="letter-spacing:6px">${code}</h2><p>It expires in 10 minutes. If you did not request this, ignore this email.</p>`}) })
-    } catch { /* Treat transport failures like provider rejection and clean up below. */ }
-    if (!response?.ok) {
-      // The reset code was stored before delivery. If email delivery fails,
-      // clear only this request's state so the user is not locked out by a
-      // code they never received. A newer request must remain untouched.
-      await db.runTransaction(async tx => {
-        const currentSnap = await tx.get(ref)
-        const current = currentSnap.data() || {}
-        if (Number(current.sensitiveKeyResetRequestedAt || 0) === now) {
-          tx.set(ref, { sensitiveKeyResetHash: null, sensitiveKeyResetSalt: null,
-            sensitiveKeyResetExpiresAt: null, sensitiveKeyResetAttempts: 0,
-            sensitiveKeyResetRequestedAt: null }, { merge: true })
-        }
-      })
-      return res.status(502).json({ error: 'Could not send the reset email. Please try requesting a new code.' })
-    }
-    return res.status(200).json({ ok:true, expiresAt:now + RESET_TTL_MS })
+    const response = await fetch('https://api.resend.com/emails', { method:'POST', headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'}, body:JSON.stringify({from,to:[email],subject:'Rental Manager — critical change password reset',text:`Your critical change password reset code is ${code}. It expires in 10 minutes. If you did not request this, ignore this email.`,html:`<p>Your Rental Manager critical change password reset code is:</p><h2 style="letter-spacing:6px">${code}</h2><p>It expires in 10 minutes. If you did not request this, ignore this email.</p>`}) })
+    if (!response.ok) return res.status(502).json({ error: 'Could not send the reset email.' })
+    return res.status(200).json({ ok:true, expiresAt:Date.now()+RESET_TTL_MS })
   }
   if (action === 'reset-confirm') {
     const code = String(req.body?.code || '')
     const key = String(req.body?.key || '')
-    // Validate the one-time code before hashing it. This keeps the endpoint
-    // bounded even when a malformed or oversized value is submitted.
-    if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Enter the 6-digit reset code from your email.' })
     if (key.length < 8 || key.length > 128) return res.status(400).json({ error: 'Critical change password must be 8 to 128 characters.' })
+    if (!profile.sensitiveKeyResetHash || !profile.sensitiveKeyResetSalt || Number(profile.sensitiveKeyResetExpiresAt || 0) < Date.now()) return res.status(400).json({ error: 'Reset code is missing or expired.' })
+    if (!safeEqualHex(hashSensitiveKey(code, profile.sensitiveKeyResetSalt), profile.sensitiveKeyResetHash)) return res.status(403).json({ error: 'Incorrect reset code.' })
     const salt = crypto.randomBytes(16).toString('hex')
-    const now = Date.now()
-    const result = await db.runTransaction(async tx => {
-      const currentSnap = await tx.get(ref)
-      const current = currentSnap.data() || {}
-      if (!current.sensitiveKeyResetHash || !current.sensitiveKeyResetSalt || Number(current.sensitiveKeyResetExpiresAt || 0) < now) return 'expired'
-      if (Number(current.sensitiveKeyResetAttempts || 0) >= 5) return 'locked'
-      const valid = safeEqualHex(hashSensitiveKey(code, current.sensitiveKeyResetSalt), current.sensitiveKeyResetHash)
-      if (!valid) {
-        tx.set(ref, { sensitiveKeyResetAttempts: Number(current.sensitiveKeyResetAttempts || 0) + 1 }, { merge: true })
-        return 'incorrect'
-      }
-      tx.set(ref, { sensitiveKeyHash: hashSensitiveKey(key, salt), sensitiveKeySalt: salt, sensitiveKeyUpdatedAt: now,
-        sensitiveKeyResetHash: null, sensitiveKeyResetSalt: null, sensitiveKeyResetExpiresAt: null,
-        sensitiveKeyResetAttempts: 0, sensitiveKeyVerifyAttempts: 0,
-        sensitiveKeyVerifyLockedUntil: 0 }, { merge: true })
-      return 'ok'
-    })
-    if (result === 'expired') return res.status(400).json({ error: 'Reset code is missing or expired.' })
-    if (result === 'locked') return res.status(429).json({ error: 'Too many incorrect attempts. Request a new reset code after the cooldown.' })
-    if (result === 'incorrect') return res.status(403).json({ error: 'Incorrect reset code.' })
+    await ref.set({ sensitiveKeyHash: hashSensitiveKey(key, salt), sensitiveKeySalt: salt, sensitiveKeyUpdatedAt: Date.now(), sensitiveKeyResetHash: null, sensitiveKeyResetSalt: null, sensitiveKeyResetExpiresAt: null }, { merge: true })
     return res.status(200).json({ ok:true })
   }
   return res.status(400).json({ error: 'Unknown security action.' })
@@ -300,47 +299,18 @@ async function sensitiveKey(req, res) {
 async function linkNotices(req, res) {
   const decoded = await requireOwnerLevel(req)
   const noticeId = String(req.body?.noticeId || '')
-  const rawIds = Array.isArray(req.body?.linkedNoticeIds) ? req.body.linkedNoticeIds.map(String).filter(Boolean) : []
+  const ids = [...new Set(Array.isArray(req.body?.linkedNoticeIds) ? req.body.linkedNoticeIds.map(String).filter(Boolean) : [])].slice(0, 20)
   if (!noticeId) return res.status(400).json({ error:'Notice ID is required.' })
-  if (rawIds.some(id => id === noticeId)) return res.status(400).json({ error:'An announcement cannot be linked to itself.' })
-  if (rawIds.length > 20) return res.status(400).json({ error:'You can link up to 20 announcements at a time.' })
-  const ids = [...new Set(rawIds)]
-  const baseRef = db.collection('notices').doc(noticeId)
+  const baseSnap = await db.collection('notices').doc(noticeId).get()
+  if (!baseSnap.exists) return res.status(404).json({ error:'Announcement not found.' })
+  const base = baseSnap.data() || {}; const propertyId = String(base.propertyId || 'default')
   const profileSnap = await db.collection('users').doc(decoded.uid).get(); const profile = profileSnap.data() || {}
-  const result = await db.runTransaction(async tx => {
-    const baseSnap = await tx.get(baseRef)
-    if (!baseSnap.exists) return { error:'missing-base' }
-    const base = baseSnap.data() || {}; const propertyId = String(base.propertyId || 'default')
-    const { isAdmin, unrestricted, allowed } = ownerScope(profile)
-    if (!(isAdmin || unrestricted || allowed.has(propertyId))) return { error:'forbidden' }
-    const previousIds = [...new Set((Array.isArray(base.linkedNoticeIds) ? base.linkedNoticeIds : []).map(String).filter(id => id && id !== noticeId))]
-    const affectedIds = [...new Set([...previousIds, ...ids])]
-    const refs = affectedIds.map(id => db.collection('notices').doc(id))
-    const snaps = refs.length ? await Promise.all(refs.map(ref => tx.get(ref))) : []
-    const linkedData = new Map()
-    for (let i = 0; i < snaps.length; i++) {
-      if (!snaps[i].exists) return { error: ids.includes(affectedIds[i]) ? 'missing-linked' : 'missing-old-link' }
-      const linked = snaps[i].data() || {}
-      if (String(linked.propertyId || 'default') !== propertyId) return { error:'cross-property' }
-      linkedData.set(affectedIds[i], linked)
-    }
-    const now = Date.now()
-    tx.update(baseRef, { linkedNoticeIds: ids, linksUpdatedAt: now, linksUpdatedBy: decoded.uid })
-    for (const id of affectedIds) {
-      const linked = linkedData.get(id)
-      const current = [...new Set((Array.isArray(linked.linkedNoticeIds) ? linked.linkedNoticeIds : []).map(String).filter(value => value && value !== id))]
-      const next = ids.includes(id)
-        ? [...new Set([...current.filter(value => value !== noticeId), noticeId])]
-        : current.filter(value => value !== noticeId)
-      tx.update(db.collection('notices').doc(id), { linkedNoticeIds: next, linksUpdatedAt: now, linksUpdatedBy: decoded.uid })
-    }
-    return { linkedNoticeIds: ids }
-  })
-  if (result.error === 'missing-base') return res.status(404).json({ error:'Announcement not found.' })
-  if (result.error === 'forbidden') return res.status(403).json({ error:'You do not have access to this announcement.' })
-  if (result.error === 'missing-linked' || result.error === 'missing-old-link') return res.status(404).json({ error:'A linked announcement could not be found. Refresh and try again.' })
-  if (result.error === 'cross-property') return res.status(403).json({ error:'Announcements can only be linked within the same apartment/property.' })
-  return res.status(200).json({ ok:true, linkedNoticeIds:result.linkedNoticeIds })
+  const { isAdmin, unrestricted, allowed } = ownerScope(profile)
+  if (!(isAdmin || unrestricted || allowed.has(propertyId))) return res.status(403).json({ error:'You do not have access to this announcement.' })
+  const refs = ids.map(id => db.collection('notices').doc(id)); const snaps = refs.length ? await db.getAll(...refs) : []
+  for (let i=0;i<snaps.length;i++) { if (!snaps[i].exists) return res.status(404).json({ error:`Linked announcement ${ids[i]} was not found.` }); const linked = snaps[i].data() || {}; if (String(linked.propertyId || 'default') !== propertyId) return res.status(403).json({ error:'Announcements can only be linked within the same apartment/property.' }) }
+  await db.collection('notices').doc(noticeId).update({ linkedNoticeIds: ids, linksUpdatedAt: Date.now(), linksUpdatedBy: decoded.uid })
+  return res.status(200).json({ ok:true, linkedNoticeIds:ids })
 }
 
 async function correctRentPayment(req, res) {
@@ -351,10 +321,7 @@ async function correctRentPayment(req, res) {
   const replacementAmount = req.body?.replacementAmount == null || req.body?.replacementAmount === '' ? null : Number(req.body.replacementAmount)
   if (!paymentId || !key || !reason) return res.status(400).json({ error:'Payment, critical change password and reason are required.' })
   const profileSnap = await db.collection('users').doc(decoded.uid).get(); const profile = profileSnap.data() || {}
-  const keyResult = await verifyCriticalKey(decoded.uid, key)
-  if (keyResult === 'unconfigured') return res.status(400).json({ error:'Set the critical change password in Security Settings first.' })
-  if (keyResult === 'locked') return res.status(429).json({ error:'Too many incorrect attempts. Try again in 15 minutes.' })
-  if (keyResult !== 'ok') return res.status(403).json({ error:'Incorrect critical change password.' })
+  if (!profile.sensitiveKeyHash || !profile.sensitiveKeySalt || !safeEqualHex(hashSensitiveKey(key, profile.sensitiveKeySalt), profile.sensitiveKeyHash)) return res.status(403).json({ error:'Incorrect critical change password.' })
   const paymentRef = db.collection('rentPayments').doc(paymentId); const paymentSnap = await paymentRef.get()
   if (!paymentSnap.exists) return res.status(404).json({ error:'Payment not found.' })
   const payment = paymentSnap.data() || {}; const houseId = String(payment.houseId || '')
@@ -454,6 +421,7 @@ export default async function handler(req, res) {
     if (route === 'owner-houses' && req.method === 'POST') return await ownerHouses(req, res)
     if (route === 'owner-documents' && req.method === 'POST') return await ownerDocuments(req, res)
     if (route === 'pending-rent-approvals' && req.method === 'POST') return await pendingRentApprovals(req, res)
+    if (route === 'approve-rent-payment' && req.method === 'POST') return await approveRentPayment(req, res)
     if (route === 'sensitive-key' && req.method === 'POST') return await sensitiveKey(req, res)
     if (route === 'correct-rent-payment' && req.method === 'POST') return await correctRentPayment(req, res)
     if (route === 'link-notices' && req.method === 'POST') return await linkNotices(req, res)

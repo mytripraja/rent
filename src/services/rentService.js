@@ -8,7 +8,6 @@ import {
   query,
   where,
   orderBy,
-  runTransaction,
 } from 'firebase/firestore'
 import { db, authedFetch } from './firebase'
 import { getActivePropertyId } from './configService'
@@ -39,26 +38,6 @@ export async function submitRentPayment({
   uploadedByOwner = false,
   recordedBy,
 }) {
-  // Validate before uploading proof files or writing anything to Firestore.
-  // This keeps malformed submissions from creating orphaned private uploads.
-  const cleanHouseId = String(houseId || '').trim()
-  const cleanTenantId = String(tenantId || '').trim()
-  const cleanMonth = String(month || '').trim()
-  const cleanMode = String(mode || '').trim().toLowerCase()
-  const numericAmount = Number(amount)
-  const cleanDateSent = String(dateSent || '').trim()
-  const allowedModes = new Set(['upi', 'bank', 'cash', 'neighbor'])
-  if (!cleanHouseId) throw new Error('Select a house before submitting rent.')
-  if (!cleanTenantId) throw new Error('Tenant information is missing. Refresh and try again.')
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(cleanMonth)) throw new Error('Select a valid rent month.')
-  if (!Number.isFinite(numericAmount) || numericAmount <= 0) throw new Error('Enter a valid rent amount greater than zero.')
-  const dateParts = cleanDateSent.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  const parsedDate = dateParts ? new Date(Date.UTC(Number(dateParts[1]), Number(dateParts[2]) - 1, Number(dateParts[3]))) : null
-  if (!parsedDate || parsedDate.getUTCFullYear() !== Number(dateParts[1]) || parsedDate.getUTCMonth() + 1 !== Number(dateParts[2]) || parsedDate.getUTCDate() !== Number(dateParts[3])) throw new Error('Enter a valid payment date.')
-  if (!allowedModes.has(cleanMode)) throw new Error('Select a valid payment method.')
-  if (cleanMode === 'neighbor' && !String(neighborHouseId || '').trim()) throw new Error('Select the house that collected the payment.')
-  if (cleanMode === 'cash' && !String(cashReceivedBy || '').trim()) throw new Error('Select who received the cash payment.')
-
   let proofUrl = null
   let proofPublicId = null
   let proofResourceType = null
@@ -72,14 +51,14 @@ export async function submitRentPayment({
   const applicationNumber = generateApplicationNumber()
 
   await addDoc(paymentsRef, {
-    houseId: cleanHouseId,
-    tenantId: cleanTenantId,
-    month: cleanMonth,
-    amount: numericAmount,
-    dateSent: cleanDateSent,
-    mode: cleanMode,
-    cashReceivedBy: cleanMode === 'cash' ? String(cashReceivedBy).trim() : null,
-    neighborHouseId: cleanMode === 'neighbor' ? String(neighborHouseId).trim() : null,
+    houseId,
+    tenantId,
+    month,
+    amount,
+    dateSent,
+    mode,
+    cashReceivedBy: mode === 'cash' ? cashReceivedBy : null,
+    neighborHouseId: mode === 'neighbor' ? neighborHouseId : null,
     neighborCollectedBy: null, // owner fills this in on approval if mode === neighbor
     proofUrl,
     proofPublicId: proofPublicId || null,
@@ -156,71 +135,24 @@ export async function listRentHistory(houseId) {
 }
 
 export async function approvePayment(paymentId, { neighborCollectedBy, actionedBy } = {}) {
-  const paymentRef = doc(db, 'rentPayments', paymentId)
-  const journalDebitRef = doc(db, 'accountingTransactions', `rent-${paymentId}-debit`)
-  const journalCreditRef = doc(db, 'accountingTransactions', `rent-${paymentId}-credit`)
-
-  // Commit approval and both journal lines together. A retry cannot create a
-  // second rent journal, and a failed journal write cannot leave an approved payment.
-  const result = await runTransaction(db, async (tx) => {
-    const paymentSnap = await tx.get(paymentRef)
-    if (!paymentSnap.exists()) throw new Error('Rent payment not found')
-    const paymentData = paymentSnap.data()
-    if (paymentData.status !== 'waiting_approval') throw new Error('This payment is no longer pending approval. Refresh the queue and review its status.')
-    const currentHouseRef = paymentData.houseId ? doc(db, 'houses', paymentData.houseId) : null
-    const currentHouseSnap = currentHouseRef ? await tx.get(currentHouseRef) : null
-    const currentHouse = currentHouseSnap?.exists() ? currentHouseSnap.data() : null
-    if (!currentHouse) throw new Error('The payment house could not be verified. No approval was made.')
-    const amount = Number(paymentData.amount || 0)
-    if (!Number.isFinite(amount) || amount <= 0) throw new Error('Invalid rent amount. No approval was made.')
-    const debitSnap = await tx.get(journalDebitRef)
-    const creditSnap = await tx.get(journalCreditRef)
-    if (debitSnap.exists() || creditSnap.exists()) throw new Error('A rent journal already exists for this payment. Review the ledger before retrying.')
-    const now = Date.now()
-    const journalId = `RENT-${paymentId}`
-    const base = {
-      propertyId: currentHouse.propertyId || 'default',
-      createdBy: actionedBy?.uid || null,
-      journalId,
-      date: paymentData.month ? `${paymentData.month}-01` : new Date().toISOString().slice(0, 10),
-      description: `Approved rent ${paymentData.month || ''} for ${currentHouse.internalDoorNumber || paymentData.houseId}`,
-      category: 'Rent',
-      houseId: paymentData.houseId || null,
-      paymentId,
-      entryType: 'journal-line',
-      amount,
-      createdAt: now,
-      updatedAt: now,
-    }
-    tx.update(paymentRef, {
-      status: 'approved',
-      approvedAt: now,
-      actionedBy: actionedBy || null,
-      accountingJournalId: journalId,
-      ...(neighborCollectedBy ? { neighborCollectedBy } : {}),
-    })
-    tx.set(journalDebitRef, { ...base, account: 'Cash / Bank', debit: amount, credit: 0 })
-    tx.set(journalCreditRef, { ...base, account: 'Rental Income', debit: 0, credit: amount })
-    return { paymentData, houseData: currentHouse }
+  // Approval status and the double-entry journal are committed together on the
+  // server. The client-provided actor is used only for human-readable activity data.
+  const result = await authedFetch('/api/rental?route=approve-rent-payment', {
+    paymentId,
+    neighborCollectedBy: neighborCollectedBy || '',
   })
 
-  // The approval transaction is the source of truth. Secondary effects must
-  // not turn a successful approval into an apparent failure in the UI.
-  if (result.paymentData?.tenantId) {
-    try {
-      await createNotification({
-        recipientId: result.paymentData.tenantId,
-        recipientType: 'tenant',
-        type: 'rent_approved',
-        title: 'Rent Approved',
-        message: `Your rent payment for ${result.paymentData.month} has been approved.`
-      })
-    } catch (error) {
-      console.warn('Rent approval succeeded, but tenant notification failed:', error?.message || error)
-    }
+  if (result.created && result.payment?.tenantId) {
+    await createNotification({
+      recipientId: result.payment.tenantId,
+      recipientType: 'tenant',
+      type: 'rent_approved',
+      title: 'Rent Approved',
+      message: `Your rent payment for ${result.payment.month} has been approved.`,
+    }).catch((error) => console.warn('Rent approval notification could not be saved:', error?.message || error))
   }
 
-  try {
+  if (result.created) {
     const { logActivity } = await import('./activityLogService')
     await logActivity({
       action: 'approved',
@@ -228,72 +160,50 @@ export async function approvePayment(paymentId, { neighborCollectedBy, actionedB
       entityId: paymentId,
       performedBy: actionedBy?.uid || null,
       performedByName: actionedBy?.name || 'Owner',
-      details: `Approved rent payment for ${result.paymentData?.month}`,
-      propertyId: result.houseData?.propertyId || 'default'
-    })
-  } catch (error) {
-    console.warn('Rent approval succeeded, but activity logging failed:', error?.message || error)
+      details: `Approved rent payment for ${result.payment?.month}`,
+      propertyId: result.propertyId || 'default',
+    }).catch((error) => console.warn('Rent approval activity log could not be saved:', error?.message || error))
   }
   invalidateRentApprovalCache()
+  return result
 }
 
 export async function rejectPayment(paymentId, reason, actionedBy) {
   const paymentRef = doc(db, 'rentPayments', paymentId)
-  const cleanReason = String(reason || '').trim()
-  if (!paymentId || !cleanReason) throw new Error('A rejection reason is required.')
+  const snap = await getDoc(paymentRef)
+  const paymentData = snap.data()
+  const houseSnap = paymentData?.houseId ? await getDoc(doc(db, 'houses', paymentData.houseId)) : null
+  const houseData = houseSnap?.exists() ? houseSnap.data() : null
 
-  // Revalidate inside a transaction so two owners cannot both act on a stale
-  // pending item, and a rejected payment cannot overwrite a concurrent approval.
-  const result = await runTransaction(db, async (tx) => {
-    const paymentSnap = await tx.get(paymentRef)
-    if (!paymentSnap.exists()) throw new Error('Rent payment not found.')
-    const paymentData = paymentSnap.data()
-    if (paymentData.status !== 'waiting_approval') {
-      throw new Error('This payment is no longer pending approval. Refresh the queue and review its current status.')
-    }
-    const houseRef = paymentData.houseId ? doc(db, 'houses', paymentData.houseId) : null
-    const houseSnap = houseRef ? await tx.get(houseRef) : null
-    const houseData = houseSnap?.exists() ? houseSnap.data() : null
-    if (!houseData) throw new Error('The payment house could not be verified. No rejection was made.')
-
-    tx.update(paymentRef, {
-      status: 'rejected',
-      rejectionReason: cleanReason,
-      actionedBy: actionedBy || null,
-    })
-    return { paymentData, houseData }
+  await updateDoc(paymentRef, {
+    status: 'rejected',
+    rejectionReason: reason,
+    actionedBy: actionedBy || null,
   })
 
-  // Notifications and activity are secondary side effects. Their failure must
-  // not make the UI imply the core rejection transaction was rolled back.
-  if (result.paymentData?.tenantId) {
-    try {
-      await createNotification({
-        recipientId: result.paymentData.tenantId,
-        recipientType: 'tenant',
-        type: 'rent_rejected',
-        title: 'Rent Rejected',
-        message: `Your rent payment for ${result.paymentData.month} was rejected. Reason: ${cleanReason}`
-      })
-    } catch (error) {
-      console.warn('Rent rejection succeeded, but tenant notification failed:', error?.message || error)
-    }
+  if (paymentData?.tenantId) {
+    await createNotification({
+      recipientId: paymentData.tenantId,
+      recipientType: 'tenant',
+      type: 'rent_rejected',
+      title: 'Rent Rejected',
+      message: `Your rent payment for ${paymentData.month} was rejected. Reason: ${reason}`
+    })
   }
 
-  try {
-    const { logActivity } = await import('./activityLogService')
-    await logActivity({
-      action: 'rejected',
-      entityType: 'rent',
-      entityId: paymentId,
-      performedBy: actionedBy?.uid || null,
-      performedByName: actionedBy?.name || 'Owner',
-      details: `Rejected rent payment for ${result.paymentData?.month}. Reason: ${cleanReason}`,
-      propertyId: result.houseData?.propertyId || 'default'
-    })
-  } catch (error) {
-    console.warn('Rent rejection succeeded, but activity logging failed:', error?.message || error)
-  }
+  // Rejected payments must not create rent-income accounting entries.
+
+  // Task 2: Log activity
+  const { logActivity } = await import('./activityLogService')
+  await logActivity({
+    action: 'rejected',
+    entityType: 'rent',
+    entityId: paymentId,
+    performedBy: actionedBy?.uid || null,
+    performedByName: actionedBy?.name || 'Owner',
+    details: `Rejected rent payment for ${paymentData?.month}. Reason: ${reason}`,
+    propertyId: houseData?.propertyId || 'default'
+  })
   invalidateRentApprovalCache()
 }
 

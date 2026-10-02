@@ -180,58 +180,15 @@ service cloud.firestore {
       allow read: if canAccessHouse(resource.data.houseId) || (tenantCan('rent') && tenantCan('rentDetails') && resource.data.houseId == myHouseId());
       allow create: if canAccessHouse(request.resource.data.houseId)
         || (tenantCan('rent') && tenantCan('rentSubmit')
-            && request.resource.data.keys().hasOnly([
-              'houseId', 'tenantId', 'month', 'amount', 'dateSent', 'mode',
-              'cashReceivedBy', 'neighborHouseId', 'neighborCollectedBy',
-              'proofUrl', 'proofPublicId', 'proofResourceType', 'applicationNumber',
-              'status', 'uploadedByOwner', 'recordedBy', 'rejectionReason',
-              'submittedAt', 'approvedAt', 'actionedBy'
-            ])
-            && request.resource.data.keys().hasAll([
-              'houseId', 'tenantId', 'month', 'amount', 'dateSent', 'mode',
-              'cashReceivedBy', 'neighborHouseId', 'neighborCollectedBy',
-              'proofUrl', 'proofPublicId', 'proofResourceType', 'applicationNumber',
-              'status', 'uploadedByOwner', 'recordedBy', 'rejectionReason',
-              'submittedAt', 'approvedAt', 'actionedBy'
-            ])
             && request.resource.data.houseId == myHouseId()
             && request.resource.data.tenantId == request.auth.uid
-            && request.resource.data.month is string
-            && request.resource.data.month.matches('^[0-9]{4}-(0[1-9]|1[0-2])$')
-            && request.resource.data.dateSent is string
-            && request.resource.data.dateSent.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-            && request.resource.data.amount is number
-            && request.resource.data.amount > 0
-            && request.resource.data.amount <= 10000000
-            && request.resource.data.mode in ['upi', 'bank', 'cash', 'neighbor']
-            && (request.resource.data.mode != 'cash'
-                || (request.resource.data.cashReceivedBy is string
-                    && request.resource.data.cashReceivedBy.size() > 0
-                    && request.resource.data.cashReceivedBy.size() <= 80))
-            && (request.resource.data.mode == 'cash' || request.resource.data.cashReceivedBy == null)
-            && (request.resource.data.mode != 'neighbor'
-                || (request.resource.data.neighborHouseId is string
-                    && request.resource.data.neighborHouseId.size() > 0
-                    && request.resource.data.neighborHouseId.size() <= 120))
-            && (request.resource.data.mode == 'neighbor' || request.resource.data.neighborHouseId == null)
             && request.resource.data.status == 'waiting_approval'
             && request.resource.data.uploadedByOwner == false
             && request.resource.data.approvedAt == null
             && request.resource.data.actionedBy == null
             && request.resource.data.rejectionReason == null
-            && request.resource.data.recordedBy is map
-            && request.resource.data.recordedBy.keys().hasOnly(['uid', 'name'])
             && request.resource.data.recordedBy.uid == request.auth.uid
-            && request.resource.data.recordedBy.name is string
-            && request.resource.data.recordedBy.name.size() <= 120
-            && request.resource.data.submittedAt is number
-            && request.resource.data.applicationNumber is string
-            && request.resource.data.applicationNumber.size() > 0
-            && request.resource.data.applicationNumber.size() <= 80
-            && request.resource.data.proofUrl == null
-            && (request.resource.data.proofPublicId == null || request.resource.data.proofPublicId is string)
-            && (request.resource.data.proofResourceType == null || request.resource.data.proofResourceType in ['image', 'raw', 'video'])
-            && request.resource.data.neighborCollectedBy == null);
+            && request.resource.data.amount > 0);
       // Dad Lite can submit rent entries, but cannot approve/reject them.
       // This keeps the verification step with the admin account even if the
       // lite user reaches the Firestore API directly.

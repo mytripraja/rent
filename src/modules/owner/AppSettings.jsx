@@ -31,7 +31,6 @@ export default function AppSettings() {
   const [resetKey, setResetKey] = useState('')
   const [resetKeyAgain, setResetKeyAgain] = useState('')
   const [resetMode, setResetMode] = useState(false)
-  const [securityActionBusy, setSecurityActionBusy] = useState(false)
   const [deviceSecurity, setDeviceSecurity] = useState({ enabled:false, method:null })
   const { user } = useAuth()
   const isScopedOwner = user?.role === 'owner' && Array.isArray(user?.propertyAccess) && !user.propertyAccess.includes('*')
@@ -170,21 +169,16 @@ export default function AppSettings() {
   }
 
   async function resetCriticalKey() {
-    if (securityActionBusy) return
-    setSecurityMessage(''); setSecurityActionBusy(true)
-    try { await sensitiveKeyAction('reset-request'); setResetMode(true); setResetCode(''); setSecurityMessage('A reset code was sent to your account email. It expires in 10 minutes.') }
+    setSecurityMessage('')
+    try { await sensitiveKeyAction('reset-request'); setResetMode(true); setSecurityMessage('A reset code was sent to your account email. It expires in 10 minutes.') }
     catch (e) { setSecurityMessage(e.message || 'Could not send the reset email.') }
-    finally { setSecurityActionBusy(false) }
   }
 
   async function confirmCriticalReset() {
-    if (securityActionBusy) return
     setSecurityMessage('')
-    if (!/^\d{6}$/.test(resetCode) || resetKey.length < 8 || resetKey !== resetKeyAgain) return setSecurityMessage('Enter the 6-digit email code and matching password (at least 8 characters).')
-    setSecurityActionBusy(true)
+    if (!resetCode || resetKey.length < 8 || resetKey !== resetKeyAgain) return setSecurityMessage('Enter the email code and matching new password.')
     try { await sensitiveKeyAction('reset-confirm', { code: resetCode, key: resetKey }); setCriticalConfigured(true); setResetCode(''); setResetKey(''); setResetKeyAgain(''); setResetMode(false); setSecurityMessage('Critical change password reset successfully.') }
     catch (e) { setSecurityMessage(e.message || 'Could not reset the critical change password.') }
-    finally { setSecurityActionBusy(false) }
   }
 
   async function enableBiometric() {
@@ -328,9 +322,9 @@ export default function AppSettings() {
 
       <div className="bg-paper-raised rounded-2xl border border-amber-200 shadow-sm p-4 space-y-4 max-w-2xl">
         <div><h3 className="font-medium text-ink">Critical change security</h3><p className="text-xs text-ink-soft mt-1">Correcting an approved rent record is deliberately hidden behind a separate password. This password is never stored in the browser or Firestore as plain text.</p></div>
-        {!criticalConfigured && <div className="grid sm:grid-cols-2 gap-3"><input type="password" minLength="8" value={criticalKey} onChange={e=>setCriticalKey(e.target.value)} placeholder="New critical change password" autoComplete="new-password"/><input type="password" minLength="8" value={criticalKeyAgain} onChange={e=>setCriticalKeyAgain(e.target.value)} placeholder="Repeat password" autoComplete="new-password"/></div>}
-        <div className="flex flex-wrap gap-2">{!criticalConfigured && <button type="button" onClick={saveCriticalKey} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-bold">Set password</button>}<button type="button" onClick={resetCriticalKey} disabled={securityActionBusy} className="rm-secondary-button px-4 py-2 text-sm disabled:opacity-50">{criticalConfigured?'Change password by email reset':'Forgot password / email reset'}</button></div>
-        {resetMode && <div className="rounded-xl border border-brand/20 bg-brand/5 p-3 space-y-2"><p className="text-xs font-bold text-ink">Email reset code</p><input value={resetCode} onChange={e=>setResetCode(e.target.value.replace(/\D/g,'').slice(0,6))} inputMode="numeric" placeholder="6-digit code" autoComplete="one-time-code"/><div className="grid sm:grid-cols-2 gap-2"><input type="password" minLength="8" value={resetKey} onChange={e=>setResetKey(e.target.value)} placeholder="New critical password" autoComplete="new-password"/><input type="password" minLength="8" value={resetKeyAgain} onChange={e=>setResetKeyAgain(e.target.value)} placeholder="Repeat password" autoComplete="new-password"/></div><button type="button" onClick={confirmCriticalReset} disabled={securityActionBusy || !/^\d{6}$/.test(resetCode) || resetKey.length < 8 || resetKey !== resetKeyAgain} className="bg-brand text-white px-4 py-2 rounded-lg text-xs font-bold disabled:opacity-50">{securityActionBusy ? 'Please wait…' : 'Confirm reset'}</button></div>}
+        <div className="grid sm:grid-cols-2 gap-3"><input type="password" minLength="8" value={criticalKey} onChange={e=>setCriticalKey(e.target.value)} placeholder="New critical change password" autoComplete="new-password"/><input type="password" minLength="8" value={criticalKeyAgain} onChange={e=>setCriticalKeyAgain(e.target.value)} placeholder="Repeat password" autoComplete="new-password"/></div>
+        <div className="flex flex-wrap gap-2"><button type="button" onClick={saveCriticalKey} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-bold">{criticalConfigured?'Change password':'Set password'}</button><button type="button" onClick={resetCriticalKey} className="rm-secondary-button px-4 py-2 text-sm">Forgot password / email reset</button></div>
+        {resetMode && <div className="rounded-xl border border-brand/20 bg-brand/5 p-3 space-y-2"><p className="text-xs font-bold text-ink">Email reset code</p><input value={resetCode} onChange={e=>setResetCode(e.target.value.replace(/\D/g,'').slice(0,6))} inputMode="numeric" placeholder="6-digit code" autoComplete="one-time-code"/><div className="grid sm:grid-cols-2 gap-2"><input type="password" minLength="8" value={resetKey} onChange={e=>setResetKey(e.target.value)} placeholder="New critical password" autoComplete="new-password"/><input type="password" minLength="8" value={resetKeyAgain} onChange={e=>setResetKeyAgain(e.target.value)} placeholder="Repeat password" autoComplete="new-password"/></div><button type="button" onClick={confirmCriticalReset} className="bg-brand text-white px-4 py-2 rounded-lg text-xs font-bold">Confirm reset</button></div>}
         <div className="rounded-xl bg-paper border border-[var(--rm-border)] p-3"><p className="text-xs font-semibold text-ink">Device face / fingerprint verification</p><p className="text-[11px] text-ink-soft mt-1">Uses your browser/device passkey (Face ID, Windows Hello or fingerprint when supported). The biometric itself is not sent to Rental Manager.</p><div className="mt-2 flex flex-wrap gap-2">{supportsPlatformAuthenticator() && deviceSecurity.method==='biometric' ? <button type="button" onClick={disableBiometric} className="rm-secondary-button px-3 py-2 text-xs">Disable on this device</button> : <button type="button" disabled={!supportsPlatformAuthenticator()} onClick={enableBiometric} className="bg-brand text-white px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-50">Enable Face / Fingerprint</button>}</div></div>
         {securityMessage && <p className="text-xs text-brand" role="status">{securityMessage}</p>}
       </div>

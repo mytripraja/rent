@@ -10,7 +10,7 @@ const STYLE_MAP = {
   other: { background: '#efe9d8', color: '#6b6255', label: 'Notice' },
 }
 
-export default function NoticeBanner({ notice, relatedNotices = [] }) {
+export default function NoticeBanner({ notice }) {
   if (notice.type === 'both') {
     return (
       <div
@@ -20,7 +20,6 @@ export default function NoticeBanner({ notice, relatedNotices = [] }) {
         <p className="font-mono-tab text-xs font-semibold uppercase tracking-wide mb-1">Water &amp; EB Notice</p>
         {notice.title && <p className="font-semibold text-sm mb-1">{notice.title}{notice.updateNumber ? <span className="ml-2 text-[10px] opacity-70">{notice.continuationLabel || `Update #${notice.updateNumber}`}</span> : null}</p>}<p className="text-sm">{notice.message}</p>
         {notice.windowText && <p className="text-xs mt-1 opacity-70">{notice.windowText}</p>}
-        {relatedNotices.length > 0 && <div className="mt-3 pt-2 border-t border-black/10 space-y-2"><p className="text-[10px] font-bold uppercase tracking-wide opacity-70">Related notices</p>{relatedNotices.map(item => <div key={item.id} className="rounded-lg bg-white/50 px-3 py-2"><p className="text-xs font-semibold">{item.title || 'Related announcement'}</p><p className="text-xs mt-1 whitespace-pre-wrap">{item.message}</p>{item.messageTamil && <p lang="ta" className="text-xs mt-1 whitespace-pre-wrap">{item.messageTamil}</p>}</div>)}</div>}
       </div>
     )
   }
@@ -35,7 +34,6 @@ export default function NoticeBanner({ notice, relatedNotices = [] }) {
       <p className="font-mono-tab text-xs font-semibold uppercase tracking-wide mb-1">{style.label}</p>
       {notice.title && <p className="font-semibold text-sm mb-1">{notice.title}{notice.updateNumber ? <span className="ml-2 text-[10px] opacity-70">{notice.continuationLabel || `Update #${notice.updateNumber}`}</span> : null}</p>}<p className="text-sm">{notice.message}</p>
       {notice.windowText && <p className="text-xs mt-1 opacity-70">{notice.windowText}</p>}
-      {relatedNotices.length > 0 && <div className="mt-3 pt-2 border-t border-black/10 space-y-2"><p className="text-[10px] font-bold uppercase tracking-wide opacity-70">Related notices</p>{relatedNotices.map(item => <div key={item.id} className="rounded-lg bg-white/50 px-3 py-2"><p className="text-xs font-semibold">{item.title || 'Related announcement'}</p><p className="text-xs mt-1 whitespace-pre-wrap">{item.message}</p>{item.messageTamil && <p lang="ta" className="text-xs mt-1 whitespace-pre-wrap">{item.messageTamil}</p>}</div>)}</div>}
     </div>
   )
 }

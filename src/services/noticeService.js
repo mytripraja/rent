@@ -79,6 +79,7 @@ export async function createNotice({
   const resolvedMs = resolvedAt ? Number(resolvedAt) : null
   if (happenedMs && expectedMs && expectedMs < happenedMs) throw new Error('Expected resolution cannot be before Started / happened.')
   if (happenedMs && resolvedMs && resolvedMs < happenedMs) throw new Error('Resolved at cannot be before Started / happened.')
+  if (expectedMs && resolvedMs && resolvedMs < expectedMs) throw new Error('Resolved at cannot be before Expected resolution.')
   const publicToken = typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID().replace(/-/g, '')
     : `${Date.now()}${Math.random().toString(36).slice(2)}`

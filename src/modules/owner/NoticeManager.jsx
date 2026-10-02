@@ -125,6 +125,7 @@ export default function NoticeManager() {
     const resolvedMs = form.resolvedAt ? new Date(form.resolvedAt).getTime() : null
     if (happenedMs && expectedMs && expectedMs < happenedMs) return showToast({ message: 'Expected resolution cannot be before Started / happened.', type: 'error' })
     if (happenedMs && resolvedMs && resolvedMs < happenedMs) return showToast({ message: 'Resolved at cannot be before Started / happened.', type: 'error' })
+    if (expectedMs && resolvedMs && resolvedMs < expectedMs) return showToast({ message: 'Resolved at cannot be before Expected resolution.', type: 'error' })
     let scheduledAt = null
     if (form.isScheduled && form.scheduledDate && form.scheduledTime) {
       scheduledAt = new Date(`${form.scheduledDate}T${form.scheduledTime}`).getTime()
@@ -243,25 +244,14 @@ export default function NoticeManager() {
 function matchesNoticeSearch(notice, rawQuery) {
   const q = String(rawQuery || '').trim().toLowerCase()
   if (!q) return true
-  // Search every meaningful announcement timestamp, not only when it was created.
-  // This lets owners find an incident by its start, expected resolution, or resolution date.
-  const timestampFields = ['createdAt', 'happenedAt', 'expectedResolutionAt', 'resolvedAt']
-  const dateParts = timestampFields.flatMap(field => {
-    const raw = notice[field]
-    if (raw === null || raw === undefined || raw === '') return []
-    const date = new Date(raw)
-    if (Number.isNaN(date.getTime())) return []
-    return [
-      date.toLocaleDateString('en-IN'),
-      date.toISOString().slice(0, 10),
-      String(date.getFullYear()),
-      String(date.getDate()),
-      String(date.getDate()).padStart(2, '0'),
-      date.toLocaleDateString('en-IN', { weekday: 'long' }),
-      date.toLocaleDateString('en-IN', { month: 'long' }),
-      date.toLocaleDateString('en-IN', { month: 'short' }),
-    ]
-  }).join(' ').toLowerCase()
+  const created = notice.createdAt ? new Date(notice.createdAt) : null
+  const dateParts = created && !Number.isNaN(created.getTime()) ? [
+    created.toLocaleDateString('en-IN'),
+    created.toISOString().slice(0,10),
+    String(created.getFullYear()),
+    String(created.getDate()).padStart(2,'0'),
+    created.toLocaleDateString('en-IN',{weekday:'long'}),
+  ].join(' ').toLowerCase() : ''
   const haystack = [notice.title, notice.titleTamil, notice.message, notice.messageTamil, notice.category, notice.reason, notice.additionalDetails, dateParts].filter(Boolean).join(' ').toLowerCase()
   return haystack.includes(q)
 }
