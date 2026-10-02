@@ -1,122 +1,100 @@
-import React, { useEffect, useState } from 'react'
-import { Printer } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, Printer, Search, RefreshCw, FileText } from 'lucide-react'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../../services/firebase'
 import { listHouses } from '../../services/houseService'
-import { listRentHistory } from '../../services/rentService'
-import { listEbBillCycles, listEbPaymentsForBill } from '../../services/ebBillService'
-import { listWaterBillCycles, listWaterPaymentsForBill } from '../../services/waterBillService'
-import { listExpenses } from '../../services/expenseService'
+import { listRentPaymentsForHouses } from '../../services/rentService'
 import { useToast } from '../shared/ui/Toast'
+import MonthlyFinancialReport from './MonthlyFinancialReport'
 
-function monthRange(month) {
-  const [year, monthNumber] = month.split('-').map(Number)
-  return { start: new Date(year, monthNumber - 1, 1).getTime(), end: new Date(year, monthNumber, 0, 23, 59, 59, 999).getTime() }
+const money = value => `₹${Math.round(Number(value) || 0).toLocaleString('en-IN')}`
+const currentMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` }
+const shiftMonth = (month, delta) => { const [y,m] = month.split('-').map(Number); const d = new Date(y,m-1+delta,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` }
+const monthLabel = month => { const [y,m] = month.split('-').map(Number); return new Date(y,m-1,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'}) }
+const monthBounds = month => { const [y,m]=month.split('-').map(Number); return {start:new Date(y,m-1,1).getTime(),end:new Date(y,m,0,23,59,59,999)} }
+const activeInMonth = (entry, month) => { const {start,end}=monthBounds(month); return Number(entry.movedInAt||0)<=end && (entry.movedOutAt==null || Number(entry.movedOutAt)>=start) }
+const stamp = value => { if (!value) return '—'; const d = new Date(value); return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}) }
+
+function statusFor(house, rows) {
+  if (house.status !== 'occupied') return 'Vacant'
+  const total = rows.filter(p=>p.status==='approved').reduce((s,p)=>s+(Number(p.amount)||0),0)
+  if (rows.some(p => p.status === 'approved')) return Number(house.rentAmount)>0 && total < Number(house.rentAmount) ? 'Partial' : 'Paid'
+  if (rows.some(p => p.status === 'waiting_approval')) return 'Waiting'
+  return 'Unpaid'
 }
-
-function activeInMonth(entry, month) {
-  const { start, end } = monthRange(month)
-  const movedIn = Number(entry.movedInAt || 0)
-  const movedOut = entry.movedOutAt == null ? null : Number(entry.movedOutAt)
-  return movedIn <= end && (movedOut == null || movedOut >= start)
-}
-
-function money(value) { return `₹${Math.round(Number(value) || 0).toLocaleString('en-IN')}` }
 
 export default function MonthlyReport() {
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
+  const [view, setView] = useState('register')
+  const [month, setMonth] = useState(currentMonth)
+  const [houses, setHouses] = useState([])
+  const [allPayments, setAllPayments] = useState([])
+  const payments = useMemo(()=>allPayments.filter(p=>p.month===month),[allPayments,month])
   const [loading, setLoading] = useState(true)
-  const [report, setReport] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState('All')
   const toast = useToast()
 
-  useEffect(() => { loadReport() }, [month])
-
-  function generateMonthOptions() {
-    const opts = []
-    const d = new Date()
-    d.setDate(1)
-    for (let i = 0; i < 12; i++) {
-      opts.push(d.toISOString().slice(0, 7))
-      d.setMonth(d.getMonth() - 1)
-    }
-    return opts
-  }
-
-  async function loadReport() {
-    setLoading(true)
+  async function load({quiet=false}={}) {
+    if (quiet) setRefreshing(true); else setLoading(true)
     try {
-      const houses = await listHouses()
-      const houseRows = await Promise.all(houses.map(async house => {
-        const [historySnap, payments] = await Promise.all([getDocs(collection(db, 'houses', house.id, 'history')), listRentHistory(house.id)])
-        const history = historySnap.docs.map(d => d.data())
-        const active = history.filter(p => p.month == null && activeInMonth(p, month))
-        const currentHistory = active[active.length - 1]
-        const expected = Number(currentHistory?.rentAmount || (house.status === 'occupied' ? house.rentAmount : 0) || 0)
-        const payment = payments.find(p => p.month === month && p.status === 'approved')
-        return {
-          door: house.internalDoorNumber || house.govtDoorNumber || house.id,
-          tenant: currentHistory?.name || house.tenantName || '—',
-          expected,
-          collected: Number(payment?.amount || 0),
-          status: payment ? 'Paid' : expected ? 'Pending' : 'Vacant',
-          date: payment?.approvedAt || payment?.dateSent || null,
-        }
-      }))
-
-      const expectedRent = houseRows.reduce((sum, row) => sum + row.expected, 0)
-      const collectedRent = houseRows.reduce((sum, row) => sum + row.collected, 0)
-      const [ebCycles, waterCycles, expenses] = await Promise.all([
-        listEbBillCycles(), listWaterBillCycles(), listExpenses(month)
+      const houseRows = await listHouses()
+      const [rentRows, historyRows] = await Promise.all([
+        listRentPaymentsForHouses(houseRows.map(h=>h.id)),
+        Promise.all(houseRows.map(async h => { try { const snap=await getDocs(collection(db,'houses',h.id,'history')); return [h.id,snap.docs.map(d=>({id:d.id,...d.data()}))] } catch (error) { console.warn('Could not load occupancy history for rent register:',h.id,error?.message||error); return [h.id,[]] } }))
       ])
-      const monthCycles = cycles => cycles.filter(c => c.createdAt && new Date(c.createdAt).toISOString().slice(0, 7) === month)
-      const ebMonthCycles = monthCycles(ebCycles)
-      const waterMonthCycles = monthCycles(waterCycles)
-      const [ebPaymentRows, waterPaymentRows] = await Promise.all([
-        Promise.all(ebMonthCycles.map(c => listEbPaymentsForBill(c.id))),
-        Promise.all(waterMonthCycles.map(c => listWaterPaymentsForBill(c.id))),
-      ])
-      const ebTotal = ebMonthCycles.reduce((sum, c) => sum + (Number(c.totalAmount) || 0), 0)
-      const waterTotal = waterMonthCycles.reduce((sum, c) => sum + (Number(c.totalAmount) || 0), 0)
-      const ebCollected = ebPaymentRows.flat().filter(p => p.status === 'approved').reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
-      const waterCollected = waterPaymentRows.flat().filter(p => p.status === 'approved').reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
-      const expenseTotal = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
-
-      setReport({
-        expectedRent, collectedRent, pendingRent: Math.max(0, expectedRent - collectedRent),
-        collectionRate: expectedRent ? Math.round((collectedRent / expectedRent) * 100) : 0,
-        houseBreakdown: houseRows, ebTotal, ebCollected, waterTotal, waterCollected, expenseTotal,
-        netIncome: collectedRent - expenseTotal,
-      })
+      setHouses(houseRows.map(h=>({...h,rentRegisterHistory:historyRows.find(([id])=>id===h.id)?.[1]||[]})))
+      setAllPayments(rentRows)
     } catch (err) {
-      console.error(err)
-      toast.error('Could not generate the report. Please try again.')
-    } finally { setLoading(false) }
+      console.error('Rent register load failed:',err)
+      toast.error('Could not load the rent register. Please retry.')
+    } finally { setLoading(false); setRefreshing(false) }
   }
+  useEffect(()=>{ load() },[])
+  useEffect(()=>{ if(!loading) setFilter('All') },[month])
 
-  if (loading) return <div className="p-4 text-sm text-ink-soft">Loading report…</div>
-  if (!report) return null
+  const rows = useMemo(()=>houses.map(h=>{
+    const own = payments.filter(p=>p.houseId===h.id)
+    const approved = own.filter(p=>p.status==='approved')
+    const waiting = own.filter(p=>p.status==='waiting_approval')
+    const amount = approved.reduce((s,p)=>s+(Number(p.amount)||0),0)
+    const history=(h.rentRegisterHistory||[]).filter(x=>activeInMonth(x,month)&&x.month==null).sort((a,b)=>Number(a.movedInAt||0)-Number(b.movedInAt||0)); const entry=history.at(-1); const occupied=(h.rentRegisterHistory||[]).length?!!entry:h.status==='occupied'; const tenant=entry?.name||(occupied?h.tenantName:'—'); const tenantPhone=entry?.phone||(occupied?h.tenantPhone:null); const expected=occupied?Number(entry?.rentAmount??h.rentAmount)||0:0
+    return { ...h, id:h.id, door:h.internalDoorNumber||h.govtDoorNumber||h.id, tenant, tenantPhone, expected, collected:amount, status:statusFor({...h,status:occupied?'occupied':'vacant',rentAmount:expected},own), waiting, own }
+  }).sort((a,b)=>String(a.door).localeCompare(String(b.door),undefined,{numeric:true})),[houses,payments,month])
+  const filtered = useMemo(()=>rows.filter(r=>{
+    const q=search.trim().toLowerCase()
+    const match=!q||[r.door,r.govtDoorNumber,r.tenant,r.tenantPhone,r.id].some(v=>String(v||'').toLowerCase().includes(q))
+    return match&&(filter==='All'||(filter==='Waiting'?(r.status==='Waiting'||r.waiting.length>0):r.status===filter))
+  }),[rows,search,filter])
+  const stats = useMemo(()=>rows.reduce((s,r)=>{ if(r.status!=='Vacant') s.expected+=r.expected; s.collected+=r.collected; if(r.status==='Paid')s.paid++; if(r.status==='Partial')s.partial++; if(r.waiting.length>0)s.waiting++; if(r.status==='Unpaid')s.unpaid++; return s },{expected:0,collected:0,paid:0,partial:0,waiting:0,unpaid:0}),[rows])
 
-  return (
-    <div className="space-y-6 print:space-y-4 max-w-4xl mx-auto">
-      <style>{`@media print { body * { visibility:hidden } #printable-report,#printable-report * { visibility:visible } #printable-report { position:absolute;left:0;top:0;width:100%;padding:20px }.no-print{display:none!important} }`}</style>
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-paper-raised p-4 rounded-xl border border-brass/20 shadow-sm no-print">
-        <div><h2 className="font-semibold text-ink">Monthly report</h2><p className="text-xs text-ink-soft mt-0.5">Rent, utilities and expenses for the selected month.</p></div>
-        <div className="flex gap-2"><select value={month} onChange={e => setMonth(e.target.value)} className="border border-brass/30 rounded-lg px-3 py-2 text-sm bg-paper">{generateMonthOptions().map(m => <option key={m} value={m}>{m}</option>)}</select><button onClick={() => window.print()} className="bg-cover text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1"><Printer size={16}/> Print</button></div>
-      </div>
-
-      <div id="printable-report" className="space-y-6">
-        <div className="text-center hidden print:block mb-6"><h1 className="text-2xl font-bold text-ink">MONTHLY REPORT</h1><p className="text-ink-soft mt-1">{month}</p></div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[['Expected rent',report.expectedRent,'text-ink'],['Rent collected',report.collectedRent,'text-stamp-green'],['Pending rent',report.pendingRent,'text-stamp-red'],['Collection rate',`${report.collectionRate}%`,'text-ink']].map(([label,value,cls]) => <div key={label} className="bg-paper-raised p-4 rounded-xl border border-brass/20"><p className="text-xs text-ink-soft uppercase tracking-wider">{label}</p><p className={`text-2xl font-bold ${cls} mt-1`}>{typeof value === 'string' ? value : money(value)}</p></div>)}
-        </div>
-
-        <div className="bg-paper-raised rounded-xl border border-brass/20 overflow-hidden"><div className="p-4 border-b border-brass/20"><h3 className="font-semibold text-ink">House-wise rent</h3></div><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-xs text-ink-soft uppercase bg-paper"><tr>{['Door','Tenant','Expected','Collected','Status','Paid'].map(h=><th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody className="divide-y divide-brass/10">{report.houseBreakdown.map(h=><tr key={h.door}><td className="px-4 py-3 font-medium">{h.door}</td><td className="px-4 py-3">{h.tenant}</td><td className="px-4 py-3">{money(h.expected)}</td><td className="px-4 py-3">{money(h.collected)}</td><td className="px-4 py-3"><span className={`px-2 py-1 rounded text-xs font-medium ${h.status==='Paid'?'bg-green-100 text-green-800':h.status==='Pending'?'bg-red-100 text-red-800':'bg-gray-100 text-gray-600'}`}>{h.status}</span></td><td className="px-4 py-3">{h.date ? new Date(h.date).toLocaleDateString('en-IN') : '—'}</td></tr>)}</tbody></table></div></div>
-
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="bg-paper-raised p-4 rounded-xl border border-brass/20 space-y-3"><h3 className="font-semibold text-ink border-b border-brass/20 pb-2">Utilities</h3><div className="flex justify-between text-sm"><span className="text-ink-soft">EB billed / collected</span><span className="font-medium">{money(report.ebTotal)} / {money(report.ebCollected)}</span></div><div className="flex justify-between text-sm"><span className="text-ink-soft">Water billed / collected</span><span className="font-medium">{money(report.waterTotal)} / {money(report.waterCollected)}</span></div><div className="flex justify-between text-sm"><span className="text-ink-soft">Expenses</span><span className="font-medium text-stamp-red">− {money(report.expenseTotal)}</span></div></div>
-          <div className="bg-paper-raised p-4 rounded-xl border border-brass/20 flex flex-col justify-center"><p className="text-xs text-center text-ink-soft uppercase tracking-wider">Operating result</p><p className="text-4xl font-display font-bold text-center text-cover mt-1">{money(report.netIncome)}</p><p className="text-xs text-center text-ink-soft mt-1">Rent collected minus expenses. Utility collections are shown separately.</p></div>
-        </div>
+  if(view==='financial') return <div className="space-y-3"><button onClick={()=>setView('register')} className="text-sm font-semibold text-brand hover:underline">← Back to rent register</button><MonthlyFinancialReport /></div>
+  return <div className="max-w-6xl mx-auto space-y-5">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div><h2 className="text-xl font-bold text-ink">Rent collection register</h2><p className="text-sm text-ink-soft mt-1">See who paid, who is pending, and each payment’s details for any month.</p></div>
+      <div className="flex flex-wrap gap-2 no-print">
+        <button onClick={()=>setView('financial')} className="px-3 py-2 rounded-lg border border-brass/30 text-sm flex items-center gap-2"><FileText size={16}/> Full financial report</button>
+        <button onClick={()=>window.print()} className="px-3 py-2 rounded-lg bg-cover text-white text-sm flex items-center gap-2"><Printer size={16}/> Print</button>
+        <button onClick={()=>load({quiet:true})} disabled={loading||refreshing} aria-label="Refresh rent register" className="p-2 rounded-lg border border-brass/30 disabled:opacity-50"><RefreshCw size={17} className={refreshing?'animate-spin':''}/></button>
       </div>
     </div>
-  )
+    <section className="flex items-center justify-between gap-3 rounded-xl border border-brass/20 bg-paper-raised p-3 no-print">
+      <button onClick={()=>setMonth(m=>shiftMonth(m,-1))} aria-label="Previous month" className="p-2 rounded-lg hover:bg-paper"><ChevronLeft size={20}/></button>
+      <div className="text-center"><div className="font-semibold">{monthLabel(month)}</div><input aria-label="Choose rent month" type="month" value={month} max={currentMonth()} onChange={e=>e.target.value&&setMonth(e.target.value)} className="mt-1 text-xs bg-transparent text-ink-soft text-center"/></div>
+      <button onClick={()=>setMonth(m=>shiftMonth(m,1))} disabled={month>=currentMonth()} aria-label="Next month" className="p-2 rounded-lg hover:bg-paper disabled:opacity-30"><ChevronRight size={20}/></button>
+    </section>
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {[['Expected',money(stats.expected)],['Collected',money(stats.collected)],['Paid',stats.paid],['Waiting',stats.waiting],['Unpaid / partial',stats.unpaid+stats.partial]].map(([label,value])=><div key={label} className="rounded-xl border border-brass/20 bg-paper-raised p-3 sm:p-4"><div className="text-xs text-ink-soft">{label}</div><div className="mt-1 text-xl sm:text-2xl font-bold text-ink">{value}</div></div>)}
+    </div>
+    <div className="flex flex-col sm:flex-row gap-2 no-print">
+      <div className="relative flex-1"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft"/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search door, tenant, phone or ID" className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-brass/25 bg-paper-raised text-sm"/></div>
+      <select value={filter} onChange={e=>setFilter(e.target.value)} aria-label="Filter rent status" className="rounded-lg border border-brass/25 bg-paper-raised px-3 py-2.5 text-sm">{['All','Paid','Partial','Waiting','Unpaid','Vacant'].map(s=><option key={s}>{s}</option>)}</select>
+    </div>
+    {loading ? <div className="rounded-xl border border-brass/20 bg-paper-raised p-8 text-center text-sm text-ink-soft">Loading rent records…</div> : <div className="rounded-xl border border-brass/20 bg-paper-raised overflow-hidden">
+      <div className="px-4 py-3 border-b border-brass/15 flex justify-between items-center"><h3 className="font-semibold">House-wise status</h3><span className="text-xs text-ink-soft">{filtered.length} of {rows.length} houses</span></div>
+      {filtered.length===0 ? <div className="p-8 text-center text-sm text-ink-soft">No houses match this search or filter.</div> : <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-paper text-xs uppercase text-ink-soft"><tr>{['Door / tenant','Rent due','Approved amount','Balance','Status','Payment details'].map(h=><th key={h} className="px-4 py-3 whitespace-nowrap">{h}</th>)}</tr></thead><tbody className="divide-y divide-brass/10">{filtered.map(r=><tr key={r.id} className="align-top"><td className="px-4 py-3 min-w-[160px]"><div className="font-semibold">{r.door}</div><div className="text-ink-soft mt-0.5">{r.tenant}</div>{r.tenantPhone&&<div className="text-xs text-ink-soft">{r.tenantPhone}</div>}</td><td className="px-4 py-3 whitespace-nowrap">{r.status==='Vacant'?'—':money(r.expected)}</td><td className="px-4 py-3 whitespace-nowrap font-medium">{money(r.collected)}{r.waiting.length>0&&<div className="text-xs text-amber-700 mt-1">{r.waiting.length} awaiting review</div>}</td><td className="px-4 py-3 whitespace-nowrap">{r.status==='Vacant'?'—':money(Math.max(0,r.expected-r.collected))}</td><td className="px-4 py-3"><span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${r.status==='Paid'?'bg-green-100 text-green-800':r.status==='Partial'?'bg-amber-100 text-amber-800':r.status==='Waiting'?'bg-blue-100 text-blue-800':r.status==='Unpaid'?'bg-red-100 text-red-800':'bg-gray-100 text-gray-600'}`}>{r.status}</span></td><td className="px-4 py-3 min-w-[260px] space-y-2">{r.own.length===0?<span className="text-xs text-ink-soft">No payment submitted</span>:r.own.map(p=><div key={p.id} className="text-xs border-l-2 border-brass/30 pl-2"><div className="font-semibold">{money(p.amount)} · {p.status==='approved'?'Approved':p.status==='waiting_approval'?'Waiting approval':p.status==='rejected'?'Rejected':p.status==='corrected'?'Corrected':p.status}</div><div className="text-ink-soft">{p.mode||'Method not recorded'} · {p.applicationNumber||p.id}{p.transactionId?` · Ref: ${p.transactionId}`:p.referenceNumber?` · Ref: ${p.referenceNumber}`:p.utr?` · UTR: ${p.utr}`:''}</div><div className="text-ink-soft">Submitted: {stamp(p.dateSent||p.submittedAt)}{p.approvedAt?` · Approved: ${stamp(p.approvedAt)}`:''}</div>{p.rejectionReason&&<div className="text-red-700">Reason: {p.rejectionReason}</div>}{p.cashReceivedBy&&<div className="text-ink-soft">Received by: {p.cashReceivedBy}</div>}{p.neighborCollectedBy&&<div className="text-ink-soft">Collected by: {p.neighborCollectedBy}</div>}{p.recordedBy?.name&&<div className="text-ink-soft">Recorded by: {p.recordedBy.name}</div>}{p.replacementAmount!=null&&<div className="text-ink-soft">Correction amount: {money(p.replacementAmount)}</div>}</div>)}</td></tr>)}</tbody></table></div>}
+    </div>}
+    <p className="text-xs text-ink-soft">“Paid” reflects approved rent entries. Waiting submissions are shown separately and are not counted as collected. Vacant houses are excluded from expected rent. This register is read-only; use Rent approvals or Manual payment to record changes.</p>
+    <style>{`@media print {.no-print{display:none!important} body{background:white!important} main{padding:0!important} table{font-size:10px} th,td{padding:6px!important}}`}</style>
+  </div>
 }

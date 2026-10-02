@@ -58,7 +58,7 @@ const TABS = [
   { id: 'documents', route: 'documents', label: 'Documents', icon: FileText, group: 'Operations' },
   { id: 'contacts', route: 'contacts', label: 'Service contacts', icon: Phone, group: 'Operations' },
   { id: 'community', route: 'community', label: 'Community', icon: MessagesSquare, group: 'Community' },
-  { id: 'reports', route: 'reports', label: 'Reports', icon: ReceiptIndianRupee, group: 'Insights' },
+  { id: 'reports', route: 'reports', label: 'Rent register', icon: ReceiptIndianRupee, group: 'Money' },
   { id: 'analytics', route: 'analytics', label: 'Analytics', icon: BarChart3, group: 'Insights' },
   { id: 'more', route: 'more', label: 'More tools', mobileLabel: 'More', icon: MoreHorizontal, group: 'Admin' },
 ]
