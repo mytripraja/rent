@@ -108,7 +108,8 @@ async function getAnalyticsDataFresh() {
     houses.forEach(house => {
       const history = historyByHouse.get(house.id) || []
       const activeEntries = history.filter(entry => historyActiveInMonth(entry, month))
-      if (activeEntries.length) expected += Number(activeEntries[activeEntries.length - 1].rentAmount || house.rentAmount || 0)
+      if (month === currentMonth && house.status === 'occupied') expected += Number(house.rentAmount || 0)
+      else if (activeEntries.length) expected += Number(activeEntries[activeEntries.length - 1].rentAmount || house.rentAmount || 0)
       else if (!history.length && house.status === 'occupied') expected += Number(house.rentAmount || 0)
       collected += (rentByHouse.get(house.id) || [])
         .filter(p => p.month === month && p.status === 'approved')
@@ -237,7 +238,7 @@ export async function getYearSummary(year) {
       const isOccupied = active.length > 0 || (!history.length && house.status === 'occupied' && month === currentMonth)
       if (isOccupied) {
         occupiedMonths++
-        expected += Number(active[active.length - 1]?.rentAmount || house.rentAmount || 0)
+        expected += Number(month === currentMonth ? (house.rentAmount || 0) : (active[active.length - 1]?.rentAmount || house.rentAmount || 0))
         const paid = payments.some(p => p.month === month && p.status === 'approved')
         if (!paid) unpaidMonths++
       }

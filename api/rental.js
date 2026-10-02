@@ -98,89 +98,6 @@ async function ownerHouses(req, res) {
 }
 
 
-async function approveRentPayment(req, res) {
-  const decoded = await requireOwnerLevel(req)
-  const paymentId = String(req.body?.paymentId || '')
-  const neighborCollectedBy = String(req.body?.neighborCollectedBy || '').trim()
-  if (!paymentId || paymentId.includes('/') || paymentId.length > 150) {
-    return res.status(400).json({ error: 'Invalid payment ID' })
-  }
-  if (neighborCollectedBy.length > 120) return res.status(400).json({ error: 'Collector name is too long' })
-
-  const profileSnap = await db.collection('users').doc(decoded.uid).get()
-  const profile = profileSnap.data() || {}
-  const paymentRef = db.collection('rentPayments').doc(paymentId)
-  const result = await db.runTransaction(async tx => {
-    const paymentSnap = await tx.get(paymentRef)
-    if (!paymentSnap.exists) throw Object.assign(new Error('Rent payment not found'), { statusCode: 404 })
-    const payment = paymentSnap.data() || {}
-    const houseId = String(payment.houseId || '')
-    if (!houseId) throw Object.assign(new Error('Payment has no house assigned'), { statusCode: 409 })
-    const houseRef = db.collection('houses').doc(houseId)
-    const houseSnap = await tx.get(houseRef)
-    if (!houseSnap.exists) throw Object.assign(new Error('House not found'), { statusCode: 404 })
-    const house = houseSnap.data() || {}
-    const propertyId = String(house.propertyId || 'default')
-    const { isAdmin, unrestricted, allowed } = ownerScope(profile)
-    if (!(isAdmin || unrestricted || allowed.has(propertyId))) {
-      throw Object.assign(new Error('You do not have access to this property'), { statusCode: 403 })
-    }
-
-    const amount = Number(payment.amount)
-    if (!Number.isFinite(amount) || amount <= 0) {
-      throw Object.assign(new Error('Payment amount must be greater than zero'), { statusCode: 409 })
-    }
-    const journalId = `RENT-${paymentId}`
-    const debitRef = db.collection('accountingTransactions').doc(`rent-approval-${paymentId}-debit`)
-    const creditRef = db.collection('accountingTransactions').doc(`rent-approval-${paymentId}-credit`)
-    const [debitSnap, creditSnap] = await Promise.all([tx.get(debitRef), tx.get(creditRef)])
-
-    if (payment.status === 'approved' && payment.approvalJournalId === journalId) {
-      const debit = debitSnap.data() || {}
-      const credit = creditSnap.data() || {}
-      const pairValid = debitSnap.exists && creditSnap.exists &&
-        debit.journalId === journalId && credit.journalId === journalId &&
-        debit.paymentId === paymentId && credit.paymentId === paymentId &&
-        debit.account === 'Cash / Bank' && credit.account === 'Rental Income' &&
-        Number(debit.debit) === amount && Number(debit.credit) === 0 &&
-        Number(credit.debit) === 0 && Number(credit.credit) === amount &&
-        String(debit.propertyId || '') === propertyId && String(credit.propertyId || '') === propertyId
-      if (!pairValid) {
-        throw Object.assign(new Error('Approved payment has incomplete or inconsistent linked journal entries. Review accounting before retrying.'), { statusCode: 409 })
-      }
-      return { created: false, payment, house, propertyId, journalId }
-    }
-    if (payment.status !== 'waiting_approval') {
-      throw Object.assign(new Error('This payment is no longer awaiting approval. Refresh and review its current status.'), { statusCode: 409 })
-    }
-    if (debitSnap.exists || creditSnap.exists) {
-      throw Object.assign(new Error('Linked rent journal records already exist for this pending payment. Review accounting before approving.'), { statusCode: 409 })
-    }
-
-    const now = Date.now()
-    const description = `Approved rent ${payment.month || ''} for ${house.internalDoorNumber || houseId}`
-    const base = {
-      propertyId, createdBy: decoded.uid, journalId,
-      date: payment.month ? `${payment.month}-01` : new Date(now).toISOString().slice(0, 10),
-      description, category: 'Rent', houseId, paymentId, entryType: 'journal-line',
-      amount, createdAt: now, updatedAt: now,
-    }
-    tx.create(debitRef, { ...base, account: 'Cash / Bank', debit: amount, credit: 0 })
-    tx.create(creditRef, { ...base, account: 'Rental Income', debit: 0, credit: amount })
-    tx.update(paymentRef, {
-      status: 'approved', approvedAt: now, actionedBy: decoded.uid,
-      approvalJournalId: journalId,
-      ...(neighborCollectedBy ? { neighborCollectedBy } : {}),
-    })
-    return { created: true, payment, house, propertyId, journalId }
-  })
-  return res.status(200).json({
-    ok: true, created: result.created, journalId: result.journalId,
-    payment: { tenantId: result.payment?.tenantId || null, month: result.payment?.month || null },
-    propertyId: result.propertyId,
-  })
-}
-
 async function pendingRentApprovals(req, res) {
   const decoded = await requireOwnerLevel(req)
   const profileSnap = await db.collection('users').doc(decoded.uid).get()
@@ -332,24 +249,13 @@ async function correctRentPayment(req, res) {
   if (payment.status !== 'approved') return res.status(400).json({ error:'Only an approved payment can be corrected here.' })
   if (replacementAmount !== null && (!Number.isFinite(replacementAmount) || replacementAmount <= 0)) return res.status(400).json({ error:'Replacement amount must be greater than zero.' })
 
-  // V8.83+ rent approvals explicitly link journal lines to the payment.
-  // Prefer that linkage. Only use description matching for genuinely legacy
-  // payments that have no approvalJournalId and no linked lines.
-  const accounting = db.collection('accountingTransactions')
-  const linkedSnap = await accounting.where('paymentId','==',paymentId).get()
-  let original = linkedSnap.docs.map(d=>({id:d.id,...d.data()}))
-  if (original.length) {
-    const expectedJournalId = String(payment.approvalJournalId || `RENT-${paymentId}`)
-    original = original.filter(line => String(line.journalId || '') === expectedJournalId)
-    if (original.length !== 2) return res.status(409).json({ error:'Linked rent journal entries are incomplete or inconsistent. No correction was made; review accounting first.' })
-  } else {
-    if (payment.approvalJournalId) return res.status(409).json({ error:'The payment references a rent journal, but its linked entries were not found. No correction was made; review accounting first.' })
-    const journalSnap = await accounting.where('houseId','==',houseId).get()
-    original = journalSnap.docs.map(d=>({id:d.id,...d.data()})).filter(x =>
-      String(x.description||'') === `Approved rent ${payment.month || ''} for ${house.internalDoorNumber || houseId}` &&
-      Number(x.amount||0) === Number(payment.amount||0)
-    )
-  }
+  // Legacy rent journals do not store paymentId. Do not guess which journal
+  // belongs to this payment when multiple or incomplete matches exist.
+  const journalSnap = await db.collection('accountingTransactions').where('houseId','==',houseId).get()
+  const original = journalSnap.docs.map(d=>({id:d.id,...d.data()})).filter(x =>
+    String(x.description||'') === `Approved rent ${payment.month || ''} for ${house.internalDoorNumber || houseId}` &&
+    Number(x.amount||0) === Number(payment.amount||0)
+  )
   const debitLines = original.filter(line => Number(line.debit || 0) > 0 && Number(line.credit || 0) === 0)
   const creditLines = original.filter(line => Number(line.credit || 0) > 0 && Number(line.debit || 0) === 0)
   const journalIds = new Set(original.map(line => String(line.journalId || '')))
@@ -382,11 +288,8 @@ async function correctRentPayment(req, res) {
     for (let i=0;i<sourceSnaps.length;i++) {
       const source = sourceSnaps[i].data() || {}
       const expectedLine = original[i]
-      const expectedDescription = expectedLine.description || `Approved rent ${currentPayment.month || ''} for ${house.internalDoorNumber || houseId}`
-      if (!sourceSnaps[i].exists || String(source.description||'') !== String(expectedDescription) ||
+      if (!sourceSnaps[i].exists || String(source.description||'') !== `Approved rent ${currentPayment.month || ''} for ${house.internalDoorNumber || houseId}` ||
         Number(source.amount||0) !== Number(currentPayment.amount||0) || source.journalId !== expectedLine.journalId ||
-        (expectedLine.paymentId && String(source.paymentId || '') !== paymentId) ||
-        String(source.houseId || '') !== houseId || String(source.propertyId || 'default') !== propertyId ||
         source.account !== expectedLine.account || Number(source.debit||0) !== Number(expectedLine.debit||0) ||
         Number(source.credit||0) !== Number(expectedLine.credit||0)) {
         throw Object.assign(new Error('The original rent journal changed during correction. No changes were made; review the accounting entries.'), { statusCode:409 })
@@ -412,11 +315,11 @@ async function correctRentPayment(req, res) {
     if (replacementAmount !== null) {
       tx.create(replacementRef, { ...currentPayment, amount:replacementAmount, status:'approved', approvedAt:correctedAt, submittedAt:correctedAt,
         applicationNumber:`CORR-${String(currentPayment.applicationNumber || paymentId).slice(-20)}`, actionedBy:actor,
-        approvalJournalId:replacementJournalId, correctedFromPaymentId:paymentId, correctionReason:reason, correctedAt:null })
+        correctedFromPaymentId:paymentId, correctionReason:reason, correctedAt:null })
       const base = { propertyId, createdBy:decoded.uid, journalId:replacementJournalId,
         date:currentPayment.month ? `${currentPayment.month}-01` : new Date().toISOString().slice(0,10),
         description:`Corrected approved rent ${currentPayment.month || ''} for ${house.internalDoorNumber || houseId}`,
-        category:'Rent', houseId, entryType:'journal-line', amount:Number(replacementAmount), paymentId:replacementId,
+        category:'Rent', houseId, entryType:'journal-line', amount:Number(replacementAmount),
         createdAt:correctedAt, updatedAt:correctedAt, correctionPaymentId:paymentId, rentPaymentId:replacementId }
       tx.create(replacementDebitRef,{...base,account:'Cash / Bank',debit:Number(replacementAmount),credit:0})
       tx.create(replacementCreditRef,{...base,account:'Rental Income',debit:0,credit:Number(replacementAmount)})
@@ -435,7 +338,6 @@ export default async function handler(req, res) {
     if (route === 'owner-houses' && req.method === 'POST') return await ownerHouses(req, res)
     if (route === 'owner-documents' && req.method === 'POST') return await ownerDocuments(req, res)
     if (route === 'pending-rent-approvals' && req.method === 'POST') return await pendingRentApprovals(req, res)
-    if (route === 'approve-rent-payment' && req.method === 'POST') return await approveRentPayment(req, res)
     if (route === 'sensitive-key' && req.method === 'POST') return await sensitiveKey(req, res)
     if (route === 'correct-rent-payment' && req.method === 'POST') return await correctRentPayment(req, res)
     if (route === 'link-notices' && req.method === 'POST') return await linkNotices(req, res)

@@ -13,6 +13,7 @@ import { db, authedFetch } from './firebase'
 import { getActivePropertyId } from './configService'
 import { uploadPrivate } from './cloudinaryService'
 import { createNotification } from './notificationService'
+import { createAccountingJournal } from './enterpriseService'
 import { cachedRequest, invalidateCache } from './performanceCache'
 
 const paymentsRef = collection(db, 'rentPayments')
@@ -135,37 +136,55 @@ export async function listRentHistory(houseId) {
 }
 
 export async function approvePayment(paymentId, { neighborCollectedBy, actionedBy } = {}) {
-  // Approval status and the double-entry journal are committed together on the
-  // server. The client-provided actor is used only for human-readable activity data.
-  const result = await authedFetch('/api/rental?route=approve-rent-payment', {
-    paymentId,
-    neighborCollectedBy: neighborCollectedBy || '',
+  const paymentRef = doc(db, 'rentPayments', paymentId)
+  const snap = await getDoc(paymentRef)
+  const paymentData = snap.data()
+  const houseSnap = paymentData?.houseId ? await getDoc(doc(db, 'houses', paymentData.houseId)) : null
+  const houseData = houseSnap?.exists() ? houseSnap.data() : null
+
+  await updateDoc(paymentRef, {
+    status: 'approved',
+    approvedAt: Date.now(),
+    actionedBy: actionedBy || null,
+    ...(neighborCollectedBy ? { neighborCollectedBy } : {}),
   })
 
-  if (result.created && result.payment?.tenantId) {
+  if (paymentData?.tenantId) {
     await createNotification({
-      recipientId: result.payment.tenantId,
+      recipientId: paymentData.tenantId,
       recipientType: 'tenant',
       type: 'rent_approved',
       title: 'Rent Approved',
-      message: `Your rent payment for ${result.payment.month} has been approved.`,
-    }).catch((error) => console.warn('Rent approval notification could not be saved:', error?.message || error))
+      message: `Your rent payment for ${paymentData.month} has been approved.`
+    })
   }
 
-  if (result.created) {
-    const { logActivity } = await import('./activityLogService')
-    await logActivity({
-      action: 'approved',
-      entityType: 'rent',
-      entityId: paymentId,
-      performedBy: actionedBy?.uid || null,
-      performedByName: actionedBy?.name || 'Owner',
-      details: `Approved rent payment for ${result.payment?.month}`,
-      propertyId: result.propertyId || 'default',
-    }).catch((error) => console.warn('Rent approval activity log could not be saved:', error?.message || error))
+  if (houseData?.propertyId) {
+    await createAccountingJournal({
+      propertyId: houseData.propertyId,
+      createdBy: actionedBy?.uid || null,
+      date: paymentData.month ? `${paymentData.month}-01` : new Date().toISOString().slice(0, 10),
+      description: `Approved rent ${paymentData.month || ''} for ${houseData.internalDoorNumber || paymentData.houseId}`,
+      amount: Number(paymentData.amount || 0),
+      debitAccount: paymentData.mode === 'cash' ? 'Cash / Bank' : 'Cash / Bank',
+      creditAccount: 'Rental Income',
+      category: 'Rent',
+      houseId: paymentData.houseId,
+    }).catch(() => {})
   }
+
+  // Task 2: Log activity
+  const { logActivity } = await import('./activityLogService')
+  await logActivity({
+    action: 'approved',
+    entityType: 'rent',
+    entityId: paymentId,
+    performedBy: actionedBy?.uid || null,
+    performedByName: actionedBy?.name || 'Owner',
+    details: `Approved rent payment for ${paymentData?.month}`,
+    propertyId: houseData?.propertyId || 'default'
+  })
   invalidateRentApprovalCache()
-  return result
 }
 
 export async function rejectPayment(paymentId, reason, actionedBy) {

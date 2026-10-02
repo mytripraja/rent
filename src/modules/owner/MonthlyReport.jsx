@@ -51,7 +51,9 @@ export default function MonthlyReport() {
         const history = historySnap.docs.map(d => d.data())
         const active = history.filter(p => p.month == null && activeInMonth(p, month))
         const currentHistory = active[active.length - 1]
-        const expected = Number(currentHistory?.rentAmount || (house.status === 'occupied' ? house.rentAmount : 0) || 0)
+        const isCurrentMonth = month === new Date().toISOString().slice(0, 7)
+        // Live house rent is authoritative for the current month; history remains for past months.
+        const expected = Number((isCurrentMonth && house.status === 'occupied' ? house.rentAmount : null) ?? currentHistory?.rentAmount ?? (house.status === 'occupied' ? house.rentAmount : 0) ?? 0)
         const payment = payments.find(p => p.month === month && p.status === 'approved')
         return {
           door: house.internalDoorNumber || house.govtDoorNumber || house.id,
