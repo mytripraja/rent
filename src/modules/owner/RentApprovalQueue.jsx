@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { listPendingApprovals, approvePayment, rejectPayment, calculateLateFee } from '../../services/rentService'
 import { getCashReceivers } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../shared/ui/ConfirmDialog'
 import { useToast } from '../shared/ui/Toast'
 import RentReceipt from '../shared/RentReceipt'
+import SwipeableApprovalCard from '../shared/ui/SwipeableApprovalCard'
 import { getPaymentProofUrl } from '../../services/cloudinaryService'
+import { triggerHaptic } from '../../utils/haptics'
 
 export default function RentApprovalQueue() {
   const { user } = useAuth()
@@ -128,25 +130,14 @@ export default function RentApprovalQueue() {
             : 0
 
           return (
-            <div key={p.id} className="relative mb-3 overflow-hidden rounded-xl bg-paper-raised border border-brass/20 shadow-sm">
-              <div className="absolute inset-0 flex justify-between items-center px-6" aria-hidden="true">
-                <div className="text-red-600 font-medium flex items-center gap-2">✕ Reject</div>
-                <div className="text-stamp-green font-medium flex items-center gap-2">Approve ✓</div>
-              </div>
-              <motion.div
-                layout
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.7}
-                onDragEnd={(e, info) => {
-                  if (info.offset.x > 140) {
-                    handleApprove(p)
-                  } else if (info.offset.x < -140) {
-                    setRejectingId(p.id)
-                  }
-                }}
-                className="bg-paper-raised relative z-10 p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between shadow-sm"
-              >
+            <SwipeableApprovalCard
+              key={p.id}
+              className="mb-3"
+              hint="← Reject | Approve →"
+              onApprove={() => handleApprove(p)}
+              onReject={() => setRejectingId(p.id)}
+            >
+              <div className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
                 <div>
                   <p className="text-sm font-medium text-ink">
                     {house?.tenantName || 'Tenant'} · House {house?.internalDoorNumber || p.houseId} · {p.month} · ₹{Number(p.amount || 0).toLocaleString('en-IN')}
@@ -165,18 +156,15 @@ export default function RentApprovalQueue() {
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => handleApprove(p)} className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg font-medium">
+                  <button onClick={() => { triggerHaptic('success'); handleApprove(p) }} className="text-xs bg-green-600 text-white px-3 py-1.5 min-h-11 rounded-lg font-medium">
                     Approve
                   </button>
-                  <button onClick={() => setRejectingId(p.id)} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-lg font-medium">
+                  <button onClick={() => { triggerHaptic('error'); setRejectingId(p.id) }} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 min-h-11 rounded-lg font-medium">
                     Reject
                   </button>
                 </div>
-              </motion.div>
-              <div className="text-center text-xs text-ink-soft py-1 absolute bottom-0 w-full z-20 pointer-events-none opacity-60 bg-paper-raised/80">
-                ← Reject | Approve →
               </div>
-            </div>
+            </SwipeableApprovalCard>
           )
         })}
       </AnimatePresence>

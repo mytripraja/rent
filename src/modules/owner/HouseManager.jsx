@@ -31,7 +31,7 @@ export default function HouseManager() {
   const [bulkMode, setBulkMode] = useState(false)
   const [selectedHouseIds, setSelectedHouseIds] = useState(new Set())
   const [shareHouses, setShareHouses] = useState(null)
-  const toast = useToast()
+  const { showToast } = useToast()
 
   useEffect(() => {
     refresh()
@@ -81,11 +81,11 @@ export default function HouseManager() {
             count++
           }
         }
-        toast.success(`Sent reminders to ${count} tenants`)
+        showToast({ message: `Sent reminders to ${count} tenants`, type: 'success' })
         setSelectedHouseIds(new Set())
         setBulkMode(false)
       } catch (err) {
-        toast.error('Failed to send reminders')
+        showToast({ message: 'Failed to send reminders', type: 'error' })
       }
     }
   }

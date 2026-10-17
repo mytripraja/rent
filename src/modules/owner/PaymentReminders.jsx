@@ -11,7 +11,7 @@ export default function PaymentReminders() {
   const [remindersStatus, setRemindersStatus] = useState({})
   const [sending, setSending] = useState(false)
   const month = new Date().toISOString().slice(0, 7)
-  const toast = useToast()
+  const { showToast } = useToast()
 
   useEffect(() => {
     loadData()
@@ -32,7 +32,7 @@ export default function PaymentReminders() {
       setRemindersStatus(statusMap)
     } catch (error) {
       console.error(error)
-      toast.error('Failed to load reminders')
+      showToast({ message: 'Failed to load reminders', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -40,15 +40,15 @@ export default function PaymentReminders() {
 
   async function handleSend(house) {
     if (!house.tenantUid) {
-      return toast.error('No tenant account linked to this house.')
+      return showToast({ message: 'No tenant account linked to this house.', type: 'error' })
     }
     setSending(true)
     try {
       await sendReminder(house, month, house.tenantUid)
       setRemindersStatus(prev => ({ ...prev, [house.id]: true }))
-      toast.success(`Reminder sent to Door ${house.internalDoorNumber || house.id}`)
+      showToast({ message: `Reminder sent to Door ${house.internalDoorNumber || house.id}`, type: 'success' })
     } catch (error) {
-      toast.error('Failed to send reminder')
+      showToast({ message: 'Failed to send reminder', type: 'error' })
     } finally {
       setSending(false)
     }
@@ -56,17 +56,17 @@ export default function PaymentReminders() {
 
   async function handleSendAll() {
     const toSend = unpaidHouses.filter(h => !remindersStatus[h.id] && h.tenantUid)
-    if (toSend.length === 0) return toast.info('No pending reminders to send.')
+    if (toSend.length === 0) return showToast({ message: 'No pending reminders to send.', type: 'info' })
     
     setSending(true)
     try {
       for (const house of toSend) {
         await sendReminder(house, month, house.tenantUid)
       }
-      toast.success(`Sent ${toSend.length} reminders`)
+      showToast({ message: `Sent ${toSend.length} reminders`, type: 'success' })
       loadData()
     } catch (error) {
-      toast.error('Failed to send all reminders')
+      showToast({ message: 'Failed to send all reminders', type: 'error' })
     } finally {
       setSending(false)
     }

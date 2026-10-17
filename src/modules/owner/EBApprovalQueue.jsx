@@ -18,7 +18,7 @@ export default function EBApprovalQueue() {
   const [collectingId, setCollectingId] = useState(null)
   const [collectorName, setCollectorName] = useState('')
   const [receivers, setReceivers] = useState([])
-  const toast = useToast()
+  const { showToast } = useToast()
 
   useEffect(() => {
     refresh()
@@ -37,7 +37,7 @@ export default function EBApprovalQueue() {
       setReceivers(rec)
     } catch (error) {
       console.error("Error loading data", error)
-      toast.error('Failed to load initial data')
+      showToast({ message: 'Failed to load initial data', type: 'error' })
     }
   }
 
@@ -47,7 +47,7 @@ export default function EBApprovalQueue() {
       setPending(await listPendingEbApprovals(hList.map(h => h.id)))
     } catch (error) {
       console.error("Error fetching approvals", error)
-      toast.error('Failed to fetch pending EB approvals')
+      showToast({ message: 'Failed to fetch pending EB approvals', type: 'error' })
     }
   }
 
@@ -60,44 +60,44 @@ export default function EBApprovalQueue() {
     
     try {
       await approveEbPayment(payment.id, { actionedBy: { uid: user.uid, name: user.name } })
-      toast.success('EB Payment approved')
+      showToast({ message: 'EB Payment approved', type: 'success' })
       refresh()
     } catch (error) {
       console.error("Error approving EB payment", error)
-      toast.error('Failed to approve EB payment')
+      showToast({ message: 'Failed to approve EB payment', type: 'error' })
     }
   }
 
   async function confirmNeighborCollection() {
-    if (!collectorName) return toast.error('Please select a collector')
+    if (!collectorName) return showToast({ message: 'Please select a collector', type: 'error' })
     
     try {
       await approveEbPayment(collectingId.id, { 
         neighborCollectedBy: collectorName, 
         actionedBy: { uid: user.uid, name: user.name } 
       })
-      toast.success('EB Payment approved')
+      showToast({ message: 'EB Payment approved', type: 'success' })
       refresh()
     } catch (error) {
       console.error("Error approving EB payment", error)
-      toast.error('Failed to approve EB payment')
+      showToast({ message: 'Failed to approve EB payment', type: 'error' })
     }
   }
 
   async function handleReject() {
     if (!reason.trim()) {
-      toast.error('Please enter a reason')
+      showToast({ message: 'Please enter a reason', type: 'error' })
       return
     }
     try {
       await rejectEbPayment(rejectingId, reason, { uid: user.uid, name: user.name })
-      toast.success('EB Payment rejected')
+      showToast({ message: 'EB Payment rejected', type: 'success' })
       setRejectingId(null)
       setReason('')
       refresh()
     } catch (error) {
       console.error("Error rejecting EB payment", error)
-      toast.error('Failed to reject EB payment')
+      showToast({ message: 'Failed to reject EB payment', type: 'error' })
     }
   }
 

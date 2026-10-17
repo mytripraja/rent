@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
@@ -24,5 +24,15 @@ export default defineConfig({
       },
     },
     chunkSizeWarningLimit: 900,
+  },
+  // Vitest reads this block. Tests run in jsdom with a small setup file that
+  // polyfills the browser APIs jsdom lacks (matchMedia, ResizeObserver).
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.js',
+    css: false,
+    restoreMocks: true,
+    include: ['src/**/*.test.{js,jsx}'],
   },
 })

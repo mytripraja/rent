@@ -10,7 +10,7 @@ function csvCell(value) {
 }
 
 export default function DataBackup() {
-  const toast = useToast()
+  const { showToast } = useToast()
   const [lastExport, setLastExport] = useState(localStorage.getItem('last_backup_date') || 'Never')
 
   async function handleExportJSON() {
@@ -34,10 +34,10 @@ export default function DataBackup() {
       
       localStorage.setItem('last_backup_date', dateStr)
       setLastExport(dateStr)
-      toast.success('Backup exported successfully')
+      showToast({ message: 'Backup exported successfully', type: 'success' })
     } catch (e) {
       console.error(e)
-      toast.error('Export failed')
+      showToast({ message: 'Export failed', type: 'error' })
     }
   }
 
@@ -59,10 +59,10 @@ export default function DataBackup() {
       a.click()
       URL.revokeObjectURL(url)
       
-      toast.success('CSV exported successfully')
+      showToast({ message: 'CSV exported successfully', type: 'success' })
     } catch (e) {
       console.error(e)
-      toast.error('Export failed')
+      showToast({ message: 'Export failed', type: 'error' })
     }
   }
 

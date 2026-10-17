@@ -27,7 +27,7 @@ export default function MonthlyReport() {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
   const [loading, setLoading] = useState(true)
   const [report, setReport] = useState(null)
-  const toast = useToast()
+  const { showToast } = useToast()
 
   useEffect(() => { loadReport() }, [month])
 
@@ -89,7 +89,7 @@ export default function MonthlyReport() {
       })
     } catch (err) {
       console.error(err)
-      toast.error('Could not generate the report. Please try again.')
+      showToast({ message: 'Could not generate the report. Please try again.', type: 'error' })
     } finally { setLoading(false) }
   }
 

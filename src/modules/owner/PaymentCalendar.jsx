@@ -14,7 +14,7 @@ const STATUS = {
 }
 
 export default function PaymentCalendar() {
-  const toast = useToast()
+  const { showToast } = useToast()
   const [loading, setLoading] = useState(true)
   const [houses, setHouses] = useState([])
   const [rents, setRents] = useState([])
@@ -33,7 +33,7 @@ export default function PaymentCalendar() {
       setRents(await listRentPaymentsForHouses(h.map(x => x.id)))
     } catch (error) {
       console.error(error)
-      toast.error('Failed to load calendar data')
+      showToast({ message: 'Failed to load calendar data', type: 'error' })
     } finally { setLoading(false) }
   }
 

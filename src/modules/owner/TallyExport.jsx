@@ -6,7 +6,7 @@ import { useToast } from '../shared/ui/Toast'
 
 export default function TallyExport() {
   const [loading, setLoading] = useState(false)
-  const toast = useToast()
+  const { showToast } = useToast()
 
   async function fetchRentData() {
     setLoading(true)
@@ -18,7 +18,7 @@ export default function TallyExport() {
         .sort((a, b) => String(b.month || '').localeCompare(String(a.month || '')))
     } catch (error) {
       console.error(error)
-      toast.error('Failed to fetch data')
+      showToast({ message: 'Failed to fetch data', type: 'error' })
       return []
     } finally {
       setLoading(false)
@@ -74,7 +74,7 @@ export default function TallyExport() {
 
   async function handleDownloadXML() {
     const data = await fetchRentData()
-    if (!data.length) return toast.info('No approved payments found.')
+    if (!data.length) return showToast({ message: 'No approved payments found.', type: 'info' })
     
     const xml = generateTallyXML(data)
     const blob = new Blob([xml], { type: 'text/xml' })
@@ -84,7 +84,7 @@ export default function TallyExport() {
     a.download = `tally-receipts-${new Date().toISOString().split('T')[0]}.xml`
     a.click()
     URL.revokeObjectURL(url)
-    toast.success('Tally XML downloaded successfully')
+    showToast({ message: 'Tally XML downloaded successfully', type: 'success' })
   }
 
   return (

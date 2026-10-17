@@ -20,7 +20,7 @@ const CATEGORIES = [
 
 export default function ExpenseTracker() {
   const { user } = useAuth()
-  const toast = useToast()
+  const { showToast } = useToast()
   const [expenses, setExpenses] = useState([])
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
   const [total, setTotal] = useState(0)
@@ -48,14 +48,14 @@ export default function ExpenseTracker() {
       setExpenses(data)
       setTotal(data.reduce((sum, exp) => sum + exp.amount, 0))
     } catch (error) {
-      toast.error('Failed to load expenses')
+      showToast({ message: 'Failed to load expenses', type: 'error' })
     }
   }
 
   async function handleAdd(e) {
     e.preventDefault()
     if (!description || !amount || !paidBy) {
-      return toast.error('Please fill all required fields')
+      return showToast({ message: 'Please fill all required fields', type: 'error' })
     }
     
     setIsSubmitting(true)
@@ -69,13 +69,13 @@ export default function ExpenseTracker() {
         receiptFile: file,
         createdBy: { uid: user.uid, name: user.name }
       })
-      toast.success('Expense added')
+      showToast({ message: 'Expense added', type: 'success' })
       setIsAdding(false)
       resetForm()
       load()
     } catch (error) {
       console.error(error)
-      toast.error('Failed to add expense')
+      showToast({ message: 'Failed to add expense', type: 'error' })
     } finally {
       setIsSubmitting(false)
     }
@@ -93,11 +93,11 @@ export default function ExpenseTracker() {
   async function handleDelete() {
     try {
       await deleteExpense(deletingId)
-      toast.success('Expense deleted')
+      showToast({ message: 'Expense deleted', type: 'success' })
       setDeletingId(null)
       load()
     } catch (error) {
-      toast.error('Failed to delete')
+      showToast({ message: 'Failed to delete', type: 'error' })
     }
   }
 

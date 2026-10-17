@@ -6,7 +6,7 @@ import { useToast } from '../shared/ui/Toast'
 
 export default function GoogleSheetsExport() {
   const [loading, setLoading] = useState(false)
-  const toast = useToast()
+  const { showToast } = useToast()
 
   async function fetchRentData() {
     setLoading(true)
@@ -34,7 +34,7 @@ export default function GoogleSheetsExport() {
       return data
     } catch (error) {
       console.error(error)
-      toast.error('Failed to fetch data')
+      showToast({ message: 'Failed to fetch data', type: 'error' })
       return []
     } finally {
       setLoading(false)
@@ -82,7 +82,7 @@ export default function GoogleSheetsExport() {
     a.download = `rent-payments-${new Date().toISOString().split('T')[0]}.csv`
     a.click()
     URL.revokeObjectURL(url)
-    toast.success('CSV downloaded successfully')
+    showToast({ message: 'CSV downloaded successfully', type: 'success' })
   }
 
   async function handleCopyTSV() {
@@ -91,9 +91,9 @@ export default function GoogleSheetsExport() {
     const tsv = generateTSV(data)
     try {
       await navigator.clipboard.writeText(tsv)
-      toast.success('Copied! You can now paste directly into Google Sheets.')
+      showToast({ message: 'Copied! You can now paste directly into Google Sheets.', type: 'success' })
     } catch (err) {
-      toast.error('Failed to copy to clipboard')
+      showToast({ message: 'Failed to copy to clipboard', type: 'error' })
     }
   }
 

@@ -23,7 +23,7 @@ export default function EmailReport() {
   const [html, setHtml] = useState('')
   const [summaryText, setSummaryText] = useState('')
   const [loading, setLoading] = useState(false)
-  const toast = useToast()
+  const { showToast } = useToast()
 
   useEffect(() => {
     generateReport()
@@ -99,7 +99,7 @@ Open Complaints: ${openComplaints.length}`
       setSummaryText(text)
     } catch (e) {
       console.error(e)
-      toast.error('Failed to generate report')
+      showToast({ message: 'Failed to generate report', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -107,7 +107,7 @@ Open Complaints: ${openComplaints.length}`
 
   function handleCopy() {
     navigator.clipboard.writeText(html)
-    toast.success('HTML copied to clipboard')
+    showToast({ message: 'HTML copied to clipboard', type: 'success' })
   }
 
   function handleSend() {

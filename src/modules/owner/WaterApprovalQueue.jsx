@@ -18,7 +18,7 @@ export default function WaterApprovalQueue() {
   const [collectingId, setCollectingId] = useState(null)
   const [collectorName, setCollectorName] = useState('')
   const [receivers, setReceivers] = useState([])
-  const toast = useToast()
+  const { showToast } = useToast()
 
   useEffect(() => {
     refresh()
@@ -37,7 +37,7 @@ export default function WaterApprovalQueue() {
       setReceivers(rec)
     } catch (error) {
       console.error("Error loading data", error)
-      toast.error('Failed to load initial data')
+      showToast({ message: 'Failed to load initial data', type: 'error' })
     }
   }
 
@@ -47,7 +47,7 @@ export default function WaterApprovalQueue() {
       setPending(await listPendingWaterApprovals(hList.map(h => h.id)))
     } catch (error) {
       console.error("Error fetching approvals", error)
-      toast.error('Failed to fetch pending Water approvals')
+      showToast({ message: 'Failed to fetch pending Water approvals', type: 'error' })
     }
   }
 
@@ -60,44 +60,44 @@ export default function WaterApprovalQueue() {
     
     try {
       await approveWaterPayment(payment.id, { actionedBy: { uid: user.uid, name: user.name } })
-      toast.success('Water Payment approved')
+      showToast({ message: 'Water Payment approved', type: 'success' })
       refresh()
     } catch (error) {
       console.error("Error approving Water payment", error)
-      toast.error('Failed to approve Water payment')
+      showToast({ message: 'Failed to approve Water payment', type: 'error' })
     }
   }
 
   async function confirmNeighborCollection() {
-    if (!collectorName) return toast.error('Please select a collector')
+    if (!collectorName) return showToast({ message: 'Please select a collector', type: 'error' })
     
     try {
       await approveWaterPayment(collectingId.id, { 
         neighborCollectedBy: collectorName, 
         actionedBy: { uid: user.uid, name: user.name } 
       })
-      toast.success('Water Payment approved')
+      showToast({ message: 'Water Payment approved', type: 'success' })
       refresh()
     } catch (error) {
       console.error("Error approving Water payment", error)
-      toast.error('Failed to approve Water payment')
+      showToast({ message: 'Failed to approve Water payment', type: 'error' })
     }
   }
 
   async function handleReject() {
     if (!reason.trim()) {
-      toast.error('Please enter a reason')
+      showToast({ message: 'Please enter a reason', type: 'error' })
       return
     }
     try {
       await rejectWaterPayment(rejectingId, reason, { uid: user.uid, name: user.name })
-      toast.success('Water Payment rejected')
+      showToast({ message: 'Water Payment rejected', type: 'success' })
       setRejectingId(null)
       setReason('')
       refresh()
     } catch (error) {
       console.error("Error rejecting Water payment", error)
-      toast.error('Failed to reject Water payment')
+      showToast({ message: 'Failed to reject Water payment', type: 'error' })
     }
   }
 

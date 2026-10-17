@@ -66,7 +66,7 @@ function Empty({ text }) { return <div className="rounded-2xl border border-dash
 
 export default function FutureOperationsHub() {
   const { user } = useAuth()
-  const toast = useToast()
+  const { showToast } = useToast()
   const [tab, setTab] = useState('accounting')
   const [propertyId, setPropertyId] = useState(localStorage.getItem('rm_active_property') || 'default')
   const [properties, setProperties] = useState([])
@@ -103,7 +103,7 @@ export default function FutureOperationsHub() {
       else setRows([])
     } catch (e) {
       console.error(e)
-      toast.error(e.message || 'Could not load module')
+      showToast({ message: e.message || 'Could not load module', type: 'error' })
     } finally { setLoading(false) }
   }
 
@@ -161,13 +161,13 @@ export default function FutureOperationsHub() {
       }
       setModal(null)
       await load()
-      toast.success('Saved successfully')
-    } catch (e) { toast.error(e.message || 'Save failed') }
+      showToast({ message: 'Saved successfully', type: 'success' })
+    } catch (e) { showToast({ message: e.message || 'Save failed', type: 'error' }) }
   }
 
   async function remove(collectionName, id) {
     if (!window.confirm('Delete this record?')) return
-    try { await deleteRecord(collectionName, id); await logActivity({ action: 'deleted', entityType: collectionName, entityId: id, performedBy: user?.uid || null, performedByName: user?.name || 'Owner', propertyId, details: `Deleted ${collectionName} record` }).catch(() => {}); await load(); toast.success('Deleted') } catch (e) { toast.error(e.message || 'Delete failed') }
+    try { await deleteRecord(collectionName, id); await logActivity({ action: 'deleted', entityType: collectionName, entityId: id, performedBy: user?.uid || null, performedByName: user?.name || 'Owner', propertyId, details: `Deleted ${collectionName} record` }).catch(() => {}); await load(); showToast({ message: 'Deleted', type: 'success' }) } catch (e) { showToast({ message: e.message || 'Delete failed', type: 'error' }) }
   }
 
   const addButton = (label, type) => <button onClick={() => setModal(type)} className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white"><Plus size={16}/>{label}</button>
