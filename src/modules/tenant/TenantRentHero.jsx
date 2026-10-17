@@ -4,6 +4,8 @@ import { RotateCw } from 'lucide-react'
 import { hapticLight } from '../../utils/haptics'
 import { getTenantHouseProfile } from '../../services/houseService'
 import { getTenantRentStatus, currentMonthStr } from '../../services/rentService'
+import { listEbBillCycles } from '../../services/ebBillService'
+import { listWaterBillCycles } from '../../services/waterBillService'
 import { useAuth } from '../../context/AuthContext'
 import ApprovalStatusBadge from '../shared/ApprovalStatusBadge'
 
@@ -12,6 +14,7 @@ export default function TenantRentHero({ onPayNow, canSubmit = true, showDetails
   const [house, setHouse] = useState(null)
   const [status, setStatus] = useState('not_paid')
   const [flipped, setFlipped] = useState(false)
+  const [billShares, setBillShares] = useState({ eb: null, water: null })
   const reduceMotion = useReducedMotion()
 
   useEffect(() => {
@@ -23,6 +26,10 @@ export default function TenantRentHero({ onPayNow, canSubmit = true, showDetails
     setHouse(h)
     const result = await getTenantRentStatus(currentMonthStr())
     setStatus(result.status || 'not_paid')
+    // Use saved bill-cycle shares only; never infer or estimate missing charges.
+    const [ebResult, waterResult] = await Promise.allSettled([listEbBillCycles(h.id), listWaterBillCycles(h.id)])
+    const findShare = (rows) => (rows.status === 'fulfilled' ? rows.value : []).map(b => ({ bill: b, share: (b.shares || []).find(x => x.houseId === h.id) })).find(x => x.share) || null
+    setBillShares({ eb: findShare(ebResult), water: findShare(waterResult) })
   }
 
   if (!house) return <div className="rm-card p-5 animate-pulse"><div className="h-3 w-28 bg-ink/10 rounded"/><div className="h-9 w-36 bg-ink/10 rounded mt-3"/><div className="h-8 w-24 bg-ink/10 rounded mt-3"/></div>
@@ -56,9 +63,11 @@ export default function TenantRentHero({ onPayNow, canSubmit = true, showDetails
         <section className="tenant-rent-face tenant-rent-back absolute inset-0 min-h-52 rounded-2xl bg-cover text-paper p-5 sm:p-6 shadow-lg overflow-hidden" style={{ transform: 'rotateY(180deg)', backfaceVisibility: 'hidden' }} aria-label="Rent breakdown" aria-hidden={!flipped}>
           <p className="font-mono-tab text-xs text-brass-light uppercase tracking-wide">{monthLabel} · Rent breakdown</p>
           <h3 className="font-display text-2xl font-extrabold mt-2">₹{rentAmount.toLocaleString('en-IN')}</h3>
-          <div className="mt-4 space-y-2 text-sm">
+          <div className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between gap-3 border-b border-white/10 pb-2"><span className="text-white/75">Base monthly rent</span><strong>₹{rentAmount.toLocaleString('en-IN')}</strong></div>
-            <p className="text-xs leading-relaxed text-white/65">EB and water bill shares are shown separately when they are available in your bill records. This card does not estimate missing charges.</p>
+            <div className="flex justify-between gap-3 border-b border-white/10 pb-2"><span className="text-white/75">EB share {billShares.eb?.bill?.cycleLabel ? `· ${billShares.eb.bill.cycleLabel}` : ''}</span><strong>{billShares.eb ? `₹${Number(billShares.eb.share.shareAmount || 0).toLocaleString('en-IN')}` : 'No bill record'}</strong></div>
+            <div className="flex justify-between gap-3 border-b border-white/10 pb-2"><span className="text-white/75">Water share {billShares.water?.bill?.cycleLabel ? `· ${billShares.water.bill.cycleLabel}` : ''}</span><strong>{billShares.water ? `₹${Number(billShares.water.share.shareAmount || 0).toLocaleString('en-IN')}` : 'No bill record'}</strong></div>
+            <p className="text-[11px] leading-relaxed text-white/65">Bill shares are from the latest saved bill-cycle records and are not automatically added to rent due.</p>
           </div>
           <button type="button" onClick={() => { hapticLight(); setFlipped(false) }} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass-light"><RotateCw size={14}/> Back to rent status</button>
         </section>

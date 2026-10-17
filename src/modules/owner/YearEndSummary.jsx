@@ -10,7 +10,7 @@ export default function YearEndSummary() {
   const [year, setYear] = useState(currentYear)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const toast = useToast()
+  const { showToast } = useToast()
 
   useEffect(() => {
     let active = true
@@ -19,7 +19,7 @@ export default function YearEndSummary() {
       if (active) setData(result)
     }).catch(error => {
       console.error(error)
-      if (active) toast.error('Could not load the annual summary. Please try again.')
+      if (active) showToast({ message: 'Could not load the annual summary. Please try again.', type: 'error' })
     }).finally(() => active && setLoading(false))
     return () => { active = false }
   }, [year])

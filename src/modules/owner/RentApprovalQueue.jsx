@@ -21,7 +21,7 @@ export default function RentApprovalQueue() {
   const [collectorName, setCollectorName] = useState('')
   const [receivers, setReceivers] = useState([])
   const [receiptPayment, setReceiptPayment] = useState(null)
-  const toast = useToast()
+  const { showToast } = useToast()
 
   const [appConfig, setAppConfig] = useState(null)
 
@@ -46,7 +46,7 @@ export default function RentApprovalQueue() {
       configPromise.then(config => { setReceivers(config.cashReceivers || []); setAppConfig(config) }).catch(() => {})
     } catch (error) {
       console.error('Error fetching approvals', error)
-      toast.error('Failed to fetch pending approvals')
+      showToast({ message: 'Failed to fetch pending approvals', type: 'error' })
       setApprovalError(error.message || 'Could not load rent approvals.')
     } finally {
       setLoadingApprovals(false)
@@ -62,47 +62,47 @@ export default function RentApprovalQueue() {
     
     try {
       await approvePayment(payment.id, { actionedBy: { uid: user.uid, name: user.name } })
-      toast.success('Payment approved')
+      showToast({ message: 'Payment approved', type: 'success' })
       setReceiptPayment({ ...payment, actionedBy: { uid: user.uid, name: user.name }, status: 'approved' })
       refresh()
     } catch (error) {
       console.error("Error approving payment", error)
-      toast.error('Failed to approve payment')
+      showToast({ message: 'Failed to approve payment', type: 'error' })
     }
   }
 
   async function confirmNeighborCollection() {
-    if (!collectorName) return toast.error('Please select a collector')
+    if (!collectorName) return showToast({ message: 'Please select a collector', type: 'error' })
     
     try {
       await approvePayment(collectingId.id, { 
         neighborCollectedBy: collectorName, 
         actionedBy: { uid: user.uid, name: user.name } 
       })
-      toast.success('Payment approved')
+      showToast({ message: 'Payment approved', type: 'success' })
       setReceiptPayment({ ...collectingId, neighborCollectedBy: collectorName, actionedBy: { uid: user.uid, name: user.name }, status: 'approved' })
       setCollectingId(null)
       refresh()
     } catch (error) {
       console.error("Error approving payment", error)
-      toast.error('Failed to approve payment')
+      showToast({ message: 'Failed to approve payment', type: 'error' })
     }
   }
 
   async function handleReject() {
     if (!reason.trim()) {
-      toast.error('Please enter a reason')
+      showToast({ message: 'Please enter a reason', type: 'error' })
       return
     }
     try {
       await rejectPayment(rejectingId, reason, { uid: user.uid, name: user.name })
-      toast.success('Payment rejected')
+      showToast({ message: 'Payment rejected', type: 'success' })
       setRejectingId(null)
       setReason('')
       refresh()
     } catch (error) {
       console.error("Error rejecting payment", error)
-      toast.error('Failed to reject payment')
+      showToast({ message: 'Failed to reject payment', type: 'error' })
     }
   }
 
@@ -139,9 +139,9 @@ export default function RentApprovalQueue() {
                 dragConstraints={{ left: 0, right: 0 }}
                 dragElastic={0.7}
                 onDragEnd={(e, info) => {
-                  if (info.offset.x > 100) {
+                  if (info.offset.x > 140) {
                     handleApprove(p)
-                  } else if (info.offset.x < -100) {
+                  } else if (info.offset.x < -140) {
                     setRejectingId(p.id)
                   }
                 }}

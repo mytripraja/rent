@@ -3,6 +3,7 @@ import { listAllRequests, updateRequestStatus, resolveRequest } from '../../serv
 import { listHouses } from '../../services/houseService'
 import { motion } from 'framer-motion'
 import { Wrench, ChevronDown, ChevronUp, CheckCircle, Clock } from 'lucide-react'
+import { hapticLight } from '../../utils/haptics'
 
 export default function MaintenanceManager() {
   const [requests, setRequests] = useState([])
@@ -41,7 +42,9 @@ export default function MaintenanceManager() {
 
       <div className="space-y-4">
         {filtered.map(req => (
-          <motion.div layout key={req.id} className="bg-paper-raised p-4 rounded-lg shadow-sm border border-ink/5">
+          <div key={req.id} className="relative overflow-hidden rounded-lg">
+            <div className="absolute inset-y-0 right-0 flex items-center px-4 bg-emerald-100 text-emerald-800 text-xs font-semibold" aria-hidden="true">→ Start work</div>
+            <motion.div layout drag={req.status === 'open' ? 'x' : false} dragConstraints={{ left: 0, right: 0 }} dragElastic={0.15} onDragEnd={async (_event, info) => { if (req.status === 'open' && info.offset.x > 140) { hapticLight(); await updateRequestStatus(req.id, { status: 'in_progress' }); await load() } }} key={req.id} className="relative z-10 bg-paper-raised p-4 rounded-lg shadow-sm border border-ink/5">
             <div 
               className="flex justify-between items-center cursor-pointer"
               onClick={() => setExpanded(expanded === req.id ? null : req.id)}
@@ -104,6 +107,7 @@ export default function MaintenanceManager() {
               </motion.div>
             )}
           </motion.div>
+          </div>
         ))}
         
         {filtered.length === 0 && (

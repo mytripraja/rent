@@ -47,8 +47,9 @@ export default function HouseShareModal({ houses, onClose }) {
   }
   async function copy() { await navigator.clipboard.writeText(text); showToast({ message: 'House details copied', type: 'success' }) }
 
-  return <div className="fixed inset-0 z-[90] bg-black/50 p-3 sm:p-6 grid place-items-center" role="dialog" aria-modal="true">
-    <div className="w-full max-w-2xl max-h-[94vh] overflow-y-auto bg-paper-raised rounded-2xl shadow-2xl border border-brass/20 p-5">
+  return <div className="fixed inset-0 z-[90] bg-black/50 p-0 sm:p-6 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+    <div className="w-full max-w-2xl max-h-[92dvh] overflow-y-auto bg-paper-raised rounded-t-2xl sm:rounded-2xl shadow-2xl border border-brass/20 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-5">
+      <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300 sm:hidden" aria-hidden="true" />
       <div className="flex items-start justify-between gap-3"><div><h2 className="font-display text-xl font-bold text-ink">Share house details</h2><p className="text-xs text-ink-soft mt-1">Choose exactly which information can leave Rental Manager. Sensitive tenant details are off by default.</p></div><button onClick={onClose} className="w-9 h-9 rounded-xl grid place-items-center hover:bg-paper" aria-label="Close"><X size={18}/></button></div>
       <div className="mt-4 grid sm:grid-cols-2 gap-2">
         {[

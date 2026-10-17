@@ -184,8 +184,8 @@ export default function UserSettingsModal({ open, onClose }) {
   const googleLink = createGoogleCalendarLink({ title: eventTitle, date: eventDate, time: eventTime, allDay: false })
   const dialogText = 'Rental Manager accessibility and voice settings.'
 
-  return <div className="fixed inset-0 z-[120] bg-black/60 p-0 sm:p-6 grid place-items-center" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-describedby="settings-description">
-    <div id="settings-dialog" className="w-full max-w-4xl h-[100dvh] sm:h-auto sm:max-h-[94dvh] overflow-hidden rm-card rounded-none sm:rounded-2xl p-0 flex flex-col">
+  return <div className="fixed inset-0 z-[120] bg-black/60 p-0 sm:p-6 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-describedby="settings-description">
+    <div id="settings-dialog" className="w-full max-w-4xl h-[100dvh] sm:h-auto sm:max-h-[94dvh] overflow-hidden rm-card rounded-none sm:rounded-2xl p-0 pb-[env(safe-area-inset-bottom)] flex flex-col">
       <div className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6 bg-paper-raised/95 backdrop-blur-md border-b border-[var(--rm-border)]"><div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3"><span className="rm-icon-button" aria-hidden="true"><Settings size={19}/></span><div><p className="rm-kicker">Preferences & accessibility</p><h2 id="settings-title" className="font-display text-2xl font-extrabold">Settings</h2><p id="settings-description" className="text-sm text-ink-soft mt-1">{dialogText} Choose visual, reading and voice controls without needing a mouse.</p></div></div>
         <button onClick={onClose} className="rm-icon-button" aria-label="Close settings"><X size={19}/></button>

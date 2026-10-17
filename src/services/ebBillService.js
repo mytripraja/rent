@@ -4,6 +4,8 @@ import { getActivePropertyId } from './configService'
 import { uploadPrivate } from './cloudinaryService'
 import { listHouses } from './houseService'
 import { createBulkNotifications } from './notificationService'
+import { calculateEbSplit } from '../utils/billSplit'
+export { calculateEbSplit } from '../utils/billSplit'
 
 const billsRef = collection(db, 'ebBills')
 
@@ -21,48 +23,6 @@ const billsRef = collection(db, 'ebBills')
  * @param {number} cycleMonths - normally 2
  * @param {Array} houses - from listHouses(), each with { id, status, hasOwnEbMeter, ebShareOverrideMonths }
  */
-export function calculateEbSplit(totalAmount, cycleMonths, houses) {
-  const eligible = houses.filter((h) => h.status === 'occupied' && !h.hasOwnEbMeter)
-  const n = eligible.length
-  if (n === 0) return []
-
-  const baseShare = totalAmount / n
-
-  // Sum of "missing" amount from partial-cycle houses
-  let shortfall = 0
-  const partial = []
-  const fullShareHouses = []
-
-  eligible.forEach((h) => {
-    const monthsOccupied = h.ebShareOverrideMonths ?? cycleMonths
-    if (monthsOccupied < cycleMonths) {
-      const proratedShare = baseShare * (monthsOccupied / cycleMonths)
-      shortfall += baseShare - proratedShare
-      partial.push({ houseId: h.id, internalDoorNumber: h.internalDoorNumber, monthsOccupied, shareAmount: round2(proratedShare) })
-    } else {
-      fullShareHouses.push(h)
-    }
-  })
-
-  // Redistribute shortfall across full-cycle houses only
-  const redistributionPerHouse = fullShareHouses.length > 0 ? shortfall / fullShareHouses.length : 0
-
-  const fullShares = fullShareHouses.map((h) => ({
-    houseId: h.id,
-    internalDoorNumber: h.internalDoorNumber,
-    monthsOccupied: cycleMonths,
-    shareAmount: round2(baseShare + redistributionPerHouse),
-  }))
-
-  return [...fullShares, ...partial].sort((a, b) =>
-    String(a.internalDoorNumber).localeCompare(String(b.internalDoorNumber))
-  )
-}
-
-function round2(n) {
-  return Math.round(n * 100) / 100
-}
-
 export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId, previousMeterReading, currentMeterReading, meterReadingDate, meterReadingTime }) {
   const houses = await listHouses()
   const shares = calculateEbSplit(totalAmount, cycleMonths, houses)

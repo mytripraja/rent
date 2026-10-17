@@ -68,8 +68,9 @@ Details / விவரங்கள்: ${notice.shareUrl}`
     await downloadFile(file)
   }
 
-  return <div className="fixed inset-0 z-[80] bg-black/50 p-3 sm:p-6 grid place-items-center" role="dialog" aria-modal="true" aria-labelledby="share-announcement-title">
-    <div className="w-full max-w-xl max-h-[92vh] overflow-auto bg-paper-raised rounded-2xl shadow-2xl border border-brass/20 p-5">
+  return <div className="fixed inset-0 z-[80] bg-black/50 p-0 sm:p-6 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="share-announcement-title">
+    <div className="w-full max-w-xl max-h-[92dvh] overflow-auto bg-paper-raised rounded-t-2xl sm:rounded-2xl shadow-2xl border border-brass/20 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-5">
+      <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300 sm:hidden" aria-hidden="true" />
       <div className="flex items-start justify-between gap-3">
         <div><h2 id="share-announcement-title" className="font-semibold text-ink">Share announcement</h2><p className="text-xs text-ink-soft mt-1">English + Tamil are included. Edit Tamil before posting; image/PDF sharing uses the actual file when your device supports file sharing.</p></div>
         <button type="button" onClick={onClose} className="w-9 h-9 rounded-xl grid place-items-center hover:bg-paper" aria-label="Close"><X size={18}/></button>

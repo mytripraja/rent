@@ -4,48 +4,10 @@ import { getActivePropertyId } from './configService'
 import { uploadPrivate } from './cloudinaryService'
 import { listHouses } from './houseService'
 import { createBulkNotifications } from './notificationService'
+import { calculateWaterSplit } from '../utils/billSplit'
+export { calculateWaterSplit } from '../utils/billSplit'
 
 const billsRef = collection(db, 'waterBills')
-
-export function calculateWaterSplit(totalAmount, cycleMonths, houses) {
-  const eligible = houses.filter((h) => h.status === 'occupied')
-  const n = eligible.length
-  if (n === 0) return []
-
-  const baseShare = totalAmount / n
-
-  let shortfall = 0
-  const partial = []
-  const fullShareHouses = []
-
-  eligible.forEach((h) => {
-    const monthsOccupied = h.waterShareOverrideMonths ?? h.ebShareOverrideMonths ?? cycleMonths
-    if (monthsOccupied < cycleMonths) {
-      const proratedShare = baseShare * (monthsOccupied / cycleMonths)
-      shortfall += baseShare - proratedShare
-      partial.push({ houseId: h.id, internalDoorNumber: h.internalDoorNumber, monthsOccupied, shareAmount: round2(proratedShare) })
-    } else {
-      fullShareHouses.push(h)
-    }
-  })
-
-  const redistributionPerHouse = fullShareHouses.length > 0 ? shortfall / fullShareHouses.length : 0
-
-  const fullShares = fullShareHouses.map((h) => ({
-    houseId: h.id,
-    internalDoorNumber: h.internalDoorNumber,
-    monthsOccupied: cycleMonths,
-    shareAmount: round2(baseShare + redistributionPerHouse),
-  }))
-
-  return [...fullShares, ...partial].sort((a, b) =>
-    String(a.internalDoorNumber).localeCompare(String(b.internalDoorNumber))
-  )
-}
-
-function round2(n) {
-  return Math.round(n * 100) / 100
-}
 
 export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId }) {
   const houses = await listHouses()
