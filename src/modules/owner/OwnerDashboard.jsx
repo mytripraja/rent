@@ -155,7 +155,7 @@ export default function OwnerDashboard() {
                           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[13px] transition ${active ? 'bg-brand/10 text-brand font-bold' : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
                           <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${active ? 'bg-brand text-white' : 'bg-paper text-ink-soft'}`}><t.icon size={16} /></span>
                           <span className="truncate">{t.label}</span>
-                          {t.id === 'approvals' && <span className="ml-auto w-2 h-2 rounded-full bg-stamp-amber" aria-label="Pending approvals" />}
+                          
                         </button>
                       )
                     })}
