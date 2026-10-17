@@ -289,3 +289,13 @@ label { font-weight: 500; }
   }
   .rm-notification-panel > div:last-child { max-height: calc(100dvh - 9rem); }
 }
+
+
+/* Mobile ergonomics and lightweight 3D rent card */
+html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.tenant-rent-perspective { isolation: isolate; }
+.tenant-rent-flip { transform: translateZ(0); }
+.tenant-rent-face { min-height: 13rem; }
+.tenant-rent-back { background-image: linear-gradient(135deg, #172033 0%, #24344b 60%, #172033 100%); }
+.tenant-rent-glare { opacity: .45; background: radial-gradient(circle at 85% 10%, rgba(242,200,120,.20), transparent 35%); }
+@media (prefers-reduced-motion: reduce) { .tenant-rent-flip { will-change: auto !important; } }

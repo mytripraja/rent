@@ -131,6 +131,7 @@ export default function OwnerDashboard() {
           <div className="md:hidden flex items-center gap-1 shrink-0">
             <NotificationBell userId={user?.uid} darkHeader />
             <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={18}/></button>
+            <button type="button" onClick={logout} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Log out"><LogOut size={18}/></button>
           </div>
         </div>
       </header>
