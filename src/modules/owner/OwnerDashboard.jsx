@@ -88,6 +88,25 @@ export default function OwnerDashboard() {
     }
   }, [])
 
+  // Warm the most-used lazily-loaded screens once the dashboard is idle so
+  // moving between sections feels instant instead of showing a loader.
+  useEffect(() => {
+    const warm = () => {
+      import('./OwnerHome')
+      import('./HouseManager')
+      import('./TenantsSection')
+      import('./RentApprovalQueue')
+      import('./PaymentCalendar')
+      import('./MoreMenu')
+    }
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(warm, { timeout: 3000 })
+      return () => window.cancelIdleCallback?.(id)
+    }
+    const timer = setTimeout(warm, 1500)
+    return () => clearTimeout(timer)
+  }, [])
+
   function go(t) {
     const target = TABS.find(x => x.id === t)?.route || 'home'
     navigate(`/owner/${target}`)

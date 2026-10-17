@@ -12,6 +12,8 @@ import { listActiveNoticesForHouses } from '../../services/noticeService'
 import { listAllComplaints } from '../../services/complaintService'
 import { useAuth } from '../../context/AuthContext'
 import { Skeleton } from '../shared/ui/Skeleton'
+import Tilt3D from '../shared/ui/Tilt3D'
+import AnimatedCounter from '../shared/ui/AnimatedCounter'
 
 export default function OwnerHome({ onNavigate }) {
   const { user } = useAuth()
@@ -66,9 +68,9 @@ export default function OwnerHome({ onNavigate }) {
 
   const cards = [
     { id: 'houses', label: 'Occupied homes', value: `${stats.occupied}/${stats.total}`, icon: Home, tab: 'houses', sub: stats.total ? `${Math.round(stats.occupied / stats.total * 100)}% occupied` : 'No houses' },
-    { id: 'rent', label: `Rent collected · ${monthLabel()}`, value: `₹${stats.collected.toLocaleString('en-IN')}`, icon: WalletCards, tab: 'approvals', sub: stats.pendingHouses ? `${stats.pendingHouses} house${stats.pendingHouses === 1 ? '' : 's'} need attention` : 'All current rent clear' },
-    { id: 'pending', label: 'Rent follow-ups', value: stats.pendingHouses, icon: AlertCircle, tab: 'tenants', urgent: stats.pendingHouses > 0, sub: stats.pendingHouses ? 'Open payment items' : 'All clear' },
-    { id: 'complaints', label: 'Open issues', value: openComplaints, icon: Wrench, tab: 'complaints', urgent: openComplaints > 0, sub: openComplaints ? 'Needs your attention' : 'No open issues' },
+    { id: 'rent', label: `Rent collected · ${monthLabel()}`, value: `₹${stats.collected.toLocaleString('en-IN')}`, count: stats.collected, prefix: '₹', icon: WalletCards, tab: 'approvals', sub: stats.pendingHouses ? `${stats.pendingHouses} house${stats.pendingHouses === 1 ? '' : 's'} need attention` : 'All current rent clear' },
+    { id: 'pending', label: 'Rent follow-ups', value: stats.pendingHouses, count: stats.pendingHouses, icon: AlertCircle, tab: 'tenants', urgent: stats.pendingHouses > 0, sub: stats.pendingHouses ? 'Open payment items' : 'All clear' },
+    { id: 'complaints', label: 'Open issues', value: openComplaints, count: openComplaints, icon: Wrench, tab: 'complaints', urgent: openComplaints > 0, sub: openComplaints ? 'Needs your attention' : 'No open issues' },
   ]
 
   const actions = [
@@ -91,6 +93,7 @@ export default function OwnerHome({ onNavigate }) {
       <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[26px] sm:rounded-[30px] bg-cover text-white p-5 sm:p-7 lg:p-8 shadow-[0_20px_55px_rgba(23,32,51,.16)]">
         <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-brand/30 blur-3xl" />
         <div className="absolute -left-24 -bottom-32 h-72 w-72 rounded-full bg-amber-300/10 blur-3xl" />
+        <div className="rm-aurora pointer-events-none absolute inset-0 opacity-50 mix-blend-soft-light" aria-hidden="true" />
         <div className="relative flex flex-col sm:flex-row sm:items-end justify-between gap-5">
           <div>
             <div className="flex items-center gap-2 text-white/65 text-[10px] uppercase tracking-[.18em] font-bold"><Sparkles size={13}/> Property overview</div>
@@ -98,7 +101,7 @@ export default function OwnerHome({ onNavigate }) {
             <h2 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight mt-1">{greeting()}, {user?.name?.split(' ')[0]}</h2>
             <p className="text-sm text-white/70 mt-2 max-w-xl">Rent, residents and property work at a glance.</p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/10 backdrop-blur-md px-4 py-3 min-w-[180px]">
+          <div className="rm-3d rm-tilt-hover rounded-2xl border border-white/10 bg-white/10 backdrop-blur-md px-4 py-3 min-w-[180px]">
             <div className="flex items-center gap-2 text-white/70 text-xs"><ShieldCheck size={16}/> This month</div>
             <div className="flex items-end gap-2 mt-1"><strong className="font-mono-tab text-3xl">{stats.occupied}/{stats.total}</strong><span className="text-xs text-white/60 pb-1">homes occupied</span></div>
           </div>
@@ -106,12 +109,18 @@ export default function OwnerHome({ onNavigate }) {
       </motion.section>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {cards.map((c, i) => <motion.button key={c.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * .05 }} whileTap={{ scale: .98 }} onClick={() => onNavigate(c.tab)} className="rm-card rm-card-hover text-left p-4 sm:p-5">
-          <div className="flex items-center justify-between"><span className={`w-9 h-9 rounded-xl flex items-center justify-center ${c.urgent ? 'bg-red-50 text-stamp-red' : 'bg-brand/10 text-brand'}`}><c.icon size={17}/></span><ArrowRight size={15} className="text-ink-soft"/></div>
-          <p className="font-mono-tab text-xl sm:text-2xl text-ink mt-3">{c.value}</p>
-          <p className="text-xs font-semibold text-ink mt-1 leading-4">{c.label}</p>
-          <p className="text-[11px] text-ink-soft mt-1 leading-4">{c.sub}</p>
-        </motion.button>)}
+        {cards.map((c, i) => (
+          <Tilt3D key={c.id} className="h-full" max={7}>
+            <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * .05 }} whileTap={{ scale: .98 }} onClick={() => onNavigate(c.tab)} className="rm-card rm-card-hover flex h-full w-full flex-col text-left p-4 sm:p-5">
+              <div className="flex items-center justify-between"><span className={`w-9 h-9 rounded-xl flex items-center justify-center ${c.urgent ? 'bg-red-50 text-stamp-red' : 'bg-brand/10 text-brand'}`}><c.icon size={17}/></span><ArrowRight size={15} className="text-ink-soft"/></div>
+              <p className="font-mono-tab text-xl sm:text-2xl text-ink mt-3">
+                {c.count != null ? <AnimatedCounter value={c.count} prefix={c.prefix || ''} /> : c.value}
+              </p>
+              <p className="text-xs font-semibold text-ink mt-1 leading-4">{c.label}</p>
+              <p className="text-[11px] text-ink-soft mt-1 leading-4">{c.sub}</p>
+            </motion.button>
+          </Tilt3D>
+        ))}
       </div>
 
       <section className="rm-card p-4 sm:p-6">

@@ -45,6 +45,24 @@ export default function TenantDashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const isMobile = useIsMobile()
 
+  // Preload the screens a resident is most likely to open next, once the app
+  // is idle, so tab switches do not wait on a network round-trip.
+  useEffect(() => {
+    const warm = () => {
+      import('./TenantRentHero')
+      import('./RentSubmission')
+      import('./RentHistory')
+      import('./NoticeFeed')
+      import('./EBBillShare')
+    }
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(warm, { timeout: 3000 })
+      return () => window.cancelIdleCallback?.(id)
+    }
+    const timer = setTimeout(warm, 1500)
+    return () => clearTimeout(timer)
+  }, [])
+
   async function handleRefresh() { setRefreshKey(k => k + 1); await new Promise(r => setTimeout(r, 500)) }
 
   return <div className="min-h-screen bg-paper">

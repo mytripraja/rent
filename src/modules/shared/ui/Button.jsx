@@ -20,18 +20,28 @@ export default function Button({
   ...props
 }) {
   const sizeClass = size === 'sm' ? 'px-3 py-1.5 text-xs' : 'py-2.5 px-5 text-sm'
+  const isBlocked = disabled || loading
   return (
     <motion.button
-      whileTap={{ scale: disabled || loading ? 1 : 0.97 }}
+      whileTap={{ scale: isBlocked ? 1 : 0.97 }}
+      whileHover={isBlocked ? undefined : { y: -1 }}
+      transition={{ type: 'spring', stiffness: 420, damping: 26 }}
       onTap={() => {
-        if (!disabled && !loading) hapticLight()
+        if (!isBlocked) hapticLight()
       }}
-      disabled={disabled || loading}
+      disabled={isBlocked}
       aria-busy={loading || undefined}
-      className={`rounded-xl font-semibold transition shadow-sm hover:shadow disabled:opacity-60 disabled:cursor-not-allowed ${VARIANTS[variant]} ${sizeClass} ${fullWidth ? 'w-full' : ''} ${className}`}
+      className={`rm-sheen rounded-xl font-semibold transition shadow-sm hover:shadow disabled:opacity-60 disabled:cursor-not-allowed ${VARIANTS[variant]} ${sizeClass} ${fullWidth ? 'w-full' : ''} ${className}`}
       {...props}
     >
-      {loading ? (loadingText || 'Please wait…') : children}
+      {loading ? (
+        <span className="inline-flex items-center gap-2">
+          <span className="rm-dots" aria-hidden="true"><i /><i /><i /></span>
+          {loadingText || 'Please wait…'}
+        </span>
+      ) : (
+        children
+      )}
     </motion.button>
   )
 }

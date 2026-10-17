@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 
@@ -77,8 +77,19 @@ export function ToastProvider({ children }) {
     setToasts(prev => prev.filter(t => t.id !== id))
   }, [])
 
+  // Expose both the low-level `showToast` helper and convenience methods.
+  // Some screens were written as `toast.error('...')`; returning these here
+  // keeps that API working without touching every call site.
+  const value = useMemo(() => ({
+    showToast,
+    success: (message) => showToast({ message, type: 'success' }),
+    error: (message) => showToast({ message, type: 'error' }),
+    info: (message) => showToast({ message, type: 'info' }),
+    warning: (message) => showToast({ message, type: 'warning' }),
+  }), [showToast])
+
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={value}>
       {children}
       <div className="fixed bottom-0 left-0 right-0 z-50 p-4 sm:p-6 pointer-events-none flex flex-col items-center sm:items-end gap-3">
         <AnimatePresence>

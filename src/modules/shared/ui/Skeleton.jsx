@@ -6,7 +6,7 @@ import React from 'react'
  * @param {string} className - Size and shape classes
  */
 export function Skeleton({ variant = 'rect', className = '' }) {
-  const base = 'animate-pulse bg-brass/10'
+  const base = 'rm-shimmer'
   const shape = variant === 'circle' ? 'rounded-full' : 'rounded-lg'
   return <div className={`${base} ${shape} ${className}`} aria-hidden="true" />
 }

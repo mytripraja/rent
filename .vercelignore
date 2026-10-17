@@ -12,3 +12,4 @@ api/*
 !api/subtenant.js
 !api/dad-lite.js
 !api/rental.js
+!api/tenant-rent-status.js

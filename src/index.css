@@ -307,3 +307,117 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
 .blueprint-isometric > div { transform-style: preserve-3d; }
 @media (max-width: 640px) { .blueprint-isometric { transform: perspective(900px) rotateX(12deg) rotateZ(-4deg) scale(.94); } }
 @media (prefers-reduced-motion: reduce) { .blueprint-isometric { transition: none; } }
+
+
+/* ============================================================
+   V8.84 — Motion & 3D layer
+   Additive animation utilities. Nothing here overrides existing
+   layout; every effect is opt-in via a class. All motion is
+   disabled automatically when the user prefers reduced motion.
+   ============================================================ */
+
+/* --- 3D scene helpers --- */
+.rm-scene { perspective: 1200px; }
+.rm-3d { transform-style: preserve-3d; }
+.rm-3d-face { backface-visibility: hidden; }
+
+/* --- Keyframes --- */
+@keyframes rm-float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+@keyframes rm-bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
+@keyframes rm-rise { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+@keyframes rm-pop { 0% { opacity: 0; transform: scale(.94) } 60% { transform: scale(1.015) } 100% { opacity: 1; transform: scale(1) } }
+@keyframes rm-aurora { 0% { background-position: 0% 50% } 50% { background-position: 100% 50% } 100% { background-position: 0% 50% } }
+@keyframes rm-sheen { 0% { transform: translateX(-140%) skewX(-16deg) } 60%,100% { transform: translateX(240%) skewX(-16deg) } }
+@keyframes rm-shimmer { 0% { background-position: -420px 0 } 100% { background-position: 420px 0 } }
+@keyframes rm-cube { 0% { transform: rotateX(-22deg) rotateY(0deg) } 100% { transform: rotateX(-22deg) rotateY(360deg) } }
+@keyframes rm-ring { 0% { transform: scale(.8); opacity: .65 } 100% { transform: scale(1.8); opacity: 0 } }
+@keyframes rm-dot { 0%,100% { opacity: .25; transform: translateY(0) } 50% { opacity: 1; transform: translateY(-3px) } }
+
+/* --- Utility animation classes --- */
+.rm-anim-rise { animation: rm-rise .55s cubic-bezier(.2,.8,.25,1) both; }
+.rm-anim-pop { animation: rm-pop .45s cubic-bezier(.2,.8,.25,1) both; }
+.rm-anim-float { animation: rm-float 4.2s ease-in-out infinite; }
+.rm-anim-bob { animation: rm-bob 2.6s ease-in-out infinite; }
+
+.rm-stagger > * { animation: rm-rise .5s cubic-bezier(.2,.8,.25,1) both; }
+.rm-stagger > *:nth-child(1) { animation-delay: .02s }
+.rm-stagger > *:nth-child(2) { animation-delay: .06s }
+.rm-stagger > *:nth-child(3) { animation-delay: .1s }
+.rm-stagger > *:nth-child(4) { animation-delay: .14s }
+.rm-stagger > *:nth-child(5) { animation-delay: .18s }
+.rm-stagger > *:nth-child(6) { animation-delay: .22s }
+.rm-stagger > *:nth-child(7) { animation-delay: .26s }
+.rm-stagger > *:nth-child(8) { animation-delay: .3s }
+.rm-stagger > *:nth-child(9) { animation-delay: .34s }
+.rm-stagger > *:nth-child(10) { animation-delay: .38s }
+.rm-stagger > *:nth-child(11) { animation-delay: .42s }
+.rm-stagger > *:nth-child(12) { animation-delay: .46s }
+
+/* Animated gradient text + ambient aurora glow */
+.rm-text-gradient {
+  background: linear-gradient(100deg, var(--color-brand), var(--color-brass), var(--color-brand));
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: rm-aurora 7s ease infinite;
+}
+.rm-aurora {
+  background-image: linear-gradient(120deg, rgba(15,118,110,.18), rgba(212,148,58,.14), rgba(23,32,51,.1), rgba(15,118,110,.18));
+  background-size: 300% 300%;
+  animation: rm-aurora 15s ease infinite;
+}
+
+/* Sheen sweep on hover (applied to buttons and feature cards) */
+.rm-sheen { position: relative; overflow: hidden; }
+.rm-sheen::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 45%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.4), transparent);
+  transform: translateX(-140%) skewX(-16deg); pointer-events: none;
+}
+.rm-sheen:hover::after, .rm-sheen:focus-visible::after { animation: rm-sheen 1.1s ease; }
+
+/* Skeleton shimmer (replaces the flat pulse with a moving light band) */
+.rm-shimmer {
+  background-color: color-mix(in srgb, var(--color-brand) 9%, transparent);
+  background-image: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-brand) 17%, transparent), transparent);
+  background-size: 420px 100%; background-repeat: no-repeat;
+  animation: rm-shimmer 1.4s linear infinite;
+}
+
+/* Depth hover lift */
+.rm-lift-3d { transition: transform .28s cubic-bezier(.2,.8,.25,1), box-shadow .28s ease; }
+.rm-lift-3d:hover { transform: translateY(-4px) scale(1.008); box-shadow: var(--rm-shadow-hover); }
+
+/* JS-free 3D tilt for cards */
+.rm-tilt-hover { transition: transform .3s cubic-bezier(.2,.8,.25,1), box-shadow .3s ease; }
+.rm-tilt-hover:hover { transform: perspective(900px) rotateX(2deg) rotateY(-2.5deg) translateY(-3px); box-shadow: var(--rm-shadow-hover); }
+
+/* 3D loading cube */
+.rm-cube-stage { perspective: 620px; width: 58px; height: 58px; display: grid; place-items: center; }
+.rm-cube { position: relative; width: 32px; height: 32px; transform-style: preserve-3d; animation: rm-cube 3.8s linear infinite; }
+.rm-cube span { position: absolute; inset: 0; border: 1.5px solid color-mix(in srgb, var(--color-brand) 70%, transparent); background: color-mix(in srgb, var(--color-brand) 12%, transparent); border-radius: 7px; }
+.rm-cube span:nth-child(1) { transform: rotateY(0deg) translateZ(16px) }
+.rm-cube span:nth-child(2) { transform: rotateY(90deg) translateZ(16px) }
+.rm-cube span:nth-child(3) { transform: rotateY(180deg) translateZ(16px) }
+.rm-cube span:nth-child(4) { transform: rotateY(270deg) translateZ(16px) }
+.rm-cube span:nth-child(5) { transform: rotateX(90deg) translateZ(16px) }
+.rm-cube span:nth-child(6) { transform: rotateX(-90deg) translateZ(16px) }
+
+/* Staggered loading dots */
+.rm-dots { display: inline-flex; gap: 4px; }
+.rm-dots i { width: 5px; height: 5px; border-radius: 999px; background: var(--color-brand); animation: rm-dot 1.1s ease-in-out infinite; }
+.rm-dots i:nth-child(2) { animation-delay: .15s }
+.rm-dots i:nth-child(3) { animation-delay: .3s }
+
+/* Reduced-motion guard: neutralise every effect above */
+@media (prefers-reduced-motion: reduce) {
+  .rm-anim-rise, .rm-anim-pop, .rm-anim-float, .rm-anim-bob,
+  .rm-stagger > *, .rm-text-gradient, .rm-aurora, .rm-shimmer,
+  .rm-cube, .rm-dots i, .rm-sheen::after {
+    animation: none !important;
+  }
+  .rm-sheen:hover::after, .rm-sheen:focus-visible::after { animation: none !important; }
+  .rm-lift-3d, .rm-tilt-hover { transition: none !important; }
+  .rm-lift-3d:hover, .rm-tilt-hover:hover { transform: none !important; }
+  .rm-text-gradient { color: var(--color-brand); -webkit-text-fill-color: var(--color-brand); }
+}
+
