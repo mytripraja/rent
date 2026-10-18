@@ -465,3 +465,22 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
   .iso-plane, .iso-plane-flat { transform: none; }
 }
 
+/* --- Return-from-UPI focus ring ---
+   Applied to the rent proof / UTR section when the tenant comes back from
+   GPay, PhonePe or Paytm, so the next step is impossible to miss. */
+.rm-focus-pulse {
+  animation: rm-focus-pulse 1.5s ease-out 2;
+}
+@keyframes rm-focus-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 14px color-mix(in srgb, var(--color-brand) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rm-focus-pulse {
+    animation: none;
+    outline: 3px solid var(--color-brand);
+    outline-offset: 4px;
+  }
+}
+

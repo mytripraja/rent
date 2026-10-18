@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { motion, useDragControls } from 'framer-motion'
 import { Accessibility, Bell, CalendarDays, Eye, Keyboard, Mic, Pause, Play, Settings, ShieldCheck, Volume2, X } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAuth } from '../../context/AuthContext'
 import NotificationBell from './ui/NotificationBell'
+import { SheetDragHandle, sheetDragProps } from './ui/BottomSheetModal'
 import { updateOwnProfile } from '../../services/authService'
 import { createGoogleCalendarLink } from '../../utils/calendarLinks'
 import DeviceSecurityPanel from './DeviceSecurityPanel'
@@ -183,9 +185,13 @@ export default function UserSettingsModal({ open, onClose }) {
 
   const googleLink = createGoogleCalendarLink({ title: eventTitle, date: eventDate, time: eventTime, allDay: false })
   const dialogText = 'Rental Manager accessibility and voice settings.'
+  // Drag is started only from the pill, so the scrolling body below keeps
+  // normal touch scrolling instead of fighting the sheet gesture.
+  const dragControls = useDragControls()
 
   return <div className="fixed inset-0 z-[120] bg-black/60 p-0 sm:p-6 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-describedby="settings-description">
-    <div id="settings-dialog" className="w-full max-w-4xl h-[100dvh] sm:h-auto sm:max-h-[94dvh] overflow-hidden rm-card rounded-none sm:rounded-2xl p-0 pb-[env(safe-area-inset-bottom)] flex flex-col">
+    <motion.div id="settings-dialog" {...sheetDragProps({ onClose, controls: dragControls })} className="w-full max-w-4xl h-[100dvh] sm:h-auto sm:max-h-[94dvh] overflow-hidden rm-card rounded-t-3xl sm:rounded-2xl p-0 pb-safe flex flex-col">
+      <SheetDragHandle onStartDrag={(e) => dragControls.start(e)} />
       <div className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6 bg-paper-raised/95 backdrop-blur-md border-b border-[var(--rm-border)]"><div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3"><span className="rm-icon-button" aria-hidden="true"><Settings size={19}/></span><div><p className="rm-kicker">Preferences & accessibility</p><h2 id="settings-title" className="font-display text-2xl font-extrabold">Settings</h2><p id="settings-description" className="text-sm text-ink-soft mt-1">{dialogText} Choose visual, reading and voice controls without needing a mouse.</p></div></div>
         <button onClick={onClose} className="rm-icon-button" aria-label="Close settings"><X size={19}/></button>
@@ -284,7 +290,7 @@ export default function UserSettingsModal({ open, onClose }) {
       </div>
 
       <button onClick={onClose} className="shrink-0 mx-4 mb-4 sm:mx-6 sm:mb-6 rounded-xl bg-cover text-white py-3 font-bold" aria-label="Close Settings">Done</button>
-    </div>
+    </motion.div>
   </div>
 }
 

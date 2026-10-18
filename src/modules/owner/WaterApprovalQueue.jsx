@@ -5,8 +5,10 @@ import { listHouses } from '../../services/houseService'
 import { getCashReceivers } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../shared/ui/ConfirmDialog'
+import SwipeableApprovalCard from '../shared/ui/SwipeableApprovalCard'
 import { useToast } from '../shared/ui/Toast'
 import { getPaymentProofUrl } from '../../services/cloudinaryService'
+import { triggerHaptic } from '../../utils/haptics'
 
 export default function WaterApprovalQueue() {
   const { user } = useAuth()
@@ -101,10 +103,6 @@ export default function WaterApprovalQueue() {
     }
   }
 
-  if (pending.length === 0) {
-    return <p className="text-sm text-ink-soft py-8 text-center">No Water bill submissions waiting for approval.</p>
-  }
-
   async function openProof(payment) {
     if (proofUrls[payment.id] || payment.proofUrl) return
     try { const url = await getPaymentProofUrl('waterBillPayments', payment.id); setProofUrls(v => ({ ...v, [payment.id]: url })); window.open(url, '_blank', 'noopener,noreferrer') } catch (e) { console.error(e) }
@@ -113,39 +111,45 @@ export default function WaterApprovalQueue() {
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-semibold text-ink">Water Bill — Pending Approvals</h2>
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
+        {pending.length === 0 && (
+          <motion.p key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-ink-soft py-8 text-center">No Water bill submissions waiting for approval.</motion.p>
+        )}
         {pending.map((p) => (
-          <motion.div
-            layout
-            exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+          <SwipeableApprovalCard
             key={p.id}
-            className="bg-paper-raised rounded-xl border border-brass/20 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
+            className="mb-3"
+            hint="← Reject | Approve →"
+            onApprove={() => handleApprove(p)}
+            onReject={() => setRejectingId(p.id)}
           >
-            <div>
-              <p className="text-sm font-medium text-ink">
-                House {houseMap[p.houseId]?.internalDoorNumber || p.houseId} · ₹{p.amount}
-                {p.uploadedByOwner && <span className="ml-2 text-xs text-blue-600">(Uploaded by Owner)</span>}
-              </p>
-              <p className="text-xs text-ink-soft">
-                Mode: {p.mode}{p.mode === 'cash' && ` · Received by ${p.cashReceivedBy}`}{p.mode === 'neighbor' && ` · Via neighbor house ${houseMap[p.neighborHouseId]?.internalDoorNumber || p.neighborHouseId}`}
-              </p>
-              <p className="text-xs text-ink-soft">Sent: {p.dateSent} · App# {p.applicationNumber}</p>
-              {p.recordedBy && <p className="text-xs text-ink-soft">Entered by {p.recordedBy.name}</p>}
-              {p.proofUrl && (
-                <a href={proofUrls[p.id] || p.proofUrl || '#'} target="_blank" rel="noreferrer" onClick={e => { if (!p.proofUrl && !proofUrls[p.id]) { e.preventDefault(); openProof(p) } }} className="text-xs text-brand hover:underline">
-                  View proof screenshot
-                </a>
-              )}
+            <div className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+              <div>
+                <p className="text-sm font-medium text-ink">
+                  House {houseMap[p.houseId]?.internalDoorNumber || p.houseId} · ₹{p.amount}
+                  {p.uploadedByOwner && <span className="ml-2 text-xs text-blue-600">(Uploaded by Owner)</span>}
+                </p>
+                <p className="text-xs text-ink-soft">
+                  Mode: {p.mode}{p.mode === 'cash' && ` · Received by ${p.cashReceivedBy}`}{p.mode === 'neighbor' && ` · Via neighbor house ${houseMap[p.neighborHouseId]?.internalDoorNumber || p.neighborHouseId}`}
+                </p>
+                <p className="text-xs text-ink-soft">Sent: {p.dateSent} · App# {p.applicationNumber}</p>
+                {p.recordedBy && <p className="text-xs text-ink-soft">Entered by {p.recordedBy.name}</p>}
+                {p.proofUrl && (
+                  <a href={proofUrls[p.id] || p.proofUrl || '#'} target="_blank" rel="noreferrer" onClick={e => { if (!p.proofUrl && !proofUrls[p.id]) { e.preventDefault(); openProof(p) } }} className="text-xs text-brand hover:underline">
+                    View proof screenshot
+                  </a>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => { triggerHaptic('success'); handleApprove(p) }} className="text-xs bg-green-600 text-white px-3 py-1.5 min-h-11 rounded-lg font-medium">
+                  Approve
+                </button>
+                <button onClick={() => { triggerHaptic('error'); setRejectingId(p.id) }} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 min-h-11 rounded-lg font-medium">
+                  Reject
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button onClick={() => handleApprove(p)} className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg font-medium">
-                Approve
-              </button>
-              <button onClick={() => setRejectingId(p.id)} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-lg font-medium">
-                Reject
-              </button>
-            </div>
-          </motion.div>
+          </SwipeableApprovalCard>
         ))}
       </AnimatePresence>
 
@@ -155,8 +159,8 @@ export default function WaterApprovalQueue() {
             <h3 className="font-semibold text-ink">Reason for rejection</h3>
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" rows={3} />
             <div className="flex gap-2">
-              <button onClick={handleReject} className="flex-1 bg-red-600 text-white py-2 rounded-lg text-sm font-medium">Reject</button>
-              <button onClick={() => setRejectingId(null)} className="flex-1 bg-paper border border-brass/30 text-ink-soft py-2 rounded-lg text-sm font-medium">Cancel</button>
+              <button onClick={handleReject} className="flex-1 bg-red-600 text-white py-2 min-h-11 rounded-lg text-sm font-medium">Reject</button>
+              <button onClick={() => setRejectingId(null)} className="flex-1 bg-paper border border-brass/30 text-ink-soft py-2 min-h-11 rounded-lg text-sm font-medium">Cancel</button>
             </div>
           </div>
         </div>

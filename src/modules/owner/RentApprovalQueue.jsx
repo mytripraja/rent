@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { listPendingApprovals, approvePayment, rejectPayment, calculateLateFee } from '../../services/rentService'
 import { getCashReceivers } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
@@ -110,9 +110,6 @@ export default function RentApprovalQueue() {
 
   if (loadingApprovals) return <p role="status" className="text-sm text-ink-soft py-8 text-center">Loading pending rent approvals…</p>
   if (approvalError) return <div role="alert" className="p-4 text-red-700">{approvalError} <button className="underline ml-2" onClick={refresh}>Retry</button></div>
-  if (pending.length === 0) {
-    return <p className="text-sm text-ink-soft py-8 text-center">No rent submissions waiting for approval.</p>
-  }
 
   async function openProof(payment) {
     if (proofUrls[payment.id] || payment.proofUrl) return
@@ -122,7 +119,12 @@ export default function RentApprovalQueue() {
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-semibold text-ink">Pending Approvals</h2>
-      <AnimatePresence>
+      {/* initial={false} keeps the list quiet on mount while still letting each
+          card collapse out when it is approved or rejected. */}
+      <AnimatePresence initial={false}>
+        {pending.length === 0 && (
+          <motion.p key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-ink-soft py-8 text-center">No rent submissions waiting for approval.</motion.p>
+        )}
         {pending.map((p) => {
           const house = houseMap[p.houseId]
           const lateFee = (appConfig && house && p.dateSent) 
@@ -175,8 +177,8 @@ export default function RentApprovalQueue() {
             <h3 className="font-semibold text-ink">Reason for rejection</h3>
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" rows={3} />
             <div className="flex gap-2">
-              <button onClick={handleReject} className="flex-1 bg-red-600 text-white py-2 rounded-lg text-sm font-medium">Reject</button>
-              <button onClick={() => setRejectingId(null)} className="flex-1 bg-paper border border-brass/30 text-ink-soft py-2 rounded-lg text-sm font-medium">Cancel</button>
+              <button onClick={handleReject} className="flex-1 bg-red-600 text-white py-2 min-h-11 rounded-lg text-sm font-medium">Reject</button>
+              <button onClick={() => setRejectingId(null)} className="flex-1 bg-paper border border-brass/30 text-ink-soft py-2 min-h-11 rounded-lg text-sm font-medium">Cancel</button>
             </div>
           </div>
         </div>

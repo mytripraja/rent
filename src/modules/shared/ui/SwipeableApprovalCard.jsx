@@ -9,7 +9,18 @@ import { triggerHaptic } from '../../../utils/haptics'
  * gesture fires haptic feedback once the threshold is crossed. Children stay
  * fully interactive, so the tappable Approve/Reject buttons remain available
  * for anyone who cannot or does not want to swipe.
+ *
+ * Pass `exit` to collapse the card when the row is removed from state; the
+ * parent must be an `<AnimatePresence initial={false}>` for that to run.
  */
+
+/** Which gesture the horizontal drag resolved to, or null when under threshold. */
+export function resolveSwipeAction(offsetX, threshold) {
+  if (offsetX > threshold) return 'approve'
+  if (offsetX < -threshold) return 'reject'
+  return null
+}
+
 export default function SwipeableApprovalCard({
   children,
   onApprove,
@@ -19,6 +30,8 @@ export default function SwipeableApprovalCard({
   approveLabel = 'Approve',
   hint = null,
   className = '',
+  // Collapse height plus both margins so `space-y-*` parents leave no gap.
+  exit = { opacity: 0, height: 0, marginTop: 0, marginBottom: 0 },
 }) {
   const x = useMotionValue(0)
 
@@ -31,10 +44,11 @@ export default function SwipeableApprovalCard({
   const approveStrength = useTransform(x, [30, threshold], [0, 1])
 
   function handleDragEnd(_event, info) {
-    if (info.offset.x > threshold) {
+    const action = resolveSwipeAction(info.offset.x, threshold)
+    if (action === 'approve') {
       triggerHaptic('success')
       onApprove?.()
-    } else if (info.offset.x < -threshold) {
+    } else if (action === 'reject') {
       triggerHaptic('error')
       onReject?.()
     }
@@ -43,6 +57,8 @@ export default function SwipeableApprovalCard({
   return (
     <motion.div
       layout
+      exit={exit}
+      transition={{ duration: 0.22, ease: 'easeInOut' }}
       className={`relative overflow-hidden rounded-xl border border-brass/20 bg-paper-raised shadow-sm ${className}`}
     >
       <motion.div

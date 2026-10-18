@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
+import { motion, useDragControls } from 'framer-motion'
 import { Copy, Download, Link2, Share2, X } from 'lucide-react'
 import { buildHouseShareImage, buildHouseSharePdf, buildHouseShareText, shareHouseFile } from '../../services/houseShareService'
 import { useToast } from '../shared/ui/Toast'
+import { SheetDragHandle, sheetDragProps } from '../shared/ui/BottomSheetModal'
 
 const DEFAULT_OPTIONS = {
   houseDetails: true,
@@ -25,6 +27,8 @@ export default function HouseShareModal({ houses, onClose }) {
   const title = rows.length === 1 ? `House ${rows[0]?.internalDoorNumber || ''} details` : `${rows.length} house details`
 
   function toggle(key) { setOptions(v => ({ ...v, [key]: !v[key] })) }
+  // Scroll lives inside this panel, so the drag is started by the pill only.
+  const dragControls = useDragControls()
   async function download(file) {
     const url = URL.createObjectURL(file)
     const a = document.createElement('a'); a.href = url; a.download = file.name; a.click()
@@ -48,8 +52,8 @@ export default function HouseShareModal({ houses, onClose }) {
   async function copy() { await navigator.clipboard.writeText(text); showToast({ message: 'House details copied', type: 'success' }) }
 
   return <div className="fixed inset-0 z-[90] bg-black/50 p-0 sm:p-6 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
-    <div className="w-full max-w-2xl max-h-[92dvh] overflow-y-auto bg-paper-raised rounded-t-2xl sm:rounded-2xl shadow-2xl border border-brass/20 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-5">
-      <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300 sm:hidden" aria-hidden="true" />
+    <motion.div {...sheetDragProps({ onClose, controls: dragControls })} className="w-full max-w-2xl max-h-[92dvh] overflow-y-auto bg-paper-raised rounded-t-3xl sm:rounded-2xl shadow-2xl border border-brass/20 p-5 pb-safe">
+      <SheetDragHandle onStartDrag={(e) => dragControls.start(e)} />
       <div className="flex items-start justify-between gap-3"><div><h2 className="font-display text-xl font-bold text-ink">Share house details</h2><p className="text-xs text-ink-soft mt-1">Choose exactly which information can leave Rental Manager. Sensitive tenant details are off by default.</p></div><button onClick={onClose} className="w-9 h-9 rounded-xl grid place-items-center hover:bg-paper" aria-label="Close"><X size={18}/></button></div>
       <div className="mt-4 grid sm:grid-cols-2 gap-2">
         {[
@@ -68,6 +72,6 @@ export default function HouseShareModal({ houses, onClose }) {
       <div className="mt-4 rounded-xl border border-brass/20 bg-paper p-4 whitespace-pre-wrap text-sm text-ink max-h-64 overflow-auto">{text}</div>
       <div className="grid sm:grid-cols-3 gap-2 mt-4"><button disabled={busy} onClick={share} className="rm-hero-button py-3 flex items-center justify-center gap-2 disabled:opacity-60"><Share2 size={17}/>{busy?'Preparing…':`Share ${format.toUpperCase()}`}</button><button onClick={copy} className="rm-secondary-button py-3 flex items-center justify-center gap-2"><Copy size={17}/>Copy text</button>{format!=='text' && <button disabled={busy} onClick={async()=>download(format==='image'?await buildHouseShareImage(rows,options):await buildHouseSharePdf(rows,options))} className="rm-secondary-button py-3 flex items-center justify-center gap-2"><Download size={17}/>Save file</button>}</div>
       {options.loginLink && <div className="mt-3 rounded-xl bg-brand/5 border border-brand/15 p-3 text-xs text-ink-soft flex gap-2"><Link2 size={15} className="text-brand shrink-0"/>Login link: {window.location.origin}/login</div>}
-    </div>
+    </motion.div>
   </div>
 }

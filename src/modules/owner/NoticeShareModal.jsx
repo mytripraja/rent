@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { motion, useDragControls } from 'framer-motion'
 import { useAuth } from '../../context/AuthContext'
 import { postMessage } from '../../services/communityService'
 import { Copy, Download, Mail, MessageCircle, Share2, X } from 'lucide-react'
 import { buildAnnouncementImage, buildAnnouncementPdf, buildAnnouncementText, shareAnnouncementFile, shareNative, shareViaEmail, shareViaWhatsApp } from '../../services/announcementShareService'
 import { useToast } from '../shared/ui/Toast'
+import { SheetDragHandle, sheetDragProps } from '../shared/ui/BottomSheetModal'
 
 export default function NoticeShareModal({ notice, affectedHomes, onClose }) {
   const { showToast } = useToast()
@@ -12,6 +14,8 @@ export default function NoticeShareModal({ notice, affectedHomes, onClose }) {
   const [postingToCommunity, setPostingToCommunity] = useState(false)
   const text = buildAnnouncementText(notice, affectedHomes)
   const title = notice.title || notice.message || 'Rental Manager announcement'
+  // The body scrolls, so only the pill may start the drag-to-dismiss gesture.
+  const dragControls = useDragControls()
 
   async function copyText() {
     await navigator.clipboard.writeText(text)
@@ -69,8 +73,8 @@ Details / விவரங்கள்: ${notice.shareUrl}`
   }
 
   return <div className="fixed inset-0 z-[80] bg-black/50 p-0 sm:p-6 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="share-announcement-title">
-    <div className="w-full max-w-xl max-h-[92dvh] overflow-auto bg-paper-raised rounded-t-2xl sm:rounded-2xl shadow-2xl border border-brass/20 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-5">
-      <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300 sm:hidden" aria-hidden="true" />
+    <motion.div {...sheetDragProps({ onClose, controls: dragControls })} className="w-full max-w-xl max-h-[92dvh] overflow-auto bg-paper-raised rounded-t-3xl sm:rounded-2xl shadow-2xl border border-brass/20 p-5 pb-safe">
+      <SheetDragHandle onStartDrag={(e) => dragControls.start(e)} />
       <div className="flex items-start justify-between gap-3">
         <div><h2 id="share-announcement-title" className="font-semibold text-ink">Share announcement</h2><p className="text-xs text-ink-soft mt-1">English + Tamil are included. Edit Tamil before posting; image/PDF sharing uses the actual file when your device supports file sharing.</p></div>
         <button type="button" onClick={onClose} className="w-9 h-9 rounded-xl grid place-items-center hover:bg-paper" aria-label="Close"><X size={18}/></button>
@@ -91,6 +95,6 @@ Details / விவரங்கள்: ${notice.shareUrl}`
       </div>
 
       {notice.shareUrl && <div className="mt-4 rounded-xl bg-brand/5 border border-brand/15 p-3 text-xs text-ink-soft break-all"><span className="font-semibold text-ink">Detailed link:</span> {notice.shareUrl}</div>}
-    </div>
+    </motion.div>
   </div>
 }

@@ -8,3 +8,13 @@ export function generateUpiLink({ payeeName, payeeUpi, amount, transactionNote }
   })
   return `upi://pay?${params.toString()}`
 }
+
+/**
+ * Hand the link to the device's UPI handler.
+ *
+ * Kept in one place so callers can mark "we launched UPI" *before* calling it,
+ * and so tests can intercept the hand-off instead of asking jsdom to navigate.
+ */
+export function openUpiLink(link) {
+  window.location.href = link
+}

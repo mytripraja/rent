@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { submitRentPayment } from '../../services/rentService'
 import { getCashReceivers, getAppConfig } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../shared/ui/Toast'
-import { generateUpiLink } from '../../utils/upiDeepLink'
+import { generateUpiLink, openUpiLink } from '../../utils/upiDeepLink'
 import { canPerformAction } from '../../utils/rateLimit'
+import { triggerHaptic } from '../../utils/haptics'
 
 export default function RentSubmission({ onSubmitted }) {
   const { user } = useAuth()
@@ -24,6 +25,44 @@ export default function RentSubmission({ onSubmitted }) {
   const [submitting, setSubmitting] = useState(false)
   const [cashReceivers, setCashReceivers] = useState([])
   const [upiConfig, setUpiConfig] = useState(null)
+  const [proofPulsing, setProofPulsing] = useState(false)
+
+  // Set just before we hand off to GPay/PhonePe/Paytm. The flag (rather than a
+  // blur/focus pair) is what proves the next visibilitychange belongs to us.
+  const hasLaunchedUpiRef = useRef(false)
+  const proofSectionRef = useRef(null)
+  const proofInputRef = useRef(null)
+
+  // Coming back from the UPI app: nudge the tenant straight to the screenshot
+  // / UTR step so an approved-ready payment is never left half-entered.
+  useEffect(() => {
+    let pulseTimer = 0
+
+    function focusProofStep() {
+      if (!hasLaunchedUpiRef.current) return
+      if (document.visibilityState !== 'visible') return
+      hasLaunchedUpiRef.current = false
+
+      triggerHaptic('light')
+
+      const section = proofSectionRef.current
+      section?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+      const target = proofInputRef.current || section
+      target?.focus?.({ preventScroll: true })
+
+      setProofPulsing(true)
+      window.clearTimeout(pulseTimer)
+      pulseTimer = window.setTimeout(() => setProofPulsing(false), 3200)
+    }
+
+    document.addEventListener('visibilitychange', focusProofStep)
+    window.addEventListener('focus', focusProofStep)
+    return () => {
+      document.removeEventListener('visibilitychange', focusProofStep)
+      window.removeEventListener('focus', focusProofStep)
+      window.clearTimeout(pulseTimer)
+    }
+  }, [])
 
   useEffect(() => {
     getCashReceivers().then((receivers) => {
@@ -95,7 +134,10 @@ export default function RentSubmission({ onSubmitted }) {
       amount: Number(form.amount) || 0,
       transactionNote: note
     })
-    window.location.href = link
+    // Mark first: some devices never blur the tab, so the flag is what tells
+    // the visibility listener that this return came from a UPI launch.
+    hasLaunchedUpiRef.current = true
+    openUpiLink(link)
   }
 
   return (
@@ -152,10 +194,21 @@ export default function RentSubmission({ onSubmitted }) {
       )}
 
       {(form.mode === 'upi' || form.mode === 'bank') && (
-        <div>
-          <label className="text-xs text-ink-soft">Payment screenshot</label>
-          <input type="file" accept="image/*" onChange={(e) => setProofFile(e.target.files[0])}
-            className="w-full text-sm mt-1" />
+        <div
+          ref={proofSectionRef}
+          tabIndex={-1}
+          data-testid="rent-proof-section"
+          className={`rounded-xl ${proofPulsing ? 'rm-focus-pulse' : ''}`}
+        >
+          <label className="text-xs text-ink-soft" htmlFor="rent-proof-input">Payment screenshot / UTR</label>
+          <input
+            id="rent-proof-input"
+            ref={proofInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => setProofFile(e.target.files[0])}
+            className="w-full text-sm mt-1"
+          />
         </div>
       )}
 

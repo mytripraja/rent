@@ -12,3 +12,6 @@ android/local.properties
 android/captures
 android/.idea
 *.iml
+
+# Scratch file produced by manual API inspection — never commit it
+api_dump.txt
