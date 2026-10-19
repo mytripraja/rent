@@ -64,7 +64,7 @@ export async function submitRentPayment({
     amount,
     dateSent,
     mode,
-    cashReceivedBy: String(cashReceivedBy || '').trim() || null,
+    cashReceivedBy: mode === 'cash' ? cashReceivedBy : null,
     paidBy: String(paidBy || '').trim(),
     notes: String(notes || '').trim(),
     neighborHouseId: mode === 'neighbor' ? neighborHouseId : null,

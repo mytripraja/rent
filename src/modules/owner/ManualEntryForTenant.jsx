@@ -13,7 +13,7 @@ export default function ManualEntryForTenant() {
   const [houses, setHouses] = useState([])
   const currentMonth = new Date().toISOString().slice(0, 7)
   const [form, setForm] = useState({
-    houseId: '', month: currentMonth, amount: '', dateSent: '', mode: 'cash', cashReceivedBy: '', receiverOther: '', paidBy: '', notes: '',
+    houseId: '', month: currentMonth, amount: '', dateSent: '', mode: 'cash', cashReceivedBy: '', paidBy: '', notes: '',
   })
   const [proofFile, setProofFile] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -67,7 +67,7 @@ export default function ManualEntryForTenant() {
         amount: Number(form.amount),
         dateSent: form.dateSent,
         mode: form.mode,
-        cashReceivedBy: form.cashReceivedBy === 'others' ? form.receiverOther.trim() : form.cashReceivedBy,
+        cashReceivedBy: form.mode === 'cash' ? form.cashReceivedBy : null,
         paidBy: form.paidBy.trim(),
         notes: form.notes.trim(),
         proofFile,
@@ -104,7 +104,7 @@ export default function ManualEntryForTenant() {
       }
       setDone(null)
       const defaultReceiver = cashReceivers.length > 0 ? cashReceivers[0] : ''
-      setForm({ houseId: '', month: currentMonth, amount: '', dateSent: '', mode: 'cash', cashReceivedBy: defaultReceiver, receiverOther: '', paidBy: '', notes: '' })
+      setForm({ houseId: '', month: currentMonth, amount: '', dateSent: '', mode: 'cash', cashReceivedBy: defaultReceiver, paidBy: '', notes: '' })
     } catch (err) {
       console.error(err)
       showToast({ message: "Failed to approve payment", type: "error" })
@@ -178,18 +178,13 @@ export default function ManualEntryForTenant() {
           <option value="bank">Bank Transfer</option>
         </select>
 
-        <div>
-          <label className="block text-xs font-medium text-ink-soft mb-1">Who received the rent? (optional · all payment methods)</label>
-          <select value={form.cashReceivedBy} onChange={(e) => setForm({ ...form, cashReceivedBy: e.target.value, receiverOther: '' })}
+        {form.mode === 'cash' && (
+          <select value={form.cashReceivedBy} onChange={(e) => setForm({ ...form, cashReceivedBy: e.target.value })}
             className="w-full min-h-11 border border-[var(--rm-border)] rounded-xl px-3 py-2.5 text-sm bg-paper-raised focus:ring-2 focus:ring-brand/30">
-            <option value="">Select receiver</option>
             {cashReceivers.map((r) => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
             <option value="others">Others</option>
           </select>
-          {form.cashReceivedBy === 'others' && <input type="text" maxLength={100} required placeholder="Enter receiver name" value={form.receiverOther}
-            onChange={(e) => setForm({ ...form, receiverOther: e.target.value })}
-            className="mt-2 w-full min-h-11 border border-[var(--rm-border)] rounded-xl px-3 py-2.5 text-sm bg-paper-raised" />}
-        </div>
+        )}
 
         {(form.mode === 'upi' || form.mode === 'bank') && (
           <div>

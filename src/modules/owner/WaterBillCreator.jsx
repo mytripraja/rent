@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { listHouses, setWaterOverride } from '../../services/houseService'
 import { calculateWaterSplit, createWaterBillCycle, listWaterBillCycles } from '../../services/waterBillService'
 import { useToast } from '../shared/ui/Toast'
+import BillShareTools from './BillShareTools'
 
 export default function WaterBillCreator() {
   const { showToast } = useToast()
@@ -11,6 +12,8 @@ export default function WaterBillCreator() {
   const [cycleMonths, setCycleMonths] = useState(1)
   const [cycleLabel, setCycleLabel] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [billNote, setBillNote] = useState('')
+  const [sharingBill, setSharingBill] = useState(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -56,10 +59,12 @@ export default function WaterBillCreator() {
         totalAmount: Number(totalAmount),
         cycleMonths: Number(cycleMonths),
         dueDate,
+        note: billNote,
       })
       setTotalAmount('')
       setCycleLabel('')
       setDueDate('')
+      setBillNote('')
       showToast({ message: "Bill cycle created and sent", type: "success" })
       refresh()
     } catch (err) {
@@ -115,6 +120,7 @@ export default function WaterBillCreator() {
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
         <input required type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <textarea value={billNote} onChange={e => setBillNote(e.target.value)} rows={2} placeholder="Optional note for residents" className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
 
         {preview.length > 0 && (
           <div className="bg-paper rounded-lg p-3 text-xs space-y-1">
@@ -143,10 +149,13 @@ export default function WaterBillCreator() {
                 <span className="font-medium">{c.cycleLabel}</span>
                 <span>₹{c.totalAmount} · due {c.dueDate}</span>
               </div>
+              {c.note && <p className="text-xs text-ink-soft mt-1">Note: {c.note}</p>}
+              <button type="button" onClick={() => setSharingBill(c)} className="mt-2 bg-brand text-white rounded-lg px-3 py-1.5 text-xs">Share bill</button>
             </div>
           ))}
         </div>
       </div>
+      {sharingBill && <BillShareTools bill={sharingBill} houses={houses} billType="Water" onClose={() => setSharingBill(null)} />}
     </div>
   )
 }

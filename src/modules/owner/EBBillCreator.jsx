@@ -5,6 +5,7 @@ import { useToast } from '../shared/ui/Toast'
 import { createGoogleCalendarLink } from '../../utils/calendarLinks'
 import { getActivePropertyId } from '../../services/configService'
 import { CalendarPlus } from 'lucide-react'
+import BillShareTools from './BillShareTools'
 
 export default function EBBillCreator() {
   const { showToast } = useToast()
@@ -14,6 +15,8 @@ export default function EBBillCreator() {
   const [cycleMonths, setCycleMonths] = useState(2)
   const [cycleLabel, setCycleLabel] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [billNote, setBillNote] = useState('')
+  const [sharingBill, setSharingBill] = useState(null)
   const [saving, setSaving] = useState(false)
   const [createdCycle, setCreatedCycle] = useState(null)
   const [meterRows, setMeterRows] = useState([])
@@ -162,11 +165,13 @@ export default function EBBillCreator() {
         currentMeterReading: document.getElementById('eb-current-reading')?.value || '',
         meterReadingDate: document.getElementById('eb-reading-date')?.value || '',
         meterReadingTime: document.getElementById('eb-reading-time')?.value || '',
+        note: billNote,
       })
       setCreatedCycle({ label: cycleLabel, dueDate })
       setTotalAmount('')
       setCycleLabel('')
       setDueDate('')
+      setBillNote('')
       showToast({ message: "Bill cycle created and sent", type: "success" })
       refresh()
     } catch (err) {
@@ -261,6 +266,7 @@ export default function EBBillCreator() {
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
         <input required type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <textarea value={billNote} onChange={e => setBillNote(e.target.value)} rows={2} placeholder="Optional note for residents" className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
         <div className="rounded-xl bg-paper border border-brass/20 p-3 space-y-2">
           <p className="text-xs font-semibold text-ink">Government bill reading (optional)</p>
           <p className="text-[11px] text-ink-soft">Use the official EB bill values when available. The system calculates consumption as current − previous; it does not claim an individual tenant's unit usage for a shared meter.</p>
@@ -311,10 +317,13 @@ export default function EBBillCreator() {
                 <span className="font-medium">{c.cycleLabel}</span>
                 <span>₹{c.totalAmount} · due {c.dueDate}</span>
               </div>
+              {c.note && <p className="text-xs text-ink-soft mt-1">Note: {c.note}</p>}
+              <button type="button" onClick={() => setSharingBill(c)} className="mt-2 bg-brand text-white rounded-lg px-3 py-1.5 text-xs">Share bill</button>
             </div>
           ))}
         </div>
       </div>
+      {sharingBill && <BillShareTools bill={sharingBill} houses={houses} billType="EB" onClose={() => setSharingBill(null)} />}
     </div>
   )
 }

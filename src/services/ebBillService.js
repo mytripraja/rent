@@ -23,7 +23,7 @@ const billsRef = collection(db, 'ebBills')
  * @param {number} cycleMonths - normally 2
  * @param {Array} houses - from listHouses(), each with { id, status, hasOwnEbMeter, ebShareOverrideMonths }
  */
-export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId, previousMeterReading, currentMeterReading, meterReadingDate, meterReadingTime }) {
+export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId, previousMeterReading, currentMeterReading, meterReadingDate, meterReadingTime, note = '' }) {
   const houses = await listHouses()
   const shares = calculateEbSplit(totalAmount, cycleMonths, houses)
 
@@ -33,6 +33,7 @@ export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, 
     totalAmount,
     cycleMonths,
     dueDate,
+    note: String(note || '').trim(),
     previousMeterReading: previousMeterReading === '' || previousMeterReading == null ? null : Number(previousMeterReading),
     currentMeterReading: currentMeterReading === '' || currentMeterReading == null ? null : Number(currentMeterReading),
     meterReadingDate: meterReadingDate || null,
