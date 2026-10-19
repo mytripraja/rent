@@ -108,7 +108,7 @@ export default function OwnerDashboard() {
 
   function go(t) {
     const target = TABS.find(x => x.id === t)?.route || 'home'
-    navigate(`/owner/${target}`)
+    navigate(`/owner/${target}`, t === 'tenants' ? { state: { resetTenantsAt: Date.now() } } : undefined)
   }
 
   function handleSearchSelect(houseId) {

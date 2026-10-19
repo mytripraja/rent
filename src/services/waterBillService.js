@@ -117,15 +117,15 @@ export async function submitWaterPayment({
 }
 
 export async function listPendingWaterApprovals(houseIds = []) {
-  const ids = [...new Set(houseIds.filter(Boolean))]
+  const ids = [...new Set((houseIds || []).filter(Boolean))]
   if (!ids.length) return []
-  const chunks = []
-  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30))
-  const snapshots = await Promise.all(
-    chunks.map((chunk) => getDocs(query(waterPaymentsRef, where('houseId', 'in', chunk))))
-  )
+  // Query each known house independently: Firestore rules can reject a multi-house
+  // `in` query even when the signed-in owner may access each house individually.
+  const snapshots = await Promise.all(ids.map(houseId =>
+    getDocs(query(waterPaymentsRef, where('houseId', '==', houseId)))
+  ))
   const seen = new Map()
-  snapshots.forEach((snap) => snap.docs.forEach((d) => {
+  snapshots.forEach(snap => snap.docs.forEach(d => {
     const data = d.data()
     if (data.status === 'waiting_approval') seen.set(d.id, { id: d.id, ...data })
   }))

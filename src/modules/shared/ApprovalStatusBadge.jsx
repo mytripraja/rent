@@ -6,6 +6,7 @@ const STAMP_CLASS = {
   not_paid: 'stamp-red',
   approved: 'stamp-green',
   rejected: 'stamp-red',
+  not_tracked: 'stamp-ink',
 }
 
 const LABELS = {
@@ -14,6 +15,7 @@ const LABELS = {
   not_paid: 'Not Paid',
   approved: 'Approved',
   rejected: 'Rejected',
+  not_tracked: 'Not tracked',
 }
 
 export default function ApprovalStatusBadge({ status }) {

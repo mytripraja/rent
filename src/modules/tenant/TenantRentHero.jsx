@@ -104,9 +104,9 @@ export default function TenantRentHero({ onPayNow, canSubmit = true, showDetails
               <div className="min-w-0">
                 <p className="font-mono-tab text-xs text-brass-light uppercase tracking-wide">{monthLabel} · House {house.internalDoorNumber}</p>
                 {showDetails && <p className="font-display text-3xl sm:text-4xl mt-1 tracking-tight">₹{rentAmount.toLocaleString('en-IN')}</p>}
-                <div className="mt-2 flex items-center gap-2 flex-wrap"><ApprovalStatusBadge status={status} />{showDetails && <span className="text-[11px] text-paper/70">Monthly rent</span>}</div>
+                <div className="mt-2 flex items-center gap-2 flex-wrap"><ApprovalStatusBadge status={status} />{showDetails && <span className="text-[11px] text-paper/70">{status === 'not_tracked' ? `Tracking starts ${house.rentTrackingStartMonth || 'later'}` : 'Monthly rent'}</span>}</div>
               </div>
-              {status !== 'paid' && canSubmit && <button onClick={e => { e.stopPropagation(); onPayNow?.() }} className="relative z-10 shrink-0 min-h-11 bg-brass text-cover-dark font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-brass-light transition shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass-light">{status === 'waiting_approval' ? 'View Status' : 'Pay Now'}</button>}
+              {status !== 'paid' && status !== 'not_tracked' && canSubmit && <button onClick={e => { e.stopPropagation(); onPayNow?.() }} className="relative z-10 shrink-0 min-h-11 bg-brass text-cover-dark font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-brass-light transition shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass-light">{status === 'waiting_approval' ? 'View Status' : 'Pay Now'}</button>}
             </div>
             <button type="button" onClick={toggleFlip} className="relative mt-5 inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white/90 hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass-light" aria-label="Flip card to view rent breakdown">
               <RotateCw size={14} /> View rent breakdown

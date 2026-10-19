@@ -1,0 +1,549 @@
+import { useEffect, useState } from 'react'
+import { getHouse, getHouseHistory } from '../../services/houseService'
+import { listRentHistory } from '../../services/rentService'
+import { listAdvanceLedger, addAdvancePayment, getAdvanceCollected } from '../../services/advanceLedgerService'
+import { updateTenantContact, getUserProfile, sendTenantLoginSetup } from '../../services/authService'
+import { ALL_TENANT_PERMISSIONS, TENANT_PERMISSION_LABELS, updateTenantPermissions } from '../../services/tenantAccountService'
+import { uploadAgreement, getAgreementForHouse, getAgreementViewUrl } from '../../services/agreementService'
+import ApprovalStatusBadge from '../shared/ApprovalStatusBadge'
+import TextField from '../shared/ui/TextField'
+import SelectField from '../shared/ui/SelectField'
+import Button from '../shared/ui/Button'
+import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../shared/ui/Toast'
+import FamilyAccounts from '../tenant/FamilyAccounts'
+
+export default function TenantProfile({ houseId, onBack }) {
+  const { user } = useAuth()
+  const { showToast } = useToast()
+  const [house, setHouse] = useState(null)
+  const [rentHistory, setRentHistory] = useState([])
+  const [pastOccupants, setPastOccupants] = useState([])
+  const [ledger, setLedger] = useState([])
+  const [collected, setCollected] = useState(0)
+  const [agreement, setAgreement] = useState(null)
+  const [editingContact, setEditingContact] = useState(false)
+  const [sendingLogin, setSendingLogin] = useState(false)
+  const [addingAdvance, setAddingAdvance] = useState(false)
+  const [uploadingAgreement, setUploadingAgreement] = useState(false)
+  const [tenantPermissions, setTenantPermissions] = useState({})
+  const [savingPermissions, setSavingPermissions] = useState(false)
+  const [permissionError, setPermissionError] = useState('')
+
+  useEffect(() => {
+    load()
+  }, [houseId])
+
+  async function load() {
+    const h = await getHouse(houseId)
+    setHouse(h)
+    if (h?.currentTenantId) {
+      try { const profile = await getUserProfile(h.currentTenantId); setTenantPermissions(profile?.tenantPermissions || {}) } catch (e) { console.warn('Tenant permissions unavailable', e) }
+    }
+    setRentHistory(await listRentHistory(houseId))
+    setPastOccupants((await getHouseHistory(houseId)).filter((entry) => entry.movedOutAt))
+    if (h?.status === 'occupied') {
+      setLedger(await listAdvanceLedger(houseId))
+      setCollected(await getAdvanceCollected(houseId))
+      setAgreement(await getAgreementForHouse(houseId))
+    }
+  }
+
+  if (!house) return <p className="text-sm text-ink-soft py-8 text-center" role="status">Loading…</p>
+
+  const isVacant = house.status !== 'occupied'
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <button onClick={onBack} className="text-sm text-ink-soft hover:text-ink">← Back to Tenants</button>
+
+      <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 flex items-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-paper overflow-hidden flex items-center justify-center text-lg text-ink-soft shrink-0">
+          {house.tenantPhotoUrl ? <img src={house.tenantPhotoUrl} alt="" className="w-full h-full object-cover" /> : (house.tenantName || '?')[0]}
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold text-ink">{house.tenantName || 'Vacant house'}</h2>
+          <p className="text-sm text-ink-soft">House {house.internalDoorNumber} {isVacant && '· Currently vacant'}</p>
+        </div>
+      </div>
+
+      {!isVacant && <FamilyAccounts houseId={houseId} ownerMode />}
+
+      {!isVacant && user?.role === 'admin' && (
+        <div className="bg-paper-raised rounded-2xl border border-brand/20 shadow-sm p-5 space-y-4">
+          <div><h3 className="font-semibold text-ink text-sm">Tenant access controls</h3><p className="text-xs text-ink-soft mt-1">Choose exactly what this tenant can see or do. Rent status/details can be read-only, while payment submission is controlled separately.</p></div>
+          {permissionError && <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700">{permissionError}</div>}
+          <div className="grid sm:grid-cols-2 gap-2">
+            {ALL_TENANT_PERMISSIONS.map(permission => {
+              const enabled = tenantPermissions[permission] !== false
+              return <label key={permission} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--rm-border)] bg-paper p-3 cursor-pointer">
+                <span><span className="block text-sm font-semibold text-ink">{TENANT_PERMISSION_LABELS[permission]}</span><span className="block text-[11px] text-ink-soft mt-0.5">{enabled ? 'Allowed' : 'Blocked'}</span></span>
+                <input type="checkbox" checked={enabled} onChange={e => setTenantPermissions(prev => ({ ...prev, [permission]: e.target.checked }))} aria-label={`Allow ${TENANT_PERMISSION_LABELS[permission]}`} />
+              </label>
+            })}
+          </div>
+          <button disabled={savingPermissions || !house.currentTenantId} onClick={async () => {
+            setSavingPermissions(true); setPermissionError('')
+            try { await updateTenantPermissions(house.currentTenantId, tenantPermissions); setPermissionError(''); } catch (e) { setPermissionError(e.message || 'Could not save access controls.') } finally { setSavingPermissions(false) }
+          }} className="w-full rounded-xl bg-brand text-white py-3 text-sm font-bold disabled:opacity-60">{savingPermissions ? 'Saving access…' : 'Save tenant access'}</button>
+          <p className="text-[11px] text-ink-soft">Changes apply to the tenant's account immediately. Existing accounts without a saved permission value remain enabled.</p>
+        </div>
+      )}
+
+      {!isVacant && (
+        <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold text-ink text-sm">Contact & login</h3>
+              <p className="text-sm text-ink-soft">Phone: {house.tenantPhone || 'Not provided'}</p>
+              <p className="text-sm text-ink-soft truncate">Email: {house.tenantEmail || 'Not linked yet'}</p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <button onClick={() => setEditingContact(true)} className="rm-secondary-button px-3 py-2 text-xs">Edit</button>
+              {house.currentTenantId && house.tenantEmail && <button type="button" disabled={sendingLogin} onClick={async () => { setSendingLogin(true); try { await sendTenantLoginSetup({ tenantUid: house.currentTenantId, houseId: house.id }); showToast({ message: 'Login setup email sent', type: 'success' }) } catch (e) { showToast({ message: e.message || 'Could not send login setup', type: 'error' }) } finally { setSendingLogin(false) } }} className="rm-hero-button px-3 py-2 text-xs">{sendingLogin ? 'Sending…' : 'Send login setup'}</button>}
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-2 text-sm text-ink-soft">
+            <p>Move-in: {house.moveInDate || '—'}{house.moveInDateApproximate ? ' (approx.)' : ''}</p><p>EB: {house.ebNumber || '—'}</p><p>Rent: ₹{house.rentAmount || 0}</p>
+          </div>
+          {!house.tenantEmail && <p className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">Email is optional when creating the tenant. Add it when you are ready to give this tenant login access.</p>}
+        </div>
+      )}
+
+      {!isVacant && (
+        <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-ink text-sm">Rent increase history</h3>
+            <span className="text-[11px] text-ink-soft">Saved in tenant profile</span>
+          </div>
+          {Array.isArray(house.rentIncreaseHistory) && house.rentIncreaseHistory.length ? <div className="space-y-2">{house.rentIncreaseHistory.slice().reverse().map((r,i)=><div key={i} className="rounded-xl bg-paper border border-[var(--rm-border)] p-3"><p className="text-sm font-semibold text-ink">₹{Number(r.fromAmount||0).toLocaleString('en-IN')} → ₹{Number(r.toAmount||0).toLocaleString('en-IN')}</p><p className="text-xs text-ink-soft mt-1">Effective from {r.effectiveMonth || '—'}</p></div>)}</div> : <p className="text-xs text-ink-soft">No rent increases recorded yet.</p>}
+          {house.nextRentIncreaseMonth && <p className="text-xs font-semibold text-amber-700">Next planned increase: {house.nextRentIncreaseMonth} · {Math.max(0, Math.ceil((new Date(`${house.nextRentIncreaseMonth}-01T00:00:00`).getTime()-Date.now())/86400000))} day(s) remaining</p>}
+        </div>
+      )}
+
+      {!isVacant && (
+        <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-ink text-sm">Advance Payment</h3>
+            <button onClick={() => setAddingAdvance(true)} className="text-xs text-brand hover:underline">Add Payment</button>
+          </div>
+          <p className="text-sm text-ink-soft">
+            Collected ₹{collected} of ₹{house.advanceAmount} agreed
+            {collected < house.advanceAmount && <span className="text-amber-600"> · ₹{house.advanceAmount - collected} remaining</span>}
+          </p>
+          <div className="space-y-1.5">
+            {ledger.map((entry) => (
+              <div key={entry.id} className="flex justify-between text-xs text-ink-soft border-b border-brass/15 pb-1">
+                <span>{entry.date} · {entry.mode}{entry.note ? ` · ${entry.note}` : ''}</span>
+                <span className="font-medium text-ink">₹{entry.amount}</span>
+              </div>
+            ))}
+            {ledger.length === 0 && <p className="text-xs text-ink-soft">No advance payments recorded yet.</p>}
+          </div>
+        </div>
+      )}
+
+      {!isVacant && (
+        <RentAgreementCard house={house} agreement={agreement} onChanged={load} uploading={uploadingAgreement} setUploading={setUploadingAgreement} />
+      )}
+
+      <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
+        <h3 className="font-semibold text-ink text-sm mb-3">Rent History</h3>
+        <div className="space-y-1.5">
+          {rentHistory.map((p) => (
+            <div key={p.id} className="flex items-center justify-between text-sm border-b border-brass/15 pb-1.5">
+              <span className="text-ink-soft">{p.month} · ₹{p.amount}</span>
+              <ApprovalStatusBadge status={p.status === 'approved' ? 'paid' : p.status} />
+            </div>
+          ))}
+          {rentHistory.length === 0 && <p className="text-xs text-ink-soft">No rent history yet.</p>}
+        </div>
+      </div>
+
+      {pastOccupants.length > 0 && (
+        <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5">
+          <h3 className="font-semibold text-ink text-sm mb-3">Previous Occupants of This House</h3>
+          <div className="space-y-1.5">
+            {pastOccupants.map((o) => (
+              <div key={o.id} className="text-xs text-ink-soft border-b border-brass/15 pb-1.5">
+                {o.name} · {o.moveInDate || '—'} to {new Date(o.movedOutAt).toLocaleDateString()}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Task 3 & 7: Notes and Comm Log */}
+      <HouseNotes houseId={house.id} />
+      {!isVacant && <CommLog houseId={house.id} tenantName={house.tenantName} />}
+
+      {editingContact && (
+        <EditContactModal house={house} onClose={() => setEditingContact(false)} onSaved={load} />
+      )}
+      {addingAdvance && (
+        <AddAdvanceModal house={house} user={user} onClose={() => setAddingAdvance(false)} onSaved={load} />
+      )}
+    </div>
+  )
+}
+
+function HouseNotes({ houseId }) {
+  const { user } = useAuth()
+  const [notes, setNotes] = useState([])
+  const [text, setText] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { load() }, [houseId])
+
+  async function load() {
+    const { listNotes } = await import('../../services/notesService')
+    setNotes(await listNotes(houseId))
+  }
+
+  async function handleAdd(e) {
+    e.preventDefault()
+    if (!text.trim()) return
+    setSaving(true)
+    const { addNote } = await import('../../services/notesService')
+    await addNote(houseId, { text, createdBy: user?.uid, createdByName: user?.name })
+    setText('')
+    setSaving(false)
+    load()
+  }
+
+  async function handleDelete(noteId) {
+    if (!window.confirm('Delete note?')) return
+    const { deleteNote } = await import('../../services/notesService')
+    await deleteNote(houseId, noteId)
+    load()
+  }
+
+  return (
+    <div className="bg-[#fffdf2] rounded-2xl border border-amber-200 shadow-sm p-5 space-y-4">
+      <h3 className="font-semibold text-ink text-sm flex items-center gap-2">
+        <span className="text-amber-500">🔒</span> Private Notes
+      </h3>
+      <form onSubmit={handleAdd} className="flex gap-2">
+        <textarea 
+          rows={2} 
+          placeholder="Add a private note (owners only)..." 
+          value={text} 
+          onChange={e => setText(e.target.value)}
+          className="flex-1 border border-brass/30 rounded-lg px-3 py-2 text-sm bg-white" 
+        />
+        <button disabled={saving || !text.trim()} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium h-fit">Add</button>
+      </form>
+      <div className="space-y-3">
+        {notes.map(n => (
+          <div key={n.id} className="bg-white p-3 rounded-lg border border-amber-100 text-sm">
+            <p className="text-ink whitespace-pre-wrap">{n.text}</p>
+            <div className="flex justify-between mt-2 text-[11px] text-ink-soft">
+              <span>By {n.createdByName} · {new Date(n.createdAt).toLocaleDateString()}</span>
+              <button onClick={() => handleDelete(n.id)} className="text-red-500 hover:underline">Delete</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function CommLog({ houseId, tenantName }) {
+  const { user } = useAuth()
+  const [logs, setLogs] = useState([])
+  const [form, setForm] = useState({ type: 'call', date: new Date().toISOString().split('T')[0], summary: '' })
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { load() }, [houseId])
+
+  async function load() {
+    const { listCommLogs } = await import('../../services/commLogService')
+    setLogs(await listCommLogs(houseId))
+  }
+
+  async function handleAdd(e) {
+    e.preventDefault()
+    if (!form.summary.trim()) return
+    setSaving(true)
+    const { addCommLog } = await import('../../services/commLogService')
+    await addCommLog({
+      houseId,
+      tenantName,
+      ...form,
+      loggedBy: user?.uid,
+      loggedByName: user?.name
+    })
+    setForm(f => ({ ...f, summary: '' }))
+    setSaving(false)
+    load()
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm('Delete log?')) return
+    const { deleteCommLog } = await import('../../services/commLogService')
+    await deleteCommLog(id)
+    load()
+  }
+
+  return (
+    <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-4">
+      <h3 className="font-semibold text-ink text-sm">Communication Log</h3>
+      <form onSubmit={handleAdd} className="space-y-3 bg-paper p-3 rounded-xl border border-brass/10">
+        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-2 min-w-0">
+          <select value={form.type} onChange={e => setForm({...form, type: e.target.value})} className="border border-brass/30 rounded-lg px-2 py-1 text-sm bg-white">
+            <option value="call">Call</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="sms">SMS</option>
+            <option value="in_person">In Person</option>
+          </select>
+          <input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} className="border border-brass/30 rounded-lg px-2 py-1 text-sm bg-white" />
+        </div>
+        <textarea rows={2} placeholder="Summary of conversation..." value={form.summary} onChange={e => setForm({...form, summary: e.target.value})} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm bg-white" />
+        <button disabled={saving || !form.summary.trim()} className="bg-brand text-white px-4 py-1.5 rounded-lg text-sm font-medium">Log Entry</button>
+      </form>
+      
+      <div className="space-y-3">
+        {logs.map(l => (
+          <div key={l.id} className="text-sm border-l-2 border-brass/40 pl-3 py-1">
+            <div className="flex justify-between items-start">
+              <span className="font-medium text-ink capitalize">{l.type.replace('_', ' ')} · {l.date}</span>
+              <button onClick={() => handleDelete(l.id)} className="text-[10px] text-red-500 hover:underline">Delete</button>
+            </div>
+            <p className="text-ink-soft mt-1">{l.summary}</p>
+            <p className="text-[10px] text-brass mt-1">Logged by {l.loggedByName}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function RentAgreementCard({ house, agreement, onChanged, uploading, setUploading }) {
+  const [showForm, setShowForm] = useState(false)
+  const [viewing, setViewing] = useState(false)
+  const [viewError, setViewError] = useState('')
+  const [form, setForm] = useState({
+    startDate: '', endDate: '', monthlyRent: house.rentAmount ? String(house.rentAmount) : '',
+  })
+  const [file, setFile] = useState(null)
+  const [error, setError] = useState('')
+
+  async function submit(e) {
+    e.preventDefault()
+    if (!file) { setError('Choose a file to upload.'); return }
+    setUploading(true)
+    setError('')
+    try {
+      await uploadAgreement({
+        houseId: house.id,
+        tenantId: house.currentTenantId,
+        tenantName: house.tenantName,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        monthlyRent: Number(form.monthlyRent),
+        file,
+      })
+      setShowForm(false)
+      setFile(null)
+      onChanged()
+    } catch (err) {
+      setError(err.message || 'Upload failed — please try again.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleView() {
+    setViewing(true)
+    setViewError('')
+    try {
+      const url = await getAgreementViewUrl(agreement)
+      window.open(url, '_blank', 'noopener')
+    } catch (err) {
+      setViewError(err.message || 'Could not open the agreement.')
+    } finally {
+      setViewing(false)
+    }
+  }
+
+  return (
+    <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-ink text-sm">Rent Agreement</h3>
+        {agreement && !showForm && (
+          <button onClick={() => setShowForm(true)} className="text-xs text-brand hover:underline">Replace</button>
+        )}
+      </div>
+
+      {agreement && !showForm && (
+        <div className="text-sm space-y-1">
+          <p className="text-ink-soft">{agreement.startDate} to {agreement.endDate} · ₹{agreement.monthlyRent}/mo</p>
+          <p className="text-xs text-ink-soft">Uploaded {new Date(agreement.uploadedAt).toLocaleDateString()}</p>
+          <Button size="sm" onClick={handleView} loading={viewing} loadingText="Opening…" className="mt-1">View Agreement</Button>
+          {viewError && <p className="text-xs text-red-600" role="alert">{viewError}</p>}
+        </div>
+      )}
+
+      {!agreement && !showForm && (
+        <div>
+          <p className="text-sm text-ink-soft mb-2">No agreement on file yet.</p>
+          <Button size="sm" onClick={() => setShowForm(true)}>Upload Agreement</Button>
+        </div>
+      )}
+
+      {showForm && (
+        <form onSubmit={submit} className="space-y-3" noValidate>
+          <div className="grid grid-cols-2 gap-3">
+            <TextField label="Start date" type="date" required value={form.startDate}
+              onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+            <TextField label="End date" type="date" required value={form.endDate}
+              onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+          </div>
+          <TextField label="Monthly rent (₹)" type="number" required value={form.monthlyRent}
+            onChange={(e) => setForm({ ...form, monthlyRent: e.target.value })} />
+          <div>
+            <label className="text-sm text-ink-soft" htmlFor="agreement-file">Agreement file (photo or PDF)</label>
+            <input id="agreement-file" type="file" accept="image/*,.pdf" onChange={(e) => setFile(e.target.files[0])} className="w-full text-sm mt-1" />
+          </div>
+          {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+          <div className="flex gap-2">
+            <Button type="submit" loading={uploading} loadingText="Uploading…" className="flex-1">Save</Button>
+            <Button type="button" variant="secondary" onClick={() => { setShowForm(false); setError('') }} className="flex-1">Cancel</Button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
+function EditContactModal({ house, onClose, onSaved }) {
+  const [name, setName] = useState(house.tenantName || '')
+  const [moveInDate, setMoveInDate] = useState(house.moveInDate || '')
+  const [approximate, setApproximate] = useState(!!house.moveInDateApproximate)
+  const [ebNumber, setEbNumber] = useState(house.ebNumber || '')
+  const [rentAmount, setRentAmount] = useState(String(house.rentAmount || 0))
+  const [email, setEmail] = useState(house.tenantEmail || '')
+  const [phone, setPhone] = useState(house.tenantPhone || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [touched, setTouched] = useState({})
+
+  const emailError = touched.email && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ? 'Enter a valid email address.' : ''
+  const phoneError = touched.phone && phone && phone.replace(/\D/g, '').length < 10
+    ? 'Enter a valid 10-digit phone number.' : ''
+
+  async function submit(e) {
+    e.preventDefault()
+    setTouched({ email: true, phone: true })
+    if ((email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) || (phone.trim() && phone.replace(/\D/g, '').length < 10) || !name.trim() || !Number.isFinite(Number(rentAmount)) || Number(rentAmount) < 0) { setError('Enter a valid tenant name, optional valid email/phone, and rent amount.'); return }
+
+    setSaving(true)
+    setError('')
+    try {
+      await updateTenantContact({
+        tenantUid: house.currentTenantId,
+        houseId: house.id,
+        newEmail: email.trim() !== (house.tenantEmail || '') ? email.trim() : undefined,
+        newPhone: phone !== house.tenantPhone ? phone : undefined,
+        newName: name !== house.tenantName ? name.trim() : undefined,
+        moveInDate: moveInDate !== (house.moveInDate || '') ? moveInDate : undefined,
+        moveInDateApproximate: approximate !== !!house.moveInDateApproximate ? approximate : undefined,
+        ebNumber: ebNumber !== (house.ebNumber || '') ? ebNumber : undefined,
+        newRentAmount: Number(rentAmount) !== Number(house.rentAmount || 0) ? Number(rentAmount) : undefined,
+      })
+      onSaved()
+      onClose()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-labelledby="edit-contact-title">
+      <form onSubmit={submit} className="bg-paper-raised rounded-2xl shadow-lg w-full max-w-sm p-6 space-y-3" noValidate>
+        <h3 id="edit-contact-title" className="font-semibold text-ink font-display text-lg">Edit Tenant Details</h3>
+        <TextField label="Tenant name" value={name} onChange={e => setName(e.target.value)} required />
+        <TextField label="Move-in date" type="date" value={moveInDate} onChange={e => setMoveInDate(e.target.value)} />
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={approximate} onChange={e => setApproximate(e.target.checked)} /> Approximate move-in date</label>
+        <TextField label="EB number" value={ebNumber} onChange={e => setEbNumber(e.target.value)} />
+        <TextField label="Monthly rent (₹)" type="number" min="0" value={rentAmount} onChange={e => setRentAmount(e.target.value)} onWheel={e => e.currentTarget.blur()} />
+        <TextField
+          label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+          onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+          error={emailError}
+          hint={email !== house.tenantEmail && !emailError ? 'This email becomes their login address. You can link it later when you give them login access.' : 'Optional until login access is needed.'}
+        />
+        <TextField
+          label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)}
+          onBlur={() => setTouched((t) => ({ ...t, phone: true }))}
+          error={phoneError}
+        />
+        {error && <p className="text-xs text-red-600" role="alert">{error}</p>}
+        <div className="flex gap-2">
+          <Button type="submit" loading={saving} loadingText="Saving…" className="flex-1">Save</Button>
+          <Button type="button" variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+function AddAdvanceModal({ house, user, onClose, onSaved }) {
+  const [form, setForm] = useState({ amount: '', date: '', mode: 'cash', note: '', entryType: 'additional' })
+  const [saving, setSaving] = useState(false)
+  const [touched, setTouched] = useState(false)
+
+  const amountError = touched && form.amount && Number(form.amount) <= 0 ? 'Amount must be greater than ₹0.' : ''
+
+  async function submit(e) {
+    e.preventDefault()
+    setTouched(true)
+    if (amountError) return
+    setSaving(true)
+    try {
+      await addAdvancePayment({
+        houseId: house.id,
+        tenantId: house.currentTenantId,
+        amount: Number(form.amount),
+        date: form.date,
+        mode: form.mode,
+        note: `${form.entryType === 'initial' ? 'Initial advance' : 'Additional advance'}${form.note ? ` — ${form.note}` : ''}`,
+        entryType: form.entryType,
+        recordedBy: { uid: user.uid, name: user.name },
+      })
+      onSaved()
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-labelledby="add-advance-title">
+      <form onSubmit={submit} className="bg-paper-raised rounded-2xl shadow-lg w-full max-w-sm p-6 space-y-3" noValidate>
+        <h3 id="add-advance-title" className="font-semibold text-ink font-display text-lg">Add Advance Payment</h3>
+        <TextField
+          label="Amount (₹)" type="number" required value={form.amount}
+          onChange={(e) => setForm({ ...form, amount: e.target.value })}
+          onBlur={() => setTouched(true)}
+          error={amountError}
+        />
+        <TextField label="Date" type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+        <SelectField label="Advance type" value={form.entryType} onChange={e=>setForm({...form,entryType:e.target.value})}><option value="initial">Initial advance collected at move-in</option><option value="additional">Additional advance collected later</option></SelectField>
+        <SelectField label="Mode" value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
+          <option value="cash">Cash</option>
+          <option value="upi">UPI</option>
+          <option value="bank">Bank Transfer</option>
+        </SelectField>
+        <TextField label="Note" hint="Optional" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+        <div className="flex gap-2">
+          <Button type="submit" loading={saving} loadingText="Saving…" className="flex-1">Add</Button>
+          <Button type="button" variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
+        </div>
+      </form>
+    </div>
+  )
+}

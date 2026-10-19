@@ -11,6 +11,7 @@ const STATUS = {
   waiting_approval: { label: 'Waiting', dot: 'bg-stamp-amber' },
   not_paid: { label: 'Not paid', dot: 'bg-stamp-red' },
   vacant: { label: 'Vacant', dot: 'bg-black/10' },
+  not_tracked: { label: 'Not tracked', dot: 'bg-black/20' },
 }
 
 export default function PaymentCalendar() {
@@ -47,7 +48,7 @@ export default function PaymentCalendar() {
   const cells = useMemo(() => filteredHouses.map(h => {
     const houseRents = rents.filter(r => r.houseId === h.id)
     const monthRents = houseRents.filter(r => r.month === monthStr)
-    let status = resolveMonthStatus(houseRents, monthStr)
+    let status = h.rentTrackingStartMonth && monthStr < h.rentTrackingStartMonth ? 'not_tracked' : resolveMonthStatus(houseRents, monthStr)
     if (h.status === 'vacant' && monthRents.length === 0) status = 'vacant'
     return { house: h, status, rents: monthRents }
   }), [filteredHouses, rents, monthStr])

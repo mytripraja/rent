@@ -9,6 +9,8 @@ import RentReceipt from '../shared/RentReceipt'
 import SwipeableApprovalCard from '../shared/ui/SwipeableApprovalCard'
 import { getPaymentProofUrl } from '../../services/cloudinaryService'
 import { triggerHaptic } from '../../utils/haptics'
+import { listHouses } from '../../services/houseService'
+import { listRentHistory } from '../../services/rentService'
 
 export default function RentApprovalQueue() {
   const { user } = useAuth()
@@ -26,6 +28,10 @@ export default function RentApprovalQueue() {
   const { showToast } = useToast()
 
   const [appConfig, setAppConfig] = useState(null)
+  const [view, setView] = useState('pending')
+  const [historyRows, setHistoryRows] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7))
 
   useEffect(() => { refresh() }, [])
 
@@ -36,9 +42,15 @@ export default function RentApprovalQueue() {
       const { getAppConfig } = await import('../../services/configService')
       // The approval API now returns the minimal house context with each waiting
       // payment, so the page no longer waits for a separate full house query.
-      const approvalsPromise = listPendingApprovals()
+      const [approvals, houseList] = await Promise.all([listPendingApprovals(), listHouses()])
+      setHistoryLoading(true)
+      const historyResults = await Promise.all(houseList.map(async h => {
+        try { return (await listRentHistory(h.id)).map(p => ({ ...p, _house: h })) }
+        catch (e) { console.warn('Could not load rent history for house', h.id, e); return [] }
+      }))
+      setHistoryRows(historyResults.flat().sort((a,b) => Number(b.submittedAt || b.approvedAt || 0) - Number(a.submittedAt || a.approvedAt || 0)))
+      setHistoryLoading(false)
       const configPromise = getAppConfig()
-      const approvals = await approvalsPromise
       const hMap = {}
       approvals.forEach(p => { if (p._house) hMap[p.houseId] = p._house })
       setHouseMap(hMap)
@@ -50,6 +62,7 @@ export default function RentApprovalQueue() {
       console.error('Error fetching approvals', error)
       showToast({ message: 'Failed to fetch pending approvals', type: 'error' })
       setApprovalError(error.message || 'Could not load rent approvals.')
+      setHistoryLoading(false)
     } finally {
       setLoadingApprovals(false)
     }
@@ -110,19 +123,15 @@ export default function RentApprovalQueue() {
 
   if (loadingApprovals) return <p role="status" className="text-sm text-ink-soft py-8 text-center">Loading pending rent approvals…</p>
   if (approvalError) return <div role="alert" className="p-4 text-red-700">{approvalError} <button className="underline ml-2" onClick={refresh}>Retry</button></div>
-  if (pending.length === 0) {
-    return <p className="text-sm text-ink-soft py-8 text-center">No rent submissions waiting for approval.</p>
-  }
-
   async function openProof(payment) {
     if (proofUrls[payment.id] || payment.proofUrl) return
     try { const url = await getPaymentProofUrl('rentPayments', payment.id); setProofUrls(v => ({ ...v, [payment.id]: url })); window.open(url, '_blank', 'noopener,noreferrer') } catch (e) { console.error(e) }
   }
 
   return (
-    <div className="space-y-3">
-      <h2 className="text-lg font-semibold text-ink">Pending Approvals</h2>
-      <AnimatePresence>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold text-ink">Rent approvals & history</h2><div className="flex rounded-xl border border-[var(--rm-border)] p-1 bg-paper-raised"><button onClick={() => setView('pending')} className={`px-3 py-2 rounded-lg text-sm ${view === 'pending' ? 'bg-brand text-white' : 'text-ink-soft'}`}>Pending ({pending.length})</button><button onClick={() => setView('history')} className={`px-3 py-2 rounded-lg text-sm ${view === 'history' ? 'bg-brand text-white' : 'text-ink-soft'}`}>Approval history</button></div></div>
+      {view === 'history' ? <section className="rounded-2xl border border-[var(--rm-border)] bg-paper-raised p-4 space-y-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-ink">Monthly rent history</h3><p className="text-xs text-ink-soft">Approved, waiting and rejected entries grouped month by month.</p></div><input aria-label="Filter history by month" type="month" value={historyMonth} onChange={e => setHistoryMonth(e.target.value)} className="border border-[var(--rm-border)] rounded-lg px-3 py-2 text-sm" /></div>{historyLoading ? <p className="text-sm text-ink-soft py-4">Loading history…</p> : historyRows.filter(p => p.month === historyMonth).length === 0 ? <p className="text-sm text-ink-soft py-5 text-center">No rent entries for {historyMonth}.</p> : <div className="space-y-2">{historyRows.filter(p => p.month === historyMonth).map(p => <div key={p.id} className="rounded-xl border border-[var(--rm-border)] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"><div><p className="font-medium text-ink">{p._house?.internalDoorNumber || p.houseId} · {p._house?.tenantName || 'Tenant'} · ₹{Number(p.amount || 0).toLocaleString('en-IN')}</p><p className="text-xs text-ink-soft">{p.month} · {p.dateSent || 'No payment date'} · Ref {p.applicationNumber || p.id}</p>{p.rejectionReason && <p className="text-xs text-red-600">Reason: {p.rejectionReason}</p>}</div><span className={`text-xs font-semibold rounded-full px-3 py-1 self-start ${p.status === 'approved' ? 'bg-green-100 text-green-700' : p.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{p.status === 'approved' ? 'Approved' : p.status === 'rejected' ? 'Rejected' : 'Waiting'}</span></div>)}</div>}</section> : <><h3 className="text-sm text-ink-soft">Pending approvals</h3>{pending.length === 0 ? <p className="text-sm text-ink-soft py-8 text-center rounded-2xl border border-[var(--rm-border)] bg-paper-raised">No rent submissions waiting for approval.</p> : <AnimatePresence>
         {pending.map((p) => {
           const house = houseMap[p.houseId]
           const lateFee = (appConfig && house && p.dateSent) 
@@ -167,7 +176,7 @@ export default function RentApprovalQueue() {
             </SwipeableApprovalCard>
           )
         })}
-      </AnimatePresence>
+      </AnimatePresence></>}
 
       {rejectingId && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">

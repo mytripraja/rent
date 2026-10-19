@@ -1,0 +1,173 @@
+import { collection, addDoc, getDocs, query, orderBy, where, updateDoc, doc } from 'firebase/firestore'
+import { db } from './firebase'
+import { getActivePropertyId } from './configService'
+import { uploadPrivate } from './cloudinaryService'
+import { listHouses } from './houseService'
+import { createBulkNotifications } from './notificationService'
+import { calculateWaterSplit } from '../utils/billSplit'
+export { calculateWaterSplit } from '../utils/billSplit'
+
+const billsRef = collection(db, 'waterBills')
+
+export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId }) {
+  const houses = await listHouses()
+  const shares = calculateWaterSplit(totalAmount, cycleMonths, houses)
+
+  const docRef = await addDoc(billsRef, {
+    cycleLabel,
+    propertyId: propertyId || houses[0]?.propertyId || getActivePropertyId() || 'default',
+    totalAmount,
+    cycleMonths,
+    dueDate,
+    shares,
+    houseIds: shares.map((share) => share.houseId),
+    createdAt: Date.now(),
+  })
+
+  const notifications = shares
+    .map(share => {
+      const house = houses.find(h => h.id === share.houseId)
+      if (house && house.tenantId) {
+        return {
+          recipientId: house.tenantId,
+          recipientType: 'tenant',
+          type: 'water_bill_created',
+          title: 'New Water Bill',
+          message: `Your share for ${cycleLabel} is ₹${share.shareAmount}`
+        }
+      }
+      return null
+    })
+    .filter(Boolean)
+
+  if (notifications.length > 0) {
+    await createBulkNotifications(notifications)
+  }
+
+  return { id: docRef.id, shares }
+}
+
+export async function listWaterBillCycles(houseId = null) {
+  const propertyId = getActivePropertyId() || 'default'
+  const base = houseId ? query(billsRef, where('houseIds', 'array-contains', houseId)) : query(billsRef, where('propertyId', '==', propertyId))
+  const snap = await getDocs(base)
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+}
+
+export function houseShareFromWaterBill(bill, houseId) {
+  return bill.shares.find((s) => s.houseId === houseId) || null
+}
+
+const waterPaymentsRef = collection(db, 'waterBillPayments')
+
+function generateWaterApplicationNumber() {
+  const rand = Math.floor(1000 + Math.random() * 9000)
+  return `WB-${Date.now().toString().slice(-6)}-${rand}`
+}
+
+export async function submitWaterPayment({
+  billId,
+  houseId,
+  tenantId,
+  amount,
+  dateSent,
+  mode,
+  cashReceivedBy,
+  neighborHouseId,
+  proofFile,
+  uploadedByOwner = false,
+  recordedBy,
+}) {
+  let proofUrl = null
+  let proofPublicId = null
+  let proofResourceType = null
+  if (proofFile) {
+    const uploaded = await uploadPrivate(proofFile, `water-proofs/${houseId}`)
+    proofUrl = null
+    proofPublicId = uploaded.publicId
+    proofResourceType = uploaded.resourceType
+  }
+
+  const applicationNumber = generateWaterApplicationNumber()
+
+  await addDoc(waterPaymentsRef, {
+    billId,
+    houseId,
+    tenantId,
+    amount,
+    dateSent,
+    mode,
+    cashReceivedBy: mode === 'cash' ? cashReceivedBy : null,
+    neighborHouseId: mode === 'neighbor' ? neighborHouseId : null,
+    neighborCollectedBy: null,
+    proofUrl,
+    proofPublicId: proofPublicId || null,
+    proofResourceType: proofResourceType || null,
+    applicationNumber,
+    status: 'waiting_approval',
+    uploadedByOwner,
+    recordedBy: recordedBy || null,
+    rejectionReason: null,
+    submittedAt: Date.now(),
+    approvedAt: null,
+    actionedBy: null,
+  })
+
+  return applicationNumber
+}
+
+export async function listPendingWaterApprovals(houseIds = []) {
+  const ids = [...new Set((houseIds || []).filter(Boolean))]
+  if (!ids.length) return []
+  // Query each known house independently: Firestore rules can reject a multi-house
+  // `in` query even when the signed-in owner may access each house individually.
+  const snapshots = await Promise.all(ids.map(houseId =>
+    getDocs(query(waterPaymentsRef, where('houseId', '==', houseId)))
+  ))
+  const seen = new Map()
+  snapshots.forEach(snap => snap.docs.forEach(d => {
+    const data = d.data()
+    if (data.status === 'waiting_approval') seen.set(d.id, { id: d.id, ...data })
+  }))
+  return [...seen.values()].sort((a, b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0))
+}
+
+export async function listWaterBillCyclesForHouses(houseIds = []) {
+  const ids = [...new Set(houseIds.filter(Boolean))]
+  if (!ids.length) return []
+  const chunks = []
+  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30))
+  const snapshots = await Promise.all(
+    chunks.map((chunk) => getDocs(query(billsRef, where('houseIds', 'array-contains-any', chunk))))
+  )
+  const seen = new Map()
+  snapshots.forEach((snap) => snap.docs.forEach((d) => seen.set(d.id, { id: d.id, ...d.data() })))
+  return [...seen.values()].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+}
+
+export async function listWaterPaymentsForHouse(houseId) {
+  const snap = await getDocs(query(waterPaymentsRef, where('houseId', '==', houseId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0))
+}
+
+export async function listWaterPaymentsForBill(billId) {
+  const snap = await getDocs(query(waterBillPaymentsRef, where('billId', '==', billId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
+export async function approveWaterPayment(paymentId, { neighborCollectedBy, actionedBy } = {}) {
+  await updateDoc(doc(db, 'waterBillPayments', paymentId), {
+    status: 'approved',
+    approvedAt: Date.now(),
+    actionedBy: actionedBy || null,
+    ...(neighborCollectedBy ? { neighborCollectedBy } : {}),
+  })
+}
+
+export async function rejectWaterPayment(paymentId, reason, actionedBy) {
+  await updateDoc(doc(db, 'waterBillPayments', paymentId), {
+    status: 'rejected',
+    rejectionReason: reason,
+    actionedBy: actionedBy || null,
+  })
+}

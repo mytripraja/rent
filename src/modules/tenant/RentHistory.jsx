@@ -26,10 +26,10 @@ export default function RentHistory() {
 
   return (
     <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 sm:p-5 space-y-4">
-      <div className="flex items-center justify-between gap-3"><div><h3 className="font-semibold text-ink">Rent History</h3><p className="text-xs text-ink-soft mt-0.5">Approved payments are counted toward the monthly total.</p></div><span className="text-xs font-semibold text-ink-soft">{payments.length} entries</span></div>
+      <div className="flex items-center justify-between gap-3"><div><h3 className="font-semibold text-ink">Rent History</h3><p className="text-xs text-ink-soft mt-0.5">Approved payments are counted toward the monthly total. {house?.rentTrackingStartMonth ? `System rent tracking starts ${house.rentTrackingStartMonth}; earlier manual records remain available as history.` : ''}</p></div><span className="text-xs font-semibold text-ink-soft">{payments.length} entries</span></div>
       {payments.length === 0 && <p className="text-sm text-ink-soft">No submissions yet.</p>}
       
-      {Object.entries(grouped).map(([month, monthPayments]) => {
+      {Object.entries(grouped).sort(([a],[b]) => b.localeCompare(a)).map(([month, monthPayments]) => {
         // Find total approved amount
         const totalPaid = monthPayments
           .filter(p => p.status === 'approved')
@@ -40,17 +40,18 @@ export default function RentHistory() {
         const expectedRent = Number(house?.rentAmount || user?.rentAmount || 0)
         const progress = expectedRent > 0 ? Math.min(100, (totalPaid / expectedRent) * 100) : 0
         const isFullyPaid = totalPaid >= expectedRent && expectedRent > 0
+        const tracked = !house?.rentTrackingStartMonth || month >= house.rentTrackingStartMonth
 
         return (
           <div key={month} className="border border-brass/20 rounded-xl overflow-hidden">
             <div className="bg-paper px-4 py-3 border-b border-brass/10">
               <div className="flex justify-between items-center mb-2">
-                <span className="font-medium text-ink">{month}</span>
+                <span className="font-medium text-ink">{month}{!tracked && <span className="ml-2 text-[10px] font-semibold rounded-full bg-black/5 text-ink-soft px-2 py-1">Historic · not tracked</span>}</span>
                 <span className="text-sm font-semibold text-ink">
                   ₹{totalPaid} {expectedRent > 0 && <span className="text-ink-soft font-normal">/ ₹{expectedRent}</span>}
                 </span>
               </div>
-              {expectedRent > 0 && (
+              {tracked && expectedRent > 0 && (
                 <div className="w-full bg-brass/20 rounded-full h-1.5">
                   <div className={`h-1.5 rounded-full ${isFullyPaid ? 'bg-stamp-green' : 'bg-brand'}`} style={{ width: `${progress}%` }}></div>
                 </div>

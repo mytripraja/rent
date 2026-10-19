@@ -41,6 +41,7 @@ export default async function handler(req, res) {
           phoneVisibleToNeighbors: !!house.phoneVisibleToNeighbors,
           blueprintVisibleToTenants: !!house.blueprintVisibleToTenants,
           photos: Array.isArray(house.photos) ? house.photos : [],
+          rentTrackingStartMonth: house.rentTrackingStartMonth || null,
           ...(canSeeRentDetails ? { rentAmount: Number(house.rentAmount || 0), pendingRentAmount: house.pendingRentAmount || null, pendingRentEffectiveMonth: house.pendingRentEffectiveMonth || null } : {}),
         },
       })
@@ -51,9 +52,13 @@ export default async function handler(req, res) {
     }
 
     const month = String(req.body?.month || currentMonth()).slice(0, 7)
+    const trackingStartMonth = String(house.rentTrackingStartMonth || '').slice(0, 7)
     const snap = await db.collection('rentPayments').where('houseId', '==', houseId).get()
     const payments = snap.docs.map((d) => d.data()).filter((p) => p.month === month)
-    return res.status(200).json({ month, status: resolveStatus(payments) })
+    // The tracking start is a per-house boundary for system-generated rent status.
+    // Earlier manual notebook periods stay in history but must not appear as system arrears.
+    const trackingEnabled = !trackingStartMonth || month >= trackingStartMonth
+    return res.status(200).json({ month, status: trackingEnabled ? resolveStatus(payments) : 'not_tracked', trackingStartMonth: trackingStartMonth || null, trackingEnabled })
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message || 'Could not load rent status' })
   }
