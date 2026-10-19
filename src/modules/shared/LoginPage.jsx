@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { ArrowLeft, ShieldCheck, Sparkles } from 'lucide-react'
 import { login, loginWithGoogle, loginWithCustomerId, resetPassword, getLoginGuard, recordFailedLogin, isWrongPasswordError } from '../../services/authService'
 import { useLanguage } from '../../context/LanguageContext'
@@ -15,13 +15,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const CUSTOMER_ID_RE = /^RM\d+$/i
 
 export default function LoginPage() {
-  const { t } = useLanguage(); const { user, loading: authLoading } = useAuth(); const navigate = useNavigate()
+  const { t } = useLanguage(); const { user, loading: authLoading } = useAuth(); const navigate = useNavigate(); const location = useLocation()
   const [method, setMethod] = useState('email'); const [email, setEmail] = useState(''); const [customerId, setCustomerId] = useState(''); const [password, setPassword] = useState('')
   const [touched, setTouched] = useState({}); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const [attemptsLeft, setAttemptsLeft] = useState(null); const [lockedUntil, setLockedUntil] = useState(0); const [legal, setLegal] = useState(false)
   const [mfaResolver, setMfaResolver] = useState(null); const [mfaCode, setMfaCode] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false); const [resetEmail, setResetEmail] = useState(''); const [resetMessage, setResetMessage] = useState(''); const [resetError, setResetError] = useState(''); const [resetLoading, setResetLoading] = useState(false)
 
-  useEffect(() => { if (!authLoading && user) navigate(user.role === 'owner' || user.role === 'admin' ? '/owner' : '/tenant', { replace: true }) }, [authLoading, user, navigate])
+  useEffect(() => { if (!authLoading && user) { const requested = new URLSearchParams(location.search).get('returnTo'); const safeReturn = requested && requested.startsWith('/tenant') && !requested.startsWith('//') ? requested : null; navigate(safeReturn && user.role === 'tenant' ? safeReturn : (user.role === 'owner' || user.role === 'admin' ? '/owner' : '/tenant'), { replace: true }) } }, [authLoading, user, navigate, location.search])
   useEffect(() => { if (sessionStorage.getItem('rm_legal_ack') === '1') setLegal(true) }, [])
 
   const emailError = touched.email && email && !EMAIL_RE.test(email) ? 'Enter a valid email address.' : ''

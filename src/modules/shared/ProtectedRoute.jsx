@@ -1,12 +1,13 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import LoadingScreen from './LoadingScreen'
 
 export default function ProtectedRoute({ role, children }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
 
   if (loading) return <LoadingScreen />
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to={`/login?returnTo=${encodeURIComponent(location.pathname + location.search)}`} replace />
 
   // "owner" routes admit both co-owners and the super-admin — they share the
   // same dashboard, just with an extra Owner Management tab for admins only.

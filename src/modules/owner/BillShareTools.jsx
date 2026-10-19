@@ -14,7 +14,8 @@ export default function BillShareTools({ bill, houses = [], billType = 'Water', 
   }), [shares, houses])
   const chosen = scope === 'one' ? rows.filter(r => selected.includes(r.houseId)).slice(0,1) : scope === 'multiple' ? rows.filter(r => selected.includes(r.houseId)) : rows
   const detailed = scope === 'all-detailed' || scope === 'one'
-  const portalLink = `${window.location.origin}/login`
+  const billTypeKey = String(billType || '').toLowerCase() === 'eb' ? 'eb' : 'water'
+  const portalLink = `${window.location.origin}/tenant?billType=${billTypeKey}&billId=${encodeURIComponent(bill?.id || '')}`
   const message = useMemo(() => {
     const lines = [`${billType} bill: ${bill?.cycleLabel || ''}`, `Total bill: ${money(bill?.totalAmount)}`, `Due date: ${bill?.dueDate || 'Not specified'}`]
     if (includeNote && bill?.note) lines.push(`Owner note: ${bill.note}`)
@@ -32,6 +33,7 @@ export default function BillShareTools({ bill, houses = [], billType = 'Water', 
     const encoded = encodeURIComponent(message)
     if (kind === 'whatsapp') window.open(`https://wa.me/?text=${encoded}`, '_blank', 'noopener,noreferrer')
     else if (kind === 'email') window.location.href = `mailto:?subject=${encodeURIComponent(`${billType} bill - ${bill?.cycleLabel || ''}`)}&body=${encoded}`
+    else if (kind === 'link') { navigator.clipboard?.writeText(portalLink).then(() => alert('Specific bill link copied.')).catch(() => alert(portalLink)) }
     else if (kind === 'copy') { navigator.clipboard?.writeText(message).then(() => alert('Bill details copied.')).catch(() => alert(message)) }
     else if (navigator.share) navigator.share({ title: `${billType} bill`, text: message }).catch(() => {})
     else window.open(`https://wa.me/?text=${encoded}`, '_blank', 'noopener,noreferrer')
@@ -50,8 +52,9 @@ export default function BillShareTools({ bill, houses = [], billType = 'Water', 
         <textarea value={customNote} onChange={e => setCustomNote(e.target.value)} rows={2} placeholder="Optional note to include in this share" className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
       </div>
       {selectedRequired && <p className="text-xs text-red-600">Select at least one house before sharing.</p>}
+      <div className="space-y-2"><label className="block text-xs font-medium text-ink-soft">Specific secure link for this bill</label><div className="flex gap-2"><input readOnly value={portalLink} className="min-w-0 flex-1 border border-brass/30 rounded-lg px-3 py-2 text-xs bg-paper" onFocus={e => e.target.select()} /><button type="button" onClick={() => shareTo('link')} className="border rounded-lg px-3 py-2 text-xs">Copy link</button></div><p className="text-[11px] text-ink-soft">Residents must sign in with their own registered account. The link identifies this bill only; the server-side house/account access still controls which share they can see.</p></div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2"><button type="button" onClick={() => shareTo('whatsapp')} className="bg-green-600 text-white rounded-lg py-2 text-sm">WhatsApp</button><button type="button" onClick={() => shareTo('email')} className="bg-brand text-white rounded-lg py-2 text-sm">Email</button><button type="button" onClick={() => shareTo('other')} className="border rounded-lg py-2 text-sm">Share…</button><button type="button" onClick={() => shareTo('copy')} className="border rounded-lg py-2 text-sm">Copy details</button></div>
-      <p className="text-[11px] text-ink-soft">The link opens the existing secure sign-in page; it does not expose another resident’s bill. Direct payment collection and a public guest page require a secured payment/backend integration. Residents can submit payment proof after signing in.</p>
+      <p className="text-[11px] text-ink-soft">The payment page shows the logged-in resident’s calculated share and lets them submit payment proof. The owner must verify proof before marking a payment as paid. No public house-number/name-only access is enabled, to protect tenant billing information.</p>
     </div>
   </div>
 }
