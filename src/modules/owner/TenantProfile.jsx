@@ -436,7 +436,7 @@ function EditContactModal({ house, onClose, onSaved }) {
   async function submit(e) {
     e.preventDefault()
     setTouched({ email: true, phone: true })
-    if (emailError || phoneError || !name.trim() || !Number.isFinite(Number(rentAmount)) || Number(rentAmount) < 0) { setError('Enter a valid tenant name, phone, email and rent amount.'); return }
+    if ((email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) || (phone.trim() && phone.replace(/\D/g, '').length < 10) || !name.trim() || !Number.isFinite(Number(rentAmount)) || Number(rentAmount) < 0) { setError('Enter a valid tenant name, optional valid email/phone, and rent amount.'); return }
 
     setSaving(true)
     setError('')
@@ -444,7 +444,7 @@ function EditContactModal({ house, onClose, onSaved }) {
       await updateTenantContact({
         tenantUid: house.currentTenantId,
         houseId: house.id,
-        newEmail: email !== house.tenantEmail ? email : undefined,
+        newEmail: email.trim() !== (house.tenantEmail || '') ? email.trim() : undefined,
         newPhone: phone !== house.tenantPhone ? phone : undefined,
         newName: name !== house.tenantName ? name.trim() : undefined,
         moveInDate: moveInDate !== (house.moveInDate || '') ? moveInDate : undefined,

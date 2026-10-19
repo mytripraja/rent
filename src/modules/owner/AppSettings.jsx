@@ -155,11 +155,12 @@ export default function AppSettings() {
   }
 
   async function saveRentTrackingStartMonth() {
-    if (!trackingHouseId) {
-      setTrackingMessage('Choose a house first.')
+    const ids = [...new Set(trackingHouseIds.filter(Boolean))]
+    if (!ids.length) {
+      setTrackingMessage('Choose at least one house using the checkboxes or the single-house selector.')
       return
     }
-    const ids = trackingHouseIds
+    // The checkbox selection is authoritative; trackingHouseId is only a convenience selector.
     const selectedHouses = houses.filter(h => ids.includes(h.id))
     if (!selectedHouses.length) { setTrackingMessage('Choose at least one house.'); return }
     const names = selectedHouses.map(h => h.internalDoorNumber || h.id).join(', ')
@@ -374,7 +375,7 @@ export default function AppSettings() {
             </div>
             <div className="max-h-44 overflow-y-auto rounded-xl border border-[var(--rm-border)] p-2 space-y-1">
               {houses.map(h => <label key={h.id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-paper min-w-0">
-                <input type="checkbox" className="mt-1 shrink-0" checked={trackingHouseIds.includes(h.id)} onChange={e => setTrackingHouseIds(old => e.target.checked ? [...old,h.id] : old.filter(id=>id!==h.id))}/>
+                <input type="checkbox" className="mt-1 shrink-0" checked={trackingHouseIds.includes(h.id)} onChange={e => { setTrackingHouseIds(old => e.target.checked ? [...new Set([...old,h.id])] : old.filter(id=>id!==h.id)); setTrackingHouseId(e.target.checked ? h.id : (trackingHouseId === h.id ? '' : trackingHouseId)); setTrackingMessage('') }}/>
                 <span className="text-xs break-words">{h.internalDoorNumber || h.id} · {h.tenantName || 'Vacant'}{h.status!=='occupied' ? ' (not occupied)' : ''}</span>
               </label>)}
             </div>
@@ -386,7 +387,7 @@ export default function AppSettings() {
             <p className="text-xs text-ink-soft">Saved start month: {trackingHouseIds.length === 1 ? (houses.find(h=>h.id===trackingHouseIds[0])?.rentTrackingStartMonth || 'Not set') : 'Varies by house'}</p>
           </div>
         </div>
-        <button type="button" onClick={saveRentTrackingStartMonth} disabled={trackingSaving || trackingHouseIds.length===0 || !trackingStartMonth} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-60">{trackingSaving ? 'Saving…' : 'Save tracking start month'}</button>
+        <button type="button" onClick={saveRentTrackingStartMonth} disabled={trackingSaving || trackingHouseIds.length===0 || !/^\d{4}-\d{2}$/.test(trackingStartMonth)} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-60">{trackingSaving ? 'Saving…' : 'Save tracking start month'}</button>
         {trackingMessage && <p role="status" className="text-sm text-ink-soft">{trackingMessage}</p>}
       </div>
       <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 space-y-4 max-w-2xl">

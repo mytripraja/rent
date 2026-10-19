@@ -373,12 +373,12 @@ export default async function handler(req, res) {
     if (newRentAmount !== undefined && (!Number.isFinite(Number(newRentAmount)) || Number(newRentAmount) < 0 || Number(newRentAmount) > 10000000)) return res.status(400).json({ error: 'Enter a valid monthly rent.' })
     if (newEmail) await auth.updateUser(tenantUid, { email: newEmail })
     const updates = { editedAt: Date.now(), editedBy }
-    if (newEmail) updates.email = newEmail
+    if (newEmail !== undefined) updates.email = newEmail || null
     if (newPhone !== undefined) updates.phone = newPhone
     if (newName !== undefined) updates.name = String(newName).trim()
     await db.collection('users').doc(tenantUid).update(updates)
     const houseUpdates = { ...updates }
-    if (newEmail) houseUpdates.tenantEmail = newEmail
+    if (newEmail !== undefined) houseUpdates.tenantEmail = newEmail || ''
     if (newPhone !== undefined) houseUpdates.tenantPhone = newPhone
     if (newName !== undefined) houseUpdates.tenantName = String(newName).trim()
     if (moveInDate !== undefined) houseUpdates.moveInDate = moveInDate || null

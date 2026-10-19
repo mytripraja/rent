@@ -263,7 +263,7 @@ function HouseDetailModal({ house, user, onClose, onVacate, onBook }) {
 
   return (
     <div className="fixed inset-0 z-[70] bg-black/55 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <motion.div initial={{ opacity: 0, y: 18, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="w-full max-w-3xl max-h-[94vh] sm:max-h-[92vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-paper-raised border border-[var(--rm-border)] shadow-2xl flex flex-col">
+      <motion.div initial={{ opacity: 0, y: 18, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="w-full max-w-3xl max-h-[calc(100dvh-env(safe-area-inset-bottom))] sm:max-h-[92vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-paper-raised border border-[var(--rm-border)] shadow-2xl flex flex-col pb-[env(safe-area-inset-bottom)]">
         <div className="px-5 sm:px-7 py-5 bg-cover text-paper flex items-start justify-between gap-4">
           <div>
             <p className="text-[10px] uppercase tracking-[.18em] text-brass-light font-bold">House profile</p>
@@ -281,17 +281,17 @@ function HouseDetailModal({ house, user, onClose, onVacate, onBook }) {
           </div>
         </div>
 
-        <div className="overflow-y-auto p-5 sm:p-7">
+        <div className="min-w-0 overflow-y-auto p-4 sm:p-7 [overflow-wrap:anywhere]">
           {loading ? <div className="py-14 text-center text-sm text-ink-soft">Loading house history…</div> : (
             <>
               {tab === 'overview' && <div className="space-y-5">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <InfoStat icon={DoorOpen} label="Status" value={house.status === 'occupied' ? 'Occupied' : 'Vacant'} />
                   <InfoStat icon={Users} label="People" value={currentMembers} />
                   <InfoStat icon={IndianRupee} label="Monthly rent" value={house.status === 'occupied' ? `₹${Number(house.rentAmount || 0).toLocaleString('en-IN')}` : '—'} />
                   <InfoStat icon={CalendarDays} label="Moved in" value={house.moveInDate || '—'} />
                 </div>
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <DetailCard title="Current resident" icon={Users}>
                     {house.status === 'occupied' ? <>
                       <p className="font-semibold text-ink">{house.tenantName}</p>
@@ -308,10 +308,16 @@ function HouseDetailModal({ house, user, onClose, onVacate, onBook }) {
                     <p className="text-sm text-ink-soft mt-2">Total approved rent recorded: <span className="text-ink font-medium">₹{paidTotal.toLocaleString('en-IN')}</span></p>
                   </DetailCard>
                 </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {house.status === 'occupied' ? <button onClick={onVacate} className="px-4 py-2.5 rounded-xl border border-stamp-red/30 text-stamp-red text-sm font-semibold hover:bg-stamp-red/5">More actions · Vacate house</button> : <button onClick={onBook} className="px-4 py-2.5 rounded-xl bg-brand !text-white text-sm font-semibold">Book this house</button>}
-                  <span className="px-4 py-2.5 rounded-xl bg-paper border border-[var(--rm-border)] text-sm text-ink-soft">Created {house.createdAt ? new Date(house.createdAt).toLocaleDateString('en-IN') : '—'}</span>
-                </div>
+                <details className="rounded-xl border border-[var(--rm-border)] bg-paper p-3">
+                  <summary className="cursor-pointer select-none text-sm font-semibold text-ink">Advanced house actions & move-out</summary>
+                  <div className="flex flex-wrap gap-2 pt-3">
+                    {house.status === 'occupied' ? <button onClick={onVacate} className="px-4 py-2.5 rounded-xl border border-stamp-red/30 text-stamp-red text-sm font-semibold hover:bg-stamp-red/5">Vacate house</button> : <button onClick={onBook} className="px-4 py-2.5 rounded-xl bg-brand !text-white text-sm font-semibold">Book this house</button>}
+                    <span className="px-4 py-2.5 rounded-xl bg-paper-raised border border-[var(--rm-border)] text-sm text-ink-soft">Created {house.createdAt ? new Date(house.createdAt).toLocaleDateString('en-IN') : '—'}</span>
+                  </div>
+                </details>
+                <details className="rounded-xl border border-[var(--rm-border)] bg-paper p-3">
+                  <summary className="cursor-pointer select-none text-sm font-semibold text-ink">Maintenance details · Paint, colours & provided items</summary>
+                  <div className="space-y-4 pt-4">
                 <DetailCard title="Paint & room colours" icon={DoorOpen}>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">{[['exterior','Exterior'],['hall','Hall'],['kitchen','Kitchen'],['bathroom','Bathroom'],['bedroom','Bedroom']].map(([key,label])=><label key={key} className="text-xs font-semibold text-ink-soft">{label}<div className="flex items-center gap-2 mt-1"><input type="color" value={houseColors[key] || '#f5f5f5'} onChange={e=>setHouseColors(v=>({...v,[key]:e.target.value}))} className="h-10 w-10 p-1 rounded-lg"/><input value={houseColors[key] || ''} onChange={e=>setHouseColors(v=>({...v,[key]:e.target.value}))} className="min-w-0 text-xs" placeholder="#RRGGBB"/></div></label>)}</div>
                   <p className="text-xs text-ink-soft mt-3">Keep these saved so repainting or repair work can match each room later.</p>
@@ -320,6 +326,8 @@ function HouseDetailModal({ house, user, onClose, onVacate, onBook }) {
                   <div className="space-y-2">{fixtures.map((item,index)=><div key={index} className="grid grid-cols-1 sm:grid-cols-[1fr_70px_1fr_auto] gap-2 items-center"><input value={item.name} onChange={e=>patchFixture(index,{name:e.target.value})} placeholder="Fan / light / calling bell"/><input type="number" min="1" value={item.quantity} onChange={e=>patchFixture(index,{quantity:Number(e.target.value||1)})}/><input value={item.notes||''} onChange={e=>patchFixture(index,{notes:e.target.value})} placeholder="Notes"/><button onClick={()=>setFixtures(v=>v.filter((_,i)=>i!==index))} className="text-red-600">×</button></div>)}<button onClick={addFixture} className="text-sm font-bold text-brand">+ Add item</button></div>
                 </DetailCard>
                 <DetailCard title="Owner notes" icon={DoorOpen}><textarea value={ownerNotes} onChange={e=>setOwnerNotes(e.target.value)} placeholder="Repair notes, special fittings, repaint notes…" className="w-full min-h-24"/><button disabled={detailSaving} onClick={saveHouseDetails} className="mt-3 rounded-xl bg-brand text-white px-4 py-2.5 text-sm font-bold disabled:opacity-60">{detailSaving?'Saving…':'Save house details'}</button></DetailCard>
+                  </div>
+                </details>
               </div>}
 
               {tab === 'residents' && <div className="space-y-4">
