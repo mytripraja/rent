@@ -19,8 +19,12 @@ import { cachedRequest, invalidateCache } from './performanceCache'
 const paymentsRef = collection(db, 'rentPayments')
 
 function generateApplicationNumber() {
-  const rand = Math.floor(1000 + Math.random() * 9000)
-  return `RENT-${Date.now().toString().slice(-6)}-${rand}`
+  // Human-readable tracking reference, similar in spirit to an ARN.
+  // The timestamp plus random suffix makes accidental collisions highly unlikely.
+  const now = new Date()
+  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+  const rand = Math.floor(100000 + Math.random() * 900000)
+  return `RENT-ARN-${date}-${rand}`
 }
 
 // mode: 'upi' | 'bank' | 'cash' | 'neighbor'
@@ -34,6 +38,8 @@ export async function submitRentPayment({
   dateSent,
   mode,
   cashReceivedBy, // deepu | rajavel | siva | hemalathe | others
+  paidBy = '',
+  notes = '',
   neighborHouseId, // if mode === 'neighbor'
   proofFile,
   uploadedByOwner = false,
@@ -58,7 +64,9 @@ export async function submitRentPayment({
     amount,
     dateSent,
     mode,
-    cashReceivedBy: mode === 'cash' ? cashReceivedBy : null,
+    cashReceivedBy: String(cashReceivedBy || '').trim() || null,
+    paidBy: String(paidBy || '').trim(),
+    notes: String(notes || '').trim(),
     neighborHouseId: mode === 'neighbor' ? neighborHouseId : null,
     neighborCollectedBy: null, // owner fills this in on approval if mode === neighbor
     proofUrl,

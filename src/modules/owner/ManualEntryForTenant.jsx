@@ -13,7 +13,7 @@ export default function ManualEntryForTenant() {
   const [houses, setHouses] = useState([])
   const currentMonth = new Date().toISOString().slice(0, 7)
   const [form, setForm] = useState({
-    houseId: '', month: currentMonth, amount: '', dateSent: '', mode: 'cash', cashReceivedBy: '',
+    houseId: '', month: currentMonth, amount: '', dateSent: '', mode: 'cash', cashReceivedBy: '', receiverOther: '', paidBy: '', notes: '',
   })
   const [proofFile, setProofFile] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -67,12 +67,14 @@ export default function ManualEntryForTenant() {
         amount: Number(form.amount),
         dateSent: form.dateSent,
         mode: form.mode,
-        cashReceivedBy: form.mode === 'cash' ? form.cashReceivedBy : null,
+        cashReceivedBy: form.cashReceivedBy === 'others' ? form.receiverOther.trim() : form.cashReceivedBy,
+        paidBy: form.paidBy.trim(),
+        notes: form.notes.trim(),
         proofFile,
         uploadedByOwner: true,
         recordedBy: { uid: user.uid, name: user.name },
       })
-      setDone(applicationNumber)
+      setDone({ applicationNumber, submittedAt: Date.now() })
       showToast({ message: "Entry submitted successfully", type: "success" })
     } catch (err) {
       console.error(err)
@@ -102,7 +104,7 @@ export default function ManualEntryForTenant() {
       }
       setDone(null)
       const defaultReceiver = cashReceivers.length > 0 ? cashReceivers[0] : ''
-      setForm({ houseId: '', month: currentMonth, amount: '', dateSent: '', mode: 'cash', cashReceivedBy: defaultReceiver })
+      setForm({ houseId: '', month: currentMonth, amount: '', dateSent: '', mode: 'cash', cashReceivedBy: defaultReceiver, receiverOther: '', paidBy: '', notes: '' })
     } catch (err) {
       console.error(err)
       showToast({ message: "Failed to approve payment", type: "error" })
@@ -112,9 +114,11 @@ export default function ManualEntryForTenant() {
   if (done) {
     return (
       <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-6 max-w-md text-center space-y-3">
-        <p className="text-sm text-ink-soft">Entry submitted. Application #{done}</p>
+        <p className="text-xs uppercase tracking-wider text-ink-soft">Rent entry reference number</p>
+        <p className="text-xl font-bold tracking-wide text-brand">{done.applicationNumber}</p>
+        <p className="text-xs text-ink-soft">Submitted on {new Date(done.submittedAt).toLocaleString('en-IN')} · Save this number to track the entry.</p>
         <p className="text-xs text-ink-soft">It'll show on the tenant's page as "Uploaded by Owner" once approved.</p>
-        <button onClick={() => approveNow(done)} className="w-full bg-green-600 text-white py-2 rounded-lg text-sm font-medium">
+        <button onClick={() => approveNow(done.applicationNumber)} className="w-full bg-green-600 text-white py-2 rounded-lg text-sm font-medium">
           Approve immediately
         </button>
         <button onClick={() => setDone(null)} className="w-full bg-paper text-ink-soft py-2 rounded-lg text-sm font-medium">
@@ -144,7 +148,7 @@ export default function ManualEntryForTenant() {
         <input type="month" required value={form.month} onChange={(e) => setForm({ ...form, month: e.target.value })}
           className="w-full min-h-11 border border-[var(--rm-border)] rounded-xl px-3 py-2.5 text-sm bg-paper-raised focus:ring-2 focus:ring-brand/30" />
 
-        {selectedHouse && <div className="rounded-xl border border-[var(--rm-border)] bg-paper p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-xs text-ink-soft">Selected resident</p><p className="font-semibold text-ink">{selectedHouse.tenantName}</p><p className="text-xs text-ink-soft">House {selectedHouse.internalDoorNumber} · Monthly rent ₹{Number(selectedHouse.rentAmount || 0).toLocaleString('en-IN')}</p></div><span className="rounded-full bg-brand/10 text-brand px-2 py-1 text-xs font-semibold">{form.month}</span></div><div className="mt-3 border-t border-[var(--rm-border)] pt-3"><p className="text-xs font-semibold text-ink">Existing entries for this month</p>{historyLoading ? <p className="text-xs text-ink-soft mt-1">Checking records…</p> : existingEntries.length ? <div className="mt-2 space-y-2">{existingEntries.map(row => <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 text-xs"><span>{row.dateSent || 'No date'} · ₹{Number(row.amount || 0).toLocaleString('en-IN')} · {row.applicationNumber || row.id}</span><span className={`rounded-full px-2 py-1 ${row.status === 'approved' ? 'bg-green-100 text-green-700' : row.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{row.status === 'approved' ? 'Approved' : row.status === 'rejected' ? 'Rejected' : 'Waiting approval'}</span></div>)}</div> : <p className="text-xs text-ink-soft mt-1">No rent entry found for this month.</p>}</div></div>}
+        {selectedHouse && <div className="rounded-xl border border-[var(--rm-border)] bg-paper p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-xs text-ink-soft">Selected resident</p><p className="font-semibold text-ink">{selectedHouse.tenantName}</p><p className="text-xs text-ink-soft">House {selectedHouse.internalDoorNumber} · Monthly rent ₹{Number(selectedHouse.rentAmount || 0).toLocaleString('en-IN')}</p></div><span className="rounded-full bg-brand/10 text-brand px-2 py-1 text-xs font-semibold">{form.month}</span></div><div className="mt-3 border-t border-[var(--rm-border)] pt-3"><p className="text-xs font-semibold text-ink">Existing entries for this month</p>{historyLoading ? <p className="text-xs text-ink-soft mt-1">Checking records…</p> : existingEntries.length ? <div className="mt-2 space-y-2">{existingEntries.map(row => <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 text-xs"><span>{row.dateSent || 'No date'} · ₹{Number(row.amount || 0).toLocaleString('en-IN')} · {row.applicationNumber || row.id}{row.paidBy ? ` · Paid by: ${row.paidBy}` : ''}{row.notes ? ` · Note: ${row.notes}` : ''}</span><span className={`rounded-full px-2 py-1 ${row.status === 'approved' ? 'bg-green-100 text-green-700' : row.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{row.status === 'approved' ? 'Approved' : row.status === 'rejected' ? 'Rejected' : 'Waiting approval'}</span></div>)}</div> : <p className="text-xs text-ink-soft mt-1">No rent entry found for this month.</p>}</div></div>}
 
         <input type="number" required min="1" placeholder="Amount (₹)" value={form.amount}
           onChange={(e) => setForm({ ...form, amount: e.target.value })}
@@ -153,6 +157,20 @@ export default function ManualEntryForTenant() {
         <input type="date" required value={form.dateSent} onChange={(e) => setForm({ ...form, dateSent: e.target.value })}
           className="w-full min-h-11 border border-[var(--rm-border)] rounded-xl px-3 py-2.5 text-sm bg-paper-raised focus:ring-2 focus:ring-brand/30" />
 
+        <div>
+          <label className="block text-xs font-medium text-ink-soft mb-1">Who paid the rent? (optional)</label>
+          <input type="text" maxLength={100} placeholder="Tenant / family member / other payer" value={form.paidBy}
+            onChange={(e) => setForm({ ...form, paidBy: e.target.value })}
+            className="w-full min-h-11 border border-[var(--rm-border)] rounded-xl px-3 py-2.5 text-sm bg-paper-raised focus:ring-2 focus:ring-brand/30" />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-ink-soft mb-1">Notes (optional)</label>
+          <textarea rows={3} maxLength={1000} placeholder="Add a note about this rent payment…" value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            className="w-full border border-[var(--rm-border)] rounded-xl px-3 py-2.5 text-sm bg-paper-raised focus:ring-2 focus:ring-brand/30 resize-y" />
+        </div>
+
         <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}
           className="w-full min-h-11 border border-[var(--rm-border)] rounded-xl px-3 py-2.5 text-sm bg-paper-raised focus:ring-2 focus:ring-brand/30">
           <option value="cash">Cash</option>
@@ -160,13 +178,18 @@ export default function ManualEntryForTenant() {
           <option value="bank">Bank Transfer</option>
         </select>
 
-        {form.mode === 'cash' && (
-          <select value={form.cashReceivedBy} onChange={(e) => setForm({ ...form, cashReceivedBy: e.target.value })}
+        <div>
+          <label className="block text-xs font-medium text-ink-soft mb-1">Who received the rent? (optional · all payment methods)</label>
+          <select value={form.cashReceivedBy} onChange={(e) => setForm({ ...form, cashReceivedBy: e.target.value, receiverOther: '' })}
             className="w-full min-h-11 border border-[var(--rm-border)] rounded-xl px-3 py-2.5 text-sm bg-paper-raised focus:ring-2 focus:ring-brand/30">
+            <option value="">Select receiver</option>
             {cashReceivers.map((r) => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
             <option value="others">Others</option>
           </select>
-        )}
+          {form.cashReceivedBy === 'others' && <input type="text" maxLength={100} required placeholder="Enter receiver name" value={form.receiverOther}
+            onChange={(e) => setForm({ ...form, receiverOther: e.target.value })}
+            className="mt-2 w-full min-h-11 border border-[var(--rm-border)] rounded-xl px-3 py-2.5 text-sm bg-paper-raised" />}
+        </div>
 
         {(form.mode === 'upi' || form.mode === 'bank') && (
           <div>

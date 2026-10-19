@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
-import { listPendingApprovals, approvePayment, rejectPayment, calculateLateFee } from '../../services/rentService'
+import { listPendingApprovals, approvePayment, rejectPayment } from '../../services/rentService'
 import { getCashReceivers } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../shared/ui/ConfirmDialog'
@@ -132,15 +132,11 @@ export default function RentApprovalQueue() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold text-ink">Rent approvals & history</h2><div className="flex rounded-xl border border-[var(--rm-border)] p-1 bg-paper-raised"><button onClick={() => setView('pending')} className={`px-3 py-2 rounded-lg text-sm ${view === 'pending' ? 'bg-brand text-white' : 'text-ink-soft'}`}>Pending ({pending.length})</button><button onClick={() => setView('history')} className={`px-3 py-2 rounded-lg text-sm ${view === 'history' ? 'bg-brand text-white' : 'text-ink-soft'}`}>Approval history</button></div></div>
       {view === 'history' ? (
-        <section className="rounded-2xl border border-[var(--rm-border)] bg-paper-raised p-4 space-y-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-ink">Monthly rent history</h3><p className="text-xs text-ink-soft">Approved, waiting and rejected entries grouped month by month.</p></div><input aria-label="Filter history by month" type="month" value={historyMonth} onChange={e => setHistoryMonth(e.target.value)} className="border border-[var(--rm-border)] rounded-lg px-3 py-2 text-sm" /></div>{historyLoading ? <p className="text-sm text-ink-soft py-4">Loading history…</p> : historyRows.filter(p => p.month === historyMonth).length === 0 ? <p className="text-sm text-ink-soft py-5 text-center">No rent entries for {historyMonth}.</p> : <div className="space-y-2">{historyRows.filter(p => p.month === historyMonth).map(p => <div key={p.id} className="rounded-xl border border-[var(--rm-border)] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"><div><p className="font-medium text-ink">{p._house?.internalDoorNumber || p.houseId} · {p._house?.tenantName || 'Tenant'} · ₹{Number(p.amount || 0).toLocaleString('en-IN')}</p><p className="text-xs text-ink-soft">{p.month} · {p.dateSent || 'No payment date'} · Ref {p.applicationNumber || p.id}</p>{p.rejectionReason && <p className="text-xs text-red-600">Reason: {p.rejectionReason}</p>}</div><span className={`text-xs font-semibold rounded-full px-3 py-1 self-start ${p.status === 'approved' ? 'bg-green-100 text-green-700' : p.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{p.status === 'approved' ? 'Approved' : p.status === 'rejected' ? 'Rejected' : 'Waiting'}</span></div>)}</div>}</section>
+        <section className="rounded-2xl border border-[var(--rm-border)] bg-paper-raised p-4 space-y-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-ink">Monthly rent history</h3><p className="text-xs text-ink-soft">Approved, waiting and rejected entries grouped month by month.</p></div><input aria-label="Filter history by month" type="month" value={historyMonth} onChange={e => setHistoryMonth(e.target.value)} className="border border-[var(--rm-border)] rounded-lg px-3 py-2 text-sm" /></div>{historyLoading ? <p className="text-sm text-ink-soft py-4">Loading history…</p> : historyRows.filter(p => p.month === historyMonth).length === 0 ? <p className="text-sm text-ink-soft py-5 text-center">No rent entries for {historyMonth}.</p> : <div className="space-y-2">{historyRows.filter(p => p.month === historyMonth).map(p => <div key={p.id} className="rounded-xl border border-[var(--rm-border)] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"><div><p className="font-medium text-ink">{p._house?.internalDoorNumber || p.houseId} · {p._house?.tenantName || 'Tenant'} · ₹{Number(p.amount || 0).toLocaleString('en-IN')}</p><p className="text-xs text-ink-soft">{p.month} · {p.dateSent || 'No payment date'} · Ref {p.applicationNumber || p.id}</p>{p.cashReceivedBy && <p className="text-xs text-ink-soft">Received by {p.cashReceivedBy}</p>}{p.paidBy && <p className="text-xs text-ink-soft">Paid by {p.paidBy}</p>}{p.notes && <p className="text-xs text-ink-soft">Note: {p.notes}</p>}{p.rejectionReason && <p className="text-xs text-red-600">Reason: {p.rejectionReason}</p>}</div><span className={`text-xs font-semibold rounded-full px-3 py-1 self-start ${p.status === 'approved' ? 'bg-green-100 text-green-700' : p.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{p.status === 'approved' ? 'Approved' : p.status === 'rejected' ? 'Rejected' : 'Waiting'}</span></div>)}</div>}</section>
       ) : (
         <><h3 className="text-sm text-ink-soft">Pending approvals</h3>{pending.length === 0 ? <p className="text-sm text-ink-soft py-8 text-center rounded-2xl border border-[var(--rm-border)] bg-paper-raised">No rent submissions waiting for approval.</p> : <AnimatePresence>
         {pending.map((p) => {
           const house = houseMap[p.houseId]
-          const lateFee = (appConfig && house && p.dateSent) 
-            ? calculateLateFee(house.rentAmount, `${p.month}-05`, p.dateSent, appConfig) 
-            : 0
-
           return (
             <SwipeableApprovalCard
               key={p.id}
@@ -156,11 +152,12 @@ export default function RentApprovalQueue() {
                     {p.entrySource === 'dad_lite' ? <span className="ml-2 text-xs font-semibold text-brand bg-brand/10 px-2 py-0.5 rounded-full">Dad Lite</span> : p.uploadedByOwner ? <span className="ml-2 text-xs text-blue-600">(Uploaded by Owner)</span> : null}
                   </p>
                   <p className="text-xs text-ink-soft">
-                    Mode: {p.mode}{p.mode === 'cash' && ` · Received by ${p.cashReceivedBy}`}{p.mode === 'neighbor' && ` · Via neighbor house ${houseMap[p.neighborHouseId]?.internalDoorNumber || p.neighborHouseId}`}
+                    Mode: {p.mode}{p.cashReceivedBy && ` · Received by ${p.cashReceivedBy}`}{p.mode === 'neighbor' && ` · Via neighbor house ${houseMap[p.neighborHouseId]?.internalDoorNumber || p.neighborHouseId}`}
                   </p>
                   <p className="text-xs text-ink-soft">Sent: {p.dateSent} · App# {p.applicationNumber}</p>
                   {p.recordedBy && <p className="text-xs text-ink-soft">Entered by {p.recordedBy.name}</p>}
-                  {lateFee > 0 && <p className="text-xs text-stamp-red font-medium mt-1">Late fee: ₹{lateFee}</p>}
+                  {p.paidBy && <p className="text-xs text-ink-soft">Paid by {p.paidBy}</p>}
+                  {p.notes && <p className="text-xs text-ink-soft">Note: {p.notes}</p>}
                   {p.proofUrl && (
                     <a href={proofUrls[p.id] || p.proofUrl || '#'} target="_blank" rel="noreferrer" onClick={e => { if (!p.proofUrl && !proofUrls[p.id]) { e.preventDefault(); openProof(p) } }} className="text-xs text-brand hover:underline mt-1 inline-block">
                       View proof screenshot
