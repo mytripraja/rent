@@ -9,7 +9,7 @@ export { calculateWaterSplit } from '../utils/billSplit'
 
 const billsRef = collection(db, 'waterBills')
 
-export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId, note = '' }) {
+export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId, note = '', paymentDetails = {} }) {
   const houses = await listHouses()
   const shares = calculateWaterSplit(totalAmount, cycleMonths, houses)
 
@@ -20,6 +20,8 @@ export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonth
     cycleMonths,
     dueDate,
     note: String(note || '').trim(),
+    paymentDetails: sanitizeBillPaymentDetails(paymentDetails),
+    publicShareToken: globalThis.crypto?.randomUUID?.() || `WBS-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`,
     shares,
     houseIds: shares.map((share) => share.houseId),
     createdAt: Date.now(),
@@ -53,6 +55,17 @@ export async function listWaterBillCycles(houseId = null) {
   const base = houseId ? query(billsRef, where('houseIds', 'array-contains', houseId)) : query(billsRef, where('propertyId', '==', propertyId))
   const snap = await getDocs(base)
   return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+}
+
+function sanitizeBillPaymentDetails(value = {}) {
+  return { upiId: String(value.upiId || '').trim(), payeeName: String(value.payeeName || '').trim(), bankName: String(value.bankName || '').trim(), accountName: String(value.accountName || '').trim(), accountNumber: String(value.accountNumber || '').trim(), ifsc: String(value.ifsc || '').trim(), paymentInstructions: String(value.paymentInstructions || '').trim() }
+}
+
+export async function ensureWaterBillShareToken(bill) {
+  if (bill?.publicShareToken) return bill.publicShareToken
+  const token = globalThis.crypto?.randomUUID?.() || `WBS-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+  await updateDoc(doc(db, 'waterBills', bill.id), { publicShareToken: token })
+  return token
 }
 
 export function houseShareFromWaterBill(bill, houseId) {

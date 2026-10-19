@@ -16,6 +16,7 @@ export default function EBBillCreator() {
   const [cycleLabel, setCycleLabel] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [billNote, setBillNote] = useState('')
+  const [paymentDetails, setPaymentDetails] = useState({ upiId: '', payeeName: '', bankName: '', accountName: '', accountNumber: '', ifsc: '', paymentInstructions: '' })
   const [sharingBill, setSharingBill] = useState(null)
   const [saving, setSaving] = useState(false)
   const [createdCycle, setCreatedCycle] = useState(null)
@@ -166,12 +167,14 @@ export default function EBBillCreator() {
         meterReadingDate: document.getElementById('eb-reading-date')?.value || '',
         meterReadingTime: document.getElementById('eb-reading-time')?.value || '',
         note: billNote,
+        paymentDetails,
       })
       setCreatedCycle({ label: cycleLabel, dueDate })
       setTotalAmount('')
       setCycleLabel('')
       setDueDate('')
       setBillNote('')
+      setPaymentDetails({ upiId: '', payeeName: '', bankName: '', accountName: '', accountNumber: '', ifsc: '', paymentInstructions: '' })
       showToast({ message: "Bill cycle created and sent", type: "success" })
       refresh()
     } catch (err) {
@@ -267,6 +270,7 @@ export default function EBBillCreator() {
         <input required type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
         <textarea value={billNote} onChange={e => setBillNote(e.target.value)} rows={2} placeholder="Optional note for residents" className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <details className="rounded-xl border border-brass/20 p-3"><summary className="cursor-pointer text-sm font-semibold">Payment account for this EB bill</summary><p className="text-xs text-ink-soft mt-2">These details are shown on the bill link. Leave fields blank if you do not want to publish them.</p><div className="grid gap-2 mt-3"><input value={paymentDetails.payeeName} onChange={e=>setPaymentDetails({...paymentDetails,payeeName:e.target.value})} placeholder="UPI / account holder name" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.upiId} onChange={e=>setPaymentDetails({...paymentDetails,upiId:e.target.value})} placeholder="UPI ID (e.g. name@bank)" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.bankName} onChange={e=>setPaymentDetails({...paymentDetails,bankName:e.target.value})} placeholder="Bank name" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.accountName} onChange={e=>setPaymentDetails({...paymentDetails,accountName:e.target.value})} placeholder="Bank account holder name" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.accountNumber} onChange={e=>setPaymentDetails({...paymentDetails,accountNumber:e.target.value})} placeholder="Bank account number" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.ifsc} onChange={e=>setPaymentDetails({...paymentDetails,ifsc:e.target.value.toUpperCase()})} placeholder="IFSC" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.paymentInstructions} onChange={e=>setPaymentDetails({...paymentDetails,paymentInstructions:e.target.value})} placeholder="Payment instructions (optional)" className="w-full border rounded-lg px-3 py-2 text-sm"/></div></details>
         <div className="rounded-xl bg-paper border border-brass/20 p-3 space-y-2">
           <p className="text-xs font-semibold text-ink">Government bill reading (optional)</p>
           <p className="text-[11px] text-ink-soft">Use the official EB bill values when available. The system calculates consumption as current − previous; it does not claim an individual tenant's unit usage for a shared meter.</p>

@@ -23,7 +23,7 @@ const billsRef = collection(db, 'ebBills')
  * @param {number} cycleMonths - normally 2
  * @param {Array} houses - from listHouses(), each with { id, status, hasOwnEbMeter, ebShareOverrideMonths }
  */
-export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId, previousMeterReading, currentMeterReading, meterReadingDate, meterReadingTime, note = '' }) {
+export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId, previousMeterReading, currentMeterReading, meterReadingDate, meterReadingTime, note = '', paymentDetails = {} }) {
   const houses = await listHouses()
   const shares = calculateEbSplit(totalAmount, cycleMonths, houses)
 
@@ -34,6 +34,8 @@ export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, 
     cycleMonths,
     dueDate,
     note: String(note || '').trim(),
+    paymentDetails: sanitizeBillPaymentDetails(paymentDetails),
+    publicShareToken: globalThis.crypto?.randomUUID?.() || `EBS-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`,
     previousMeterReading: previousMeterReading === '' || previousMeterReading == null ? null : Number(previousMeterReading),
     currentMeterReading: currentMeterReading === '' || currentMeterReading == null ? null : Number(currentMeterReading),
     meterReadingDate: meterReadingDate || null,
@@ -75,6 +77,17 @@ export async function listEbBillCycles(houseId = null) {
   const base = houseId ? query(billsRef, where('houseIds', 'array-contains', houseId)) : query(billsRef, where('propertyId', '==', propertyId))
   const snap = await getDocs(base)
   return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+}
+
+function sanitizeBillPaymentDetails(value = {}) {
+  return { upiId: String(value.upiId || '').trim(), payeeName: String(value.payeeName || '').trim(), bankName: String(value.bankName || '').trim(), accountName: String(value.accountName || '').trim(), accountNumber: String(value.accountNumber || '').trim(), ifsc: String(value.ifsc || '').trim(), paymentInstructions: String(value.paymentInstructions || '').trim() }
+}
+
+export async function ensureEbBillShareToken(bill) {
+  if (bill?.publicShareToken) return bill.publicShareToken
+  const token = globalThis.crypto?.randomUUID?.() || `EBS-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+  await updateDoc(doc(db, 'ebBills', bill.id), { publicShareToken: token })
+  return token
 }
 
 export function houseShareFromBill(bill, houseId) {

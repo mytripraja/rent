@@ -104,8 +104,10 @@ function PayWaterShareModal({ bill, share, user, cashReceivers, upiConfig, onClo
   const [applicationNumber, setApplicationNumber] = useState('')
 
   const handlePayViaUPI = () => {
-    if (!upiConfig) return
-    window.location.href = generateUpiLink({ payeeName: upiConfig.ownerName, payeeUpi: upiConfig.upiId, amount: share.shareAmount, transactionNote: `Water Bill ${bill.cycleLabel} for House ${user.houseId}` })
+    const payeeUpi = bill.paymentDetails?.upiId || upiConfig?.upiId
+    const payeeName = bill.paymentDetails?.payeeName || bill.paymentDetails?.accountName || upiConfig?.ownerName
+    if (!payeeUpi || !payeeName) return
+    window.location.href = generateUpiLink({ payeeName, payeeUpi, amount: share.shareAmount, transactionNote: `Water Bill ${bill.cycleLabel} for House ${user.houseId}` })
   }
 
   async function submit(e) {
@@ -138,7 +140,7 @@ function PayWaterShareModal({ bill, share, user, cashReceivers, upiConfig, onClo
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
       <form onSubmit={submit} className="bg-paper-raised rounded-2xl shadow-lg w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto space-y-3">
         <h3 className="font-semibold text-ink">Pay {bill.cycleLabel} — ₹{share.shareAmount}</h3>
-        {upiConfig && <div className="bg-stamp-green/10 border border-stamp-green/30 rounded-xl p-4 text-center"><p className="text-sm text-stamp-green mb-2 font-medium">Quick Pay · Fixed amount ₹{share.shareAmount}</p><button type="button" onClick={handlePayViaUPI} className="w-full bg-stamp-green text-white py-2.5 rounded-lg text-sm font-medium">Pay via UPI app</button><p className="text-[10px] text-stamp-green/70 mt-2">Opens a supported UPI app with the amount prefilled. Verify the amount before authorising payment.</p></div>}
+        {(bill.paymentDetails?.upiId || upiConfig?.upiId) && <div className="bg-stamp-green/10 border border-stamp-green/30 rounded-xl p-4 text-center"><p className="text-sm text-stamp-green mb-2 font-medium">Quick Pay · Fixed amount ₹{share.shareAmount}</p><button type="button" onClick={handlePayViaUPI} className="w-full bg-stamp-green text-white py-2.5 rounded-lg text-sm font-medium">Pay via UPI app</button><p className="text-[10px] text-stamp-green/70 mt-2">Opens a supported UPI app with the amount prefilled. Verify the amount before authorising payment.</p></div>}
         {applicationNumber && <div className="text-sm rounded-xl bg-stamp-green/10 border border-stamp-green/30 p-4 space-y-1"><p className="font-semibold text-stamp-green">Payment proof submitted</p><p>Bill: {bill.cycleLabel}</p><p>House: {share.houseId}</p><p>Amount: ₹{share.shareAmount}</p><p>Reference ID: <strong className="select-all">{applicationNumber}</strong></p><p className="text-xs">You can take a screenshot of this receipt and share it with the owner. Payment remains pending until verified.</p></div>}
 
         <input required type="date" value={form.dateSent} onChange={(e) => setForm({ ...form, dateSent: e.target.value })}

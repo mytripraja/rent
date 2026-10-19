@@ -11,6 +11,7 @@ import PublicHome from './modules/public/PublicHome'
 import LegalPage from './modules/public/LegalPage'
 import NotFoundPage from './modules/public/NotFoundPage'
 import PublicNotice from './modules/public/PublicNotice'
+import PublicBill from './modules/public/PublicBill'
 import LanguagePreferenceGate from './modules/shared/LanguagePreferenceGate'
 import AppLockGate from './modules/shared/AppLockGate'
 import { GlobalErrorBoundary, OfflineStatus } from './modules/shared/AppResilience'
@@ -41,6 +42,7 @@ export default function App() {
               <Route path="/terms" element={<LegalPage type="terms" />} />
               <Route path="/acceptable-use" element={<LegalPage type="acceptable-use" />} />
               <Route path="/notice/:noticeId" element={<PublicNotice />} />
+              <Route path="/bill/:billType/:billId" element={<PublicBill />} />
               <Route path="/data-policy" element={<LegalPage type="data-policy" />} />
               <Route
                 path="/owner/*"
