@@ -17,13 +17,14 @@ import { SkeletonCard } from '../shared/ui/Skeleton'
 import BulkActions from './BulkActions'
 import { useNavigate } from 'react-router-dom'
 import { createNotification } from '../../services/notificationService'
-import { listRentHistory } from '../../services/rentService'
+import { listRentHistory, listRentPaymentsForHouses, resolveMonthStatus, currentMonthStr } from '../../services/rentService'
 import { listHouseTenantAccounts } from '../../services/tenantAccountService'
 import HouseShareModal from './HouseShareModal'
 
 export default function HouseManager() {
   const { user } = useAuth()
   const [houses, setHouses] = useState([])
+  const [currentRentStatuses, setCurrentRentStatuses] = useState({})
   const [loading, setLoading] = useState(true)
   const [bookingHouse, setBookingHouse] = useState(null)
   const [vacatingHouse, setVacatingHouse] = useState(null)
@@ -39,8 +40,26 @@ export default function HouseManager() {
 
   async function refresh() {
     setLoading(true)
-    setHouses(await listHouses())
-    setLoading(false)
+    try {
+      const loadedHouses = await listHouses()
+      setHouses(loadedHouses)
+      const payments = await listRentPaymentsForHouses(loadedHouses.map((h) => h.id))
+      const month = currentMonthStr()
+      const statuses = {}
+      for (const house of loadedHouses) {
+        if (house.status !== 'occupied') {
+          statuses[house.id] = 'vacant'
+          continue
+        }
+        statuses[house.id] = resolveMonthStatus(payments.filter((p) => p.houseId === house.id), month)
+      }
+      setCurrentRentStatuses(statuses)
+    } catch (error) {
+      console.error('Could not load houses or current-month rent statuses:', error)
+      // Keep the house directory usable even if rent history cannot be loaded.
+    } finally {
+      setLoading(false)
+    }
   }
 
   const navigate = useNavigate()
@@ -152,9 +171,17 @@ export default function HouseManager() {
                   <DoorOpen size={16} className="text-brass-light" />
                   <span className="font-display text-lg tracking-wide">{h.internalDoorNumber}</span>
                 </div>
-                <span className={`stamp ${h.status === 'occupied' ? 'stamp-green' : 'stamp-ink'} !rotate-0 !text-[0.62rem]`}>
-                  {h.status}
-                </span>
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  <span className={`stamp ${h.status === 'occupied' ? 'stamp-green' : 'stamp-ink'} !rotate-0 !text-[0.62rem]`}>
+                    {h.status}
+                  </span>
+                  {h.status === 'occupied' && currentRentStatuses[h.id] && (() => {
+                    const rentStatus = currentRentStatuses[h.id]
+                    const label = rentStatus === 'paid' ? 'RENT PAID' : rentStatus === 'waiting_approval' ? 'RENT WAITING' : rentStatus === 'not_paid' ? 'RENT UNPAID' : 'RENT STATUS'
+                    const styles = rentStatus === 'paid' ? 'border-emerald-300 text-emerald-200 bg-emerald-900/30' : rentStatus === 'waiting_approval' ? 'border-amber-300 text-amber-100 bg-amber-900/30' : 'border-red-300 text-red-100 bg-red-900/30'
+                    return <span title={`Current month (${currentMonthStr()}): ${label}`} className={`inline-flex items-center rounded-full border px-2 py-1 text-[0.58rem] font-bold tracking-wide ${styles}`}>{label}</span>
+                  })()}
+                </div>
               </div>
 
               <div className="p-4">

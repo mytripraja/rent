@@ -82,14 +82,15 @@ export async function listRentPaymentsForMonth(month) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
-// Property-scoped bulk read. Firestore 'in' supports up to 30 values, so chunk
-// house IDs instead of downloading every rent payment across every apartment.
+// Read payments one house at a time. Firestore rules validate each payment
+// against its house/property access; a multi-house `in` query can fail rules
+// evaluation even when every house shown in the UI is accessible to the owner.
+// These queries remain scoped to known house IDs and never enumerate all payments.
 export async function listRentPaymentsForHouses(houseIds = []) {
   const ids = [...new Set((houseIds || []).filter(Boolean))]
-  const chunks = []
-  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30))
+  if (!ids.length) return []
   const snapshots = await Promise.all(
-    chunks.map((chunk) => getDocs(query(paymentsRef, where('houseId', 'in', chunk))))
+    ids.map((houseId) => getDocs(query(paymentsRef, where('houseId', '==', houseId))))
   )
   const seen = new Map()
   snapshots.forEach((snap) => snap.docs.forEach((d) => seen.set(d.id, { id: d.id, ...d.data() })))
