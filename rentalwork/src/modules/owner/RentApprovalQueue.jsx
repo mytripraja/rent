@@ -134,7 +134,7 @@ export default function RentApprovalQueue() {
       {view === 'history' ? (
         <section className="rounded-2xl border border-[var(--rm-border)] bg-paper-raised p-4 space-y-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-ink">Monthly rent history</h3><p className="text-xs text-ink-soft">Approved, waiting and rejected entries grouped month by month.</p></div><input aria-label="Filter history by month" type="month" value={historyMonth} onChange={e => setHistoryMonth(e.target.value)} className="border border-[var(--rm-border)] rounded-lg px-3 py-2 text-sm" /></div>{historyLoading ? <p className="text-sm text-ink-soft py-4">Loading history…</p> : historyRows.filter(p => p.month === historyMonth).length === 0 ? <p className="text-sm text-ink-soft py-5 text-center">No rent entries for {historyMonth}.</p> : <div className="space-y-2">{historyRows.filter(p => p.month === historyMonth).map(p => <div key={p.id} className="rounded-xl border border-[var(--rm-border)] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"><div><p className="font-medium text-ink">{p._house?.internalDoorNumber || p.houseId} · {p._house?.tenantName || 'Tenant'} · ₹{Number(p.amount || 0).toLocaleString('en-IN')}</p><p className="text-xs text-ink-soft">{p.month} · {p.dateSent || 'No payment date'} · Ref {p.applicationNumber || p.id}</p>{p.rejectionReason && <p className="text-xs text-red-600">Reason: {p.rejectionReason}</p>}</div><span className={`text-xs font-semibold rounded-full px-3 py-1 self-start ${p.status === 'approved' ? 'bg-green-100 text-green-700' : p.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{p.status === 'approved' ? 'Approved' : p.status === 'rejected' ? 'Rejected' : 'Waiting'}</span></div>)}</div>}</section>
       ) : (
-        <><h3 className="text-sm text-ink-soft">Pending approvals</h3>{pending.length === 0 ? <p className="text-sm text-ink-soft py-8 text-center rounded-2xl border border-[var(--rm-border)] bg-paper-raised">No rent submissions waiting for approval.</p> : <AnimatePresence>
+        <div className="space-y-3"><h3 className="text-sm text-ink-soft">Pending approvals</h3>{pending.length === 0 ? <p className="text-sm text-ink-soft py-8 text-center rounded-2xl border border-[var(--rm-border)] bg-paper-raised">No rent submissions waiting for approval.</p> : <AnimatePresence>
         {pending.map((p) => {
           const house = houseMap[p.houseId]
           const lateFee = (appConfig && house && p.dateSent) 
@@ -179,7 +179,7 @@ export default function RentApprovalQueue() {
             </SwipeableApprovalCard>
           )
         })}
-      </AnimatePresence></>
+      </AnimatePresence></div>
       )}
 
       {rejectingId && (

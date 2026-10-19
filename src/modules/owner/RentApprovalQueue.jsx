@@ -179,7 +179,7 @@ export default function RentApprovalQueue() {
             </SwipeableApprovalCard>
           )
         })}
-      </AnimatePresence></>
+      </AnimatePresence>}</>
       )}
 
       {rejectingId && (
