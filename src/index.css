@@ -465,3 +465,24 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
   .iso-plane, .iso-plane-flat { transform: none; }
 }
 
+
+
+/* Mobile layout guardrails: prevent form controls and cards from widening the viewport. */
+html, body, #root { max-width: 100%; }
+html { -webkit-tap-highlight-color: transparent; }
+body { overflow-x: hidden; }
+button, input, select, textarea { min-width: 0; max-width: 100%; }
+input[type="date"], input[type="month"], input[type="datetime-local"] { width: 100%; min-width: 0; }
+@media (max-width: 640px) {
+  .fixed[role="dialog"], [role="dialog"].fixed { align-items: flex-end; padding: 0; }
+  [role="dialog"].fixed > form,
+  [role="dialog"].fixed > div {
+    width: 100%;
+    max-width: 100vw;
+    max-height: calc(100dvh - env(safe-area-inset-top));
+    overflow-y: auto;
+    border-radius: 1.25rem 1.25rem 0 0;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+  .min-w-max { max-width: none; }
+}

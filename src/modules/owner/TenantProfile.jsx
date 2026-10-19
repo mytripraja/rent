@@ -289,7 +289,7 @@ function CommLog({ houseId, tenantName }) {
     <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5 space-y-4">
       <h3 className="font-semibold text-ink text-sm">Communication Log</h3>
       <form onSubmit={handleAdd} className="space-y-3 bg-paper p-3 rounded-xl border border-brass/10">
-        <div className="flex gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-2 min-w-0">
           <select value={form.type} onChange={e => setForm({...form, type: e.target.value})} className="border border-brass/30 rounded-lg px-2 py-1 text-sm bg-white">
             <option value="call">Call</option>
             <option value="whatsapp">WhatsApp</option>

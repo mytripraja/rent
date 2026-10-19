@@ -20,6 +20,7 @@ export default function AppSettings() {
   const [error, setError] = useState('')
   const [houses, setHouses] = useState([])
   const [trackingHouseId, setTrackingHouseId] = useState('')
+  const [trackingHouseIds, setTrackingHouseIds] = useState([])
   const [trackingStartMonth, setTrackingStartMonth] = useState(new Date().toISOString().slice(0, 7))
   const [trackingSaving, setTrackingSaving] = useState(false)
   const [trackingMessage, setTrackingMessage] = useState('')
@@ -68,6 +69,7 @@ export default function AppSettings() {
       setHouses(loadedHouses)
       const firstOccupied = loadedHouses.find(h => h.status === 'occupied')
       setTrackingHouseId(firstOccupied?.id || loadedHouses[0]?.id || '')
+      setTrackingHouseIds([firstOccupied?.id || loadedHouses[0]?.id].filter(Boolean))
       setTrackingStartMonth(firstOccupied?.rentTrackingStartMonth || new Date().toISOString().slice(0, 7))
       const rules = await getRentReminderRules().catch(() => [])
       setReminderRules(rules.filter(r => !r.propertyId || r.propertyId === currentId))
@@ -157,18 +159,20 @@ export default function AppSettings() {
       setTrackingMessage('Choose a house first.')
       return
     }
-    const selectedHouse = houses.find(h => h.id === trackingHouseId)
-    const previousMonth = selectedHouse?.rentTrackingStartMonth || ''
+    const ids = trackingHouseIds
+    const selectedHouses = houses.filter(h => ids.includes(h.id))
+    if (!selectedHouses.length) { setTrackingMessage('Choose at least one house.'); return }
+    const names = selectedHouses.map(h => h.internalDoorNumber || h.id).join(', ')
     const confirmed = window.confirm(
-      `Start system rent tracking for ${selectedHouse?.internalDoorNumber || 'this house'} from ${trackingStartMonth}?\n\nThis setting does not delete historic manual notes or payment records. It records the month from which the system should treat rent tracking as active. Confirm that this is the intended month.`
+      `Set system rent tracking for ${selectedHouses.length} house(s): ${names}\nStart month: ${trackingStartMonth}\n\nHistoric manual notes and payment records will not be deleted. Continue?`
     )
     if (!confirmed) return
     setTrackingSaving(true)
     setTrackingMessage('')
     try {
-      await setRentTrackingStartMonth(trackingHouseId, trackingStartMonth)
-      setHouses(old => old.map(h => h.id === trackingHouseId ? { ...h, rentTrackingStartMonth: trackingStartMonth } : h))
-      setTrackingMessage(`Saved. System tracking starts from ${trackingStartMonth}. Earlier records were not changed.`)
+      for (const id of ids) await setRentTrackingStartMonth(id, trackingStartMonth)
+      setHouses(old => old.map(h => ids.includes(h.id) ? { ...h, rentTrackingStartMonth: trackingStartMonth } : h))
+      setTrackingMessage(`Saved for ${ids.length} house(s). Start month: ${trackingStartMonth}. Earlier records were not changed.`)
     } catch (err) {
       console.error(err)
       setTrackingMessage(err?.message || 'Could not save the tracking start month.')
@@ -362,12 +366,27 @@ export default function AppSettings() {
       </div>
       <div className="bg-paper-raised rounded-2xl border border-amber-200 shadow-sm p-4 space-y-4 max-w-2xl">
         <div><h3 className="font-medium text-ink">Rent tracking start month</h3><p className="text-xs text-ink-soft mt-1">Use this when system records begin later than your manual rent notebook. This saves a per-house start month and does not create or delete payment entries.</p></div>
-        <div className="grid sm:grid-cols-2 gap-3 items-end">
-          <label className="block text-xs font-medium text-ink">House / tenant<select value={trackingHouseId} onChange={e => { const id=e.target.value; setTrackingHouseId(id); const h=houses.find(x=>x.id===id); setTrackingStartMonth(h?.rentTrackingStartMonth || new Date().toISOString().slice(0,7)); setTrackingMessage('') }} className="w-full mt-1"><option value="">Choose house</option>{houses.map(h=><option key={h.id} value={h.id}>{h.internalDoorNumber || h.id} · {h.tenantName || 'Vacant'}</option>)}</select></label>
-          <label className="block text-xs font-medium text-ink">Start tracking from<input type="month" value={trackingStartMonth} onChange={e=>setTrackingStartMonth(e.target.value)} className="w-full mt-1" /></label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+          <div className="min-w-0">
+            <div className="flex flex-wrap gap-2 mb-2">
+              <button type="button" onClick={() => { setTrackingHouseIds(houses.filter(h=>h.status==='occupied').map(h=>h.id)); setTrackingHouseId(''); setTrackingMessage('') }} className="border border-[var(--rm-border)] rounded-lg px-3 py-2 text-xs">Select all occupied</button>
+              <button type="button" onClick={() => { setTrackingHouseIds([]); setTrackingHouseId(''); setTrackingMessage('') }} className="border border-[var(--rm-border)] rounded-lg px-3 py-2 text-xs">Clear selection</button>
+            </div>
+            <div className="max-h-44 overflow-y-auto rounded-xl border border-[var(--rm-border)] p-2 space-y-1">
+              {houses.map(h => <label key={h.id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-paper min-w-0">
+                <input type="checkbox" className="mt-1 shrink-0" checked={trackingHouseIds.includes(h.id)} onChange={e => setTrackingHouseIds(old => e.target.checked ? [...old,h.id] : old.filter(id=>id!==h.id))}/>
+                <span className="text-xs break-words">{h.internalDoorNumber || h.id} · {h.tenantName || 'Vacant'}{h.status!=='occupied' ? ' (not occupied)' : ''}</span>
+              </label>)}
+            </div>
+            <p className="text-xs text-ink-soft mt-1">{trackingHouseIds.length ? `${trackingHouseIds.length} selected` : 'No houses selected — choose one house below, or select multiple above.'}</p>
+          </div>
+          <div className="min-w-0 space-y-3">
+            <label className="block text-xs font-medium text-ink">Single house (optional)<select value={trackingHouseId} onChange={e => { const id=e.target.value; setTrackingHouseId(id); setTrackingHouseIds(id ? [id] : []); setTrackingMessage('') }} className="w-full mt-1 min-w-0"><option value="">Choose house</option>{houses.map(h=><option key={h.id} value={h.id}>{h.internalDoorNumber || h.id} · {h.tenantName || 'Vacant'}</option>)}</select></label>
+            <label className="block text-xs font-medium text-ink">Start tracking from<input type="month" value={trackingStartMonth} onChange={e=>setTrackingStartMonth(e.target.value)} className="w-full mt-1 min-w-0" /></label>
+            <p className="text-xs text-ink-soft">Saved start month: {trackingHouseIds.length === 1 ? (houses.find(h=>h.id===trackingHouseIds[0])?.rentTrackingStartMonth || 'Not set') : 'Varies by house'}</p>
+          </div>
         </div>
-        <p className="text-xs text-ink-soft">Current setting: {houses.find(h=>h.id===trackingHouseId)?.rentTrackingStartMonth || 'Not set (existing default behavior)'}</p>
-        <button type="button" onClick={saveRentTrackingStartMonth} disabled={trackingSaving || !trackingHouseId || !trackingStartMonth} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-60">{trackingSaving ? 'Saving…' : 'Save tracking start month'}</button>
+        <button type="button" onClick={saveRentTrackingStartMonth} disabled={trackingSaving || trackingHouseIds.length===0 || !trackingStartMonth} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-60">{trackingSaving ? 'Saving…' : 'Save tracking start month'}</button>
         {trackingMessage && <p role="status" className="text-sm text-ink-soft">{trackingMessage}</p>}
       </div>
       <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 space-y-4 max-w-2xl">
