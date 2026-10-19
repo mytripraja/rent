@@ -24,8 +24,7 @@ export default function BillShareTools({ bill, houses = [], billType = 'Water', 
       chosen.forEach(r => lines.push(`${r.tenantName} · House ${r.houseLabel} · Share ${money(r.shareAmount)}`))
     } else lines.push(`House-wise individual shares are available after signing in.`)
     lines.push('', `View your bill / sign in: ${portalLink}`, 'Please use your registered tenant account to view your exact share and submit payment proof. A payment is not marked paid until the owner verifies it.')
-    return lines.join('
-')
+    return lines.join('\n')
   }, [bill, billType, chosen, customNote, detailed, includeNote, portalLink])
   const selectedRequired = (scope === 'one' || scope === 'multiple') && !chosen.length
   function shareTo(kind) {
