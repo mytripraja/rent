@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { getCashReceivers, updateCashReceivers, getRentReminderRules, updateRentReminderRules, getActivePropertyId, getProperties, updateProperty } from '../../services/configService'
-import { listHouses } from '../../services/houseService'
+import { listHouses, setRentTrackingStartMonth } from '../../services/houseService'
 import { sensitiveKeyAction } from '../../services/authService'
 import { getDeviceSecurity, supportsPlatformAuthenticator, registerDeviceBiometric, disableDeviceSecurity } from '../../services/deviceSecurityService'
 
@@ -19,6 +19,10 @@ export default function AppSettings() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [houses, setHouses] = useState([])
+  const [trackingHouseId, setTrackingHouseId] = useState('')
+  const [trackingStartMonth, setTrackingStartMonth] = useState(new Date().toISOString().slice(0, 7))
+  const [trackingSaving, setTrackingSaving] = useState(false)
+  const [trackingMessage, setTrackingMessage] = useState('')
   const [reminderRules, setReminderRules] = useState([])
   const [reminderForm, setReminderForm] = useState({ houseId:'', dayOfMonth:5, time:'09:00', enabled:true })
   const [activePropertyId, setActivePropertyIdState] = useState('')
@@ -62,6 +66,9 @@ export default function AppSettings() {
       setOwnerName(config.ownerName || '')
       const loadedHouses = await listHouses(currentId).catch(() => [])
       setHouses(loadedHouses)
+      const firstOccupied = loadedHouses.find(h => h.status === 'occupied')
+      setTrackingHouseId(firstOccupied?.id || loadedHouses[0]?.id || '')
+      setTrackingStartMonth(firstOccupied?.rentTrackingStartMonth || new Date().toISOString().slice(0, 7))
       const rules = await getRentReminderRules().catch(() => [])
       setReminderRules(rules.filter(r => !r.propertyId || r.propertyId === currentId))
     } catch (err) {
@@ -142,6 +149,31 @@ export default function AppSettings() {
       setError('Failed to save apartment details.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function saveRentTrackingStartMonth() {
+    if (!trackingHouseId) {
+      setTrackingMessage('Choose a house first.')
+      return
+    }
+    const selectedHouse = houses.find(h => h.id === trackingHouseId)
+    const previousMonth = selectedHouse?.rentTrackingStartMonth || ''
+    const confirmed = window.confirm(
+      `Start system rent tracking for ${selectedHouse?.internalDoorNumber || 'this house'} from ${trackingStartMonth}?\n\nThis setting does not delete historic manual notes or payment records. It records the month from which the system should treat rent tracking as active. Confirm that this is the intended month.`
+    )
+    if (!confirmed) return
+    setTrackingSaving(true)
+    setTrackingMessage('')
+    try {
+      await setRentTrackingStartMonth(trackingHouseId, trackingStartMonth)
+      setHouses(old => old.map(h => h.id === trackingHouseId ? { ...h, rentTrackingStartMonth: trackingStartMonth } : h))
+      setTrackingMessage(`Saved. System tracking starts from ${trackingStartMonth}. Earlier records were not changed.`)
+    } catch (err) {
+      console.error(err)
+      setTrackingMessage(err?.message || 'Could not save the tracking start month.')
+    } finally {
+      setTrackingSaving(false)
     }
   }
 
@@ -327,6 +359,16 @@ export default function AppSettings() {
         {resetMode && <div className="rounded-xl border border-brand/20 bg-brand/5 p-3 space-y-2"><p className="text-xs font-bold text-ink">Email reset code</p><input value={resetCode} onChange={e=>setResetCode(e.target.value.replace(/\D/g,'').slice(0,6))} inputMode="numeric" placeholder="6-digit code" autoComplete="one-time-code"/><div className="grid sm:grid-cols-2 gap-2"><input type="password" minLength="8" value={resetKey} onChange={e=>setResetKey(e.target.value)} placeholder="New critical password" autoComplete="new-password"/><input type="password" minLength="8" value={resetKeyAgain} onChange={e=>setResetKeyAgain(e.target.value)} placeholder="Repeat password" autoComplete="new-password"/></div><button type="button" onClick={confirmCriticalReset} className="bg-brand text-white px-4 py-2 rounded-lg text-xs font-bold">Confirm reset</button></div>}
         <div className="rounded-xl bg-paper border border-[var(--rm-border)] p-3"><p className="text-xs font-semibold text-ink">Device face / fingerprint verification</p><p className="text-[11px] text-ink-soft mt-1">Uses your browser/device passkey (Face ID, Windows Hello or fingerprint when supported). The biometric itself is not sent to Rental Manager.</p><div className="mt-2 flex flex-wrap gap-2">{supportsPlatformAuthenticator() && deviceSecurity.method==='biometric' ? <button type="button" onClick={disableBiometric} className="rm-secondary-button px-3 py-2 text-xs">Disable on this device</button> : <button type="button" disabled={!supportsPlatformAuthenticator()} onClick={enableBiometric} className="bg-brand text-white px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-50">Enable Face / Fingerprint</button>}</div></div>
         {securityMessage && <p className="text-xs text-brand" role="status">{securityMessage}</p>}
+      </div>
+      <div className="bg-paper-raised rounded-2xl border border-amber-200 shadow-sm p-4 space-y-4 max-w-2xl">
+        <div><h3 className="font-medium text-ink">Rent tracking start month</h3><p className="text-xs text-ink-soft mt-1">Use this when system records begin later than your manual rent notebook. This saves a per-house start month and does not create or delete payment entries.</p></div>
+        <div className="grid sm:grid-cols-2 gap-3 items-end">
+          <label className="block text-xs font-medium text-ink">House / tenant<select value={trackingHouseId} onChange={e => { const id=e.target.value; setTrackingHouseId(id); const h=houses.find(x=>x.id===id); setTrackingStartMonth(h?.rentTrackingStartMonth || new Date().toISOString().slice(0,7)); setTrackingMessage('') }} className="w-full mt-1"><option value="">Choose house</option>{houses.map(h=><option key={h.id} value={h.id}>{h.internalDoorNumber || h.id} · {h.tenantName || 'Vacant'}</option>)}</select></label>
+          <label className="block text-xs font-medium text-ink">Start tracking from<input type="month" value={trackingStartMonth} onChange={e=>setTrackingStartMonth(e.target.value)} className="w-full mt-1" /></label>
+        </div>
+        <p className="text-xs text-ink-soft">Current setting: {houses.find(h=>h.id===trackingHouseId)?.rentTrackingStartMonth || 'Not set (existing default behavior)'}</p>
+        <button type="button" onClick={saveRentTrackingStartMonth} disabled={trackingSaving || !trackingHouseId || !trackingStartMonth} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-60">{trackingSaving ? 'Saving…' : 'Save tracking start month'}</button>
+        {trackingMessage && <p role="status" className="text-sm text-ink-soft">{trackingMessage}</p>}
       </div>
       <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 space-y-4 max-w-2xl">
         <div><h3 className="font-medium text-ink">Rent reminder schedule</h3><p className="text-xs text-ink-soft">Set a separate monthly unpaid-rent reminder for each house. The tenant receives it only when the current month's rent is still unpaid.</p></div>

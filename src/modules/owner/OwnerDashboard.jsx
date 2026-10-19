@@ -68,7 +68,6 @@ const MOBILE_PRIMARY = ['home', 'houses', 'approvals', 'tenants', 'more']
 
 export default function OwnerDashboard() {
   const { user } = useAuth()
-  if (user?.appMode === 'dad-lite') return <DadLiteDashboard />
   const navigate = useNavigate()
   const location = useLocation()
   const pathSegment = location.pathname.split('/owner/')[1] || 'home'
@@ -116,6 +115,8 @@ export default function OwnerDashboard() {
     setSearchHouseId(houseId)
     navigate('/owner/tenants')
   }
+
+  if (user?.appMode === 'dad-lite') return <DadLiteDashboard />
 
   return (
     <div className="min-h-screen bg-paper text-ink">

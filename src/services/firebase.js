@@ -1,11 +1,7 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
+import { getToken, initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check'
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore'
-// NOTE: `firebase/app-check` is deliberately NOT imported statically. It is only
-// needed by authenticated calls into /api/*, so it is loaded on demand in
-// getAppCheckHeader() below — that keeps the reCAPTCHA Enterprise SDK out of the
-// initial parse entirely (and out of the bundle's graph when the site key is
-// unset, i.e. every local/dev build).
 
 // Paste your Firebase project config here (from Firebase console > Project settings).
 // On Vercel, prefix each value with VITE_ and read via import.meta.env, e.g.
@@ -30,36 +26,12 @@ export const app = initializeApp(firebaseConfig)
 // Optional production App Check. Configure VITE_RECAPTCHA_ENTERPRISE_SITE_KEY
 // after registering rent.deepusiva.com in Firebase App Check. The feature stays
 // disabled until the site key is supplied, so local development is unaffected.
-// `appCheck` keeps its original name and stays null until the SDK has actually
-// been initialised (i.e. still null whenever no site key is configured).
-export let appCheck = null
-
-let appCheckModulePromise = null
-let appCheckToken = null
-
-function ensureAppCheck() {
-  const siteKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY
-  if (!siteKey) return Promise.resolve(null)
-
-  if (!appCheckModulePromise) {
-    appCheckModulePromise = import('firebase/app-check')
-      .then(({ initializeAppCheck, ReCaptchaEnterpriseProvider, getToken }) => {
-        appCheckToken = getToken
-        appCheck = initializeAppCheck(app, {
-          provider: new ReCaptchaEnterpriseProvider(siteKey),
-          isTokenAutoRefreshEnabled: true,
-        })
-        return appCheck
-      })
-      .catch((error) => {
-        console.error('Failed to initialise Firebase App Check', error)
-        appCheckModulePromise = null // retry on the next call
-        return null
-      })
-  }
-
-  return appCheckModulePromise
-}
+export const appCheck = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY
+  ? initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY),
+      isTokenAutoRefreshEnabled: true,
+    })
+  : null
 
 export const auth = getAuth(app)
 // Firebase's current persistentLocalCache API replaces the older
@@ -72,10 +44,9 @@ export const db = initializeFirestore(app, {
 // Used by any client call into /api/* — attaches the current user's Firebase
 // ID token so the serverless function can verify who's calling.
 export async function getAppCheckHeader() {
-  const instance = await ensureAppCheck()
-  if (!instance || !appCheckToken) return {}
+  if (!appCheck) return {}
   try {
-    const token = await appCheckToken(instance)
+    const token = await getToken(appCheck)
     return token?.token ? { 'X-Firebase-AppCheck': token.token } : {}
   } catch {
     return {}

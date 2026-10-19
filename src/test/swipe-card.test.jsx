@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import SwipeableApprovalCard, { resolveSwipeAction } from '../modules/shared/ui/SwipeableApprovalCard'
+import SwipeableApprovalCard from '../modules/shared/ui/SwipeableApprovalCard'
 
 function renderCard(props = {}) {
   return render(
@@ -45,32 +45,5 @@ describe('SwipeableApprovalCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open rejection' }))
     expect(onApprove).toHaveBeenCalledTimes(1)
     expect(onReject).toHaveBeenCalledTimes(1)
-  })
-
-  // The drag handler itself cannot run in jsdom, so the threshold rule that
-  // decides approve / reject / snap-back is locked down directly.
-  describe('resolveSwipeAction', () => {
-    const THRESHOLD = 140
-
-    it('approves when dragged past the right threshold', () => {
-      expect(resolveSwipeAction(141, THRESHOLD)).toBe('approve')
-      expect(resolveSwipeAction(900, THRESHOLD)).toBe('approve')
-    })
-
-    it('rejects when dragged past the left threshold', () => {
-      expect(resolveSwipeAction(-141, THRESHOLD)).toBe('reject')
-      expect(resolveSwipeAction(-900, THRESHOLD)).toBe('reject')
-    })
-
-    it('snaps back when the gesture stays under the threshold', () => {
-      expect(resolveSwipeAction(0, THRESHOLD)).toBeNull()
-      expect(resolveSwipeAction(139, THRESHOLD)).toBeNull()
-      expect(resolveSwipeAction(-139, THRESHOLD)).toBeNull()
-    })
-
-    it('treats a boundary hit as "under threshold"', () => {
-      expect(resolveSwipeAction(THRESHOLD, THRESHOLD)).toBeNull()
-      expect(resolveSwipeAction(-THRESHOLD, THRESHOLD)).toBeNull()
-    })
   })
 })

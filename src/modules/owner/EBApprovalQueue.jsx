@@ -5,10 +5,8 @@ import { listHouses } from '../../services/houseService'
 import { getCashReceivers } from '../../services/configService'
 import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../shared/ui/ConfirmDialog'
-import SwipeableApprovalCard from '../shared/ui/SwipeableApprovalCard'
 import { useToast } from '../shared/ui/Toast'
 import { getPaymentProofUrl } from '../../services/cloudinaryService'
-import { triggerHaptic } from '../../utils/haptics'
 
 export default function EBApprovalQueue() {
   const { user } = useAuth()
@@ -103,6 +101,10 @@ export default function EBApprovalQueue() {
     }
   }
 
+  if (pending.length === 0) {
+    return <p className="text-sm text-ink-soft py-8 text-center">No EB bill submissions waiting for approval.</p>
+  }
+
   async function openProof(payment) {
     if (proofUrls[payment.id] || payment.proofUrl) return
     try { const url = await getPaymentProofUrl('ebBillPayments', payment.id); setProofUrls(v => ({ ...v, [payment.id]: url })); window.open(url, '_blank', 'noopener,noreferrer') } catch (e) { console.error(e) }
@@ -111,19 +113,27 @@ export default function EBApprovalQueue() {
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-semibold text-ink">EB Bill — Pending Approvals</h2>
-      <AnimatePresence initial={false}>
-        {pending.length === 0 && (
-          <motion.p key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-ink-soft py-8 text-center">No EB bill submissions waiting for approval.</motion.p>
-        )}
+      <AnimatePresence>
         {pending.map((p) => (
-          <SwipeableApprovalCard
-            key={p.id}
-            className="mb-3"
-            hint="← Reject | Approve →"
-            onApprove={() => handleApprove(p)}
-            onReject={() => setRejectingId(p.id)}
-          >
-            <div className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+          <div key={p.id} className="relative mb-3 overflow-hidden rounded-xl bg-paper-raised border border-brass/20 shadow-sm">
+            <div className="absolute inset-0 flex justify-between items-center px-6" aria-hidden="true">
+              <div className="text-red-600 font-medium flex items-center gap-2">✕ Reject</div>
+              <div className="text-stamp-green font-medium flex items-center gap-2">Approve ✓</div>
+            </div>
+            <motion.div
+              layout
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.7}
+              onDragEnd={(e, info) => {
+                if (info.offset.x > 100) {
+                  handleApprove(p)
+                } else if (info.offset.x < -100) {
+                  setRejectingId(p.id)
+                }
+              }}
+              className="bg-paper-raised relative z-10 p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between shadow-sm"
+            >
               <div>
                 <p className="text-sm font-medium text-ink">
                   House {houseMap[p.houseId]?.internalDoorNumber || p.houseId} · ₹{p.amount}
@@ -141,15 +151,18 @@ export default function EBApprovalQueue() {
                 )}
               </div>
               <div className="flex gap-2">
-                <button onClick={() => { triggerHaptic('success'); handleApprove(p) }} className="text-xs bg-green-600 text-white px-3 py-1.5 min-h-11 rounded-lg font-medium">
+                <button onClick={() => handleApprove(p)} className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg font-medium">
                   Approve
                 </button>
-                <button onClick={() => { triggerHaptic('error'); setRejectingId(p.id) }} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 min-h-11 rounded-lg font-medium">
+                <button onClick={() => setRejectingId(p.id)} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-lg font-medium">
                   Reject
                 </button>
               </div>
+            </motion.div>
+            <div className="text-center text-xs text-ink-soft py-1 absolute bottom-0 w-full z-20 pointer-events-none opacity-60 bg-paper-raised/80">
+              ← Reject | Approve →
             </div>
-          </SwipeableApprovalCard>
+          </div>
         ))}
       </AnimatePresence>
 
@@ -159,8 +172,8 @@ export default function EBApprovalQueue() {
             <h3 className="font-semibold text-ink">Reason for rejection</h3>
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" rows={3} />
             <div className="flex gap-2">
-              <button onClick={handleReject} className="flex-1 bg-red-600 text-white py-2 min-h-11 rounded-lg text-sm font-medium">Reject</button>
-              <button onClick={() => setRejectingId(null)} className="flex-1 bg-paper border border-brass/30 text-ink-soft py-2 min-h-11 rounded-lg text-sm font-medium">Cancel</button>
+              <button onClick={handleReject} className="flex-1 bg-red-600 text-white py-2 rounded-lg text-sm font-medium">Reject</button>
+              <button onClick={() => setRejectingId(null)} className="flex-1 bg-paper border border-brass/30 text-ink-soft py-2 rounded-lg text-sm font-medium">Cancel</button>
             </div>
           </div>
         </div>

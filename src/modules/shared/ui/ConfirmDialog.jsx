@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react'
-import { motion, AnimatePresence, useDragControls } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import Button from './Button'
-import { SheetDragHandle, sheetDragProps } from './BottomSheetModal'
 
 /**
  * A styled confirmation dialog to replace window.confirm() and window.prompt()
@@ -17,8 +16,6 @@ export default function ConfirmDialog({
   variant = 'default', // 'danger' | 'warning' | 'default'
   children
 }) {
-  const dragControls = useDragControls()
-
   // Escape key handler
   useEffect(() => {
     if (!open) return
@@ -54,7 +51,7 @@ export default function ConfirmDialog({
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           {/* Overlay */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -65,21 +62,17 @@ export default function ConfirmDialog({
             aria-hidden="true"
           />
 
-          {/* Dialog — docks to the bottom of small screens and can be flung
-              down to dismiss (drag starts from the pill only). */}
+          {/* Dialog */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            {...sheetDragProps({ onClose, controls: dragControls })}
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="dialog-title"
             aria-describedby="dialog-desc"
-            className="relative w-full max-w-md bg-paper-raised rounded-t-3xl sm:rounded-2xl shadow-xl border border-brass/20 overflow-hidden flex flex-col"
+            className="relative w-full max-w-md bg-paper-raised rounded-xl shadow-xl border border-brass/20 overflow-hidden flex flex-col"
           >
-            <SheetDragHandle onStartDrag={(e) => dragControls.start(e)} />
-
             {/* Header */}
             <div className="p-6 pb-4 border-b border-brass/10">
               <h2 id="dialog-title" className={`font-display text-xl font-semibold ${getHeaderColor()}`}>
@@ -102,7 +95,7 @@ export default function ConfirmDialog({
             </div>
 
             {/* Footer */}
-            <div className="p-6 pt-4 pb-safe flex items-center justify-end gap-3 bg-paper/50">
+            <div className="p-6 pt-4 flex items-center justify-end gap-3 bg-paper/50">
               <Button
                 variant="secondary"
                 onClick={onClose}

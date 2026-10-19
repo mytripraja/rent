@@ -173,6 +173,24 @@ export async function createHouse({ govtDoorNumber, internalDoorNumber, floor, e
   return ref
 }
 
+
+/**
+ * Sets the first month managed by the rent-tracking workflow.
+ * This does not delete or modify historic rent payment records.
+ */
+export async function setRentTrackingStartMonth(houseId, month) {
+  if (!houseId) throw new Error('Choose a house.')
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''))) {
+    throw new Error('Choose a valid month.')
+  }
+  await updateDoc(doc(db, 'houses', houseId), {
+    rentTrackingStartMonth: String(month),
+    rentTrackingStartMonthUpdatedAt: Date.now(),
+  })
+  invalidateCache('houses:')
+  return { houseId, rentTrackingStartMonth: String(month) }
+}
+
 export async function updateHouse(houseId, { govtDoorNumber, internalDoorNumber, floor, ebNumber, photos = [], propertyId, roomCounts = {} }) {
   await updateDoc(doc(db, 'houses', houseId), {
     ...(propertyId ? { propertyId } : {}),
