@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../shared/ui/ConfirmDialog'
 import { useToast } from '../shared/ui/Toast'
 import { getPaymentProofUrl } from '../../services/cloudinaryService'
+import ManualUtilityPaymentEntry from './ManualUtilityPaymentEntry'
 
 export default function WaterApprovalQueue() {
   const { user } = useAuth()
@@ -102,7 +103,7 @@ export default function WaterApprovalQueue() {
   }
 
   if (pending.length === 0) {
-    return <p className="text-sm text-ink-soft py-8 text-center">No Water bill submissions waiting for approval.</p>
+    return <div className="space-y-4"><ManualUtilityPaymentEntry utility="water" onSaved={refresh} /><p className="text-sm text-ink-soft py-8 text-center">No Water bill submissions waiting for approval.</p></div>
   }
 
   async function openProof(payment) {
@@ -111,7 +112,8 @@ export default function WaterApprovalQueue() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      <ManualUtilityPaymentEntry utility="water" onSaved={refresh} />
       <h2 className="text-lg font-semibold text-ink">Water Bill — Pending Approvals</h2>
       <AnimatePresence>
         {pending.map((p) => (
