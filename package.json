@@ -14,8 +14,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@capacitor/android": "^6.1.2",
-    "@capacitor/core": "^6.1.2",
+    "@capacitor/android": "^6.2.2",
+    "@capacitor/core": "^6.2.2",
     "cloudinary": "^2.4.0",
     "firebase": "^10.12.2",
     "firebase-admin": "^12.1.1",
@@ -26,7 +26,7 @@
     "react-router-dom": "^6.24.1"
   },
   "devDependencies": {
-    "@capacitor/cli": "^6.1.2",
+    "@capacitor/cli": "^6.2.2",
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",

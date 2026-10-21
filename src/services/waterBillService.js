@@ -1,5 +1,5 @@
-import { collection, addDoc, getDocs, query, orderBy, where, updateDoc, doc } from 'firebase/firestore'
-import { db } from './firebase'
+import { collection, addDoc, getDocs, query, orderBy, where, updateDoc, doc, getDoc } from 'firebase/firestore'
+import { db, auth, authedFetch } from './firebase'
 import { getActivePropertyId } from './configService'
 import { uploadPrivate } from './cloudinaryService'
 import { listHouses } from './houseService'
@@ -52,6 +52,14 @@ export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonth
 }
 
 export async function listWaterBillCycles(houseId = null) {
+  // Tenants must not read the parent bill document: it contains every house's share.
+  if (auth.currentUser) {
+    const profileSnap = await getDoc(doc(db, 'users', auth.currentUser.uid))
+    if (profileSnap.data()?.role === 'tenant') {
+      const result = await authedFetch('/api/tenant-utility-bills', { type: 'water' })
+      return Array.isArray(result.bills) ? result.bills : []
+    }
+  }
   const propertyId = getActivePropertyId() || 'default'
   const base = houseId ? query(billsRef, where('houseIds', 'array-contains', houseId)) : query(billsRef, where('propertyId', '==', propertyId))
   const snap = await getDocs(base)

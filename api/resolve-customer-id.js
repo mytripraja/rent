@@ -1,9 +1,6 @@
 import crypto from 'node:crypto'
-import { auth, db, requireAppCheck } from '../lib/firebaseAdmin.js'
+import { auth, db, requireAppCheck, enforceIpRateLimit } from '../lib/firebaseAdmin.js'
 
-const attempts = new Map()
-const WINDOW_MS = 60 * 1000
-const MAX_ATTEMPTS = 12
 const LOGIN_LOCK_MS = 15 * 60 * 1000
 const CONSECUTIVE_WINDOW_MS = 15 * 60 * 1000
 
@@ -88,14 +85,7 @@ export default async function handler(req, res) {
     if (req.body?.action === 'guard') return await loginGuard(req, res)
 
     const customerId = String(req.body?.customerId || '').trim().toUpperCase()
-    const ip = clientIp(req)
-    const now = Date.now()
-    const recent = (attempts.get(ip) || []).filter(t => now - t < WINDOW_MS)
-    if (recent.length >= MAX_ATTEMPTS) {
-      return res.status(429).json({ error: 'Too many attempts. Please try again shortly.' })
-    }
-    recent.push(now)
-    attempts.set(ip, recent)
+    await enforceIpRateLimit(req, 'resolve-customer-id', { limit: 12, windowMs: 60_000 })
     if (!/^RM\d{4,12}$/.test(customerId)) {
       return res.status(404).json({ error: 'No account found for that Customer ID.' })
     }
@@ -107,6 +97,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ email })
   } catch (err) {
     console.error('customer/login guard:', err)
+    if (err.statusCode === 429 && err.retryAfter) res.setHeader('Retry-After', String(err.retryAfter))
     return res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Unable to process the request.' })
   }
 }

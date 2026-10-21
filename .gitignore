@@ -1,7 +1,7 @@
 node_modules
 dist
-.env
-.env.local
+.env*
+!.env.example
 .DS_Store
 
 # Android (Capacitor) - keep the project structure in git, but not build output
@@ -12,3 +12,6 @@ android/local.properties
 android/captures
 android/.idea
 *.iml
+
+# Generated source dump; do not commit a concatenated copy of private API logic
+api_dump.txt

@@ -221,7 +221,7 @@ service cloud.firestore {
 
     // ---- ebBills / ebBillPayments ----
     match /ebBills/{billId} {
-      allow read: if canAccessPropertyRecord(resource.data) || (tenantCan('bills') && billId != null && resource.data.houseIds is list && myHouseId() in resource.data.houseIds);
+      allow read: if canAccessPropertyRecord(resource.data); // Tenant-safe share data is served by /api/tenant-utility-bills.
       allow write: if canAccessPropertyRecord(request.resource.data);
     }
     match /ebBillPayments/{paymentId} {
@@ -420,7 +420,7 @@ service cloud.firestore {
 
     // ---- waterBills / waterBillPayments ----
     match /waterBills/{billId} {
-      allow read: if canAccessPropertyRecord(resource.data) || (tenantCan('bills') && resource.data.houseIds is list && myHouseId() in resource.data.houseIds);
+      allow read: if canAccessPropertyRecord(resource.data); // Tenant-safe share data is served by /api/tenant-utility-bills.
       allow write: if canAccessPropertyRecord(request.resource.data);
     }
     match /waterBillPayments/{paymentId} {
