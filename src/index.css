@@ -511,8 +511,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .rm-dashboard-welcome .rm-aurora { opacity: .08 !important; }
 
 
-/* Pass 2: align owner screens to the Figma palette: clean white surfaces,
-   pale green section headers, green primary actions, neutral borders. */
+/* Pass 3: Figma palette system — forest-green anchors, clean white surfaces,
+   pale-green supporting surfaces, readable semantic status colours. */
 :root {
   --color-brand: #16A34A;
   --color-brand-dark: #15803D;
@@ -526,9 +526,9 @@ button { -webkit-tap-highlight-color: transparent; }
   --rm-shadow-hover: 0 8px 22px rgba(22, 101, 52, .09);
 }
 .rm-house-card-header {
-  background: #E8F5EC;
-  color: #14532D;
-  border-bottom: 1px solid #D3EBDD;
+  background: #166534;
+  color: #FFFFFF;
+  border-bottom: 1px solid #14532D;
 }
 .rm-house-card-header .stamp {
   font-size: .61rem;
@@ -544,8 +544,8 @@ button { -webkit-tap-highlight-color: transparent; }
   border-bottom: 1px solid #D3EBDD;
 }
 .rm-house-profile-header h2 { color: #14532D; }
-.rm-house-card-header .text-brand { color: #15803D !important; }
-.rm-house-card-header .text-brass-light { color: #15803D !important; }
+.rm-house-card-header .text-brand { color: #FFFFFF !important; }
+.rm-house-card-header .text-brass-light { color: #FFFFFF !important; }
 .rm-house-card-header .border-red-200 { border-color: #FECACA !important; }
 .rm-house-card-header .border-amber-200 { border-color: #FDE68A !important; }
 .rm-house-card-header .border-emerald-200 { border-color: #BBF7D0 !important; }
@@ -555,4 +555,82 @@ button { -webkit-tap-highlight-color: transparent; }
 @media (max-width: 640px) {
   .rm-house-card-header { padding: .75rem .875rem; }
   .rm-house-card-header .font-display { font-size: 1.05rem; }
+}
+
+
+/* Pass 3 — shared Figma design system across the full application.
+   Keep business logic and component structure unchanged; normalize only presentation. */
+:root {
+  --rm-forest: #166534;
+  --rm-forest-deep: #14532D;
+  --rm-action: #16A34A;
+  --rm-action-hover: #15803D;
+  --rm-mint: #E8F5EC;
+  --rm-canvas: #F5F7F8;
+  --rm-surface: #FFFFFF;
+  --rm-text: #17211B;
+  --rm-muted: #64748B;
+  --rm-line: #E2E8E4;
+  --rm-focus: rgba(22, 163, 74, .16);
+}
+body { background: var(--rm-canvas); color: var(--rm-text); }
+main, .min-h-screen { color: var(--rm-text); }
+/* Main action buttons are consistent on dashboards, forms, dialogs, and detail pages. */
+button.bg-brand, a.bg-brand, .bg-brand.text-white, button.bg-cover, a.bg-cover {
+  background-color: var(--rm-action) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+  box-shadow: 0 2px 5px rgba(22, 163, 74, .12);
+}
+button.bg-brand:hover, a.bg-brand:hover, .bg-brand.text-white:hover,
+button.bg-cover:hover, a.bg-cover:hover { background-color: var(--rm-action-hover) !important; }
+/* Shared cards and containers */
+.rm-card, .bg-paper-raised, main .rounded-2xl.border, main .rounded-xl.border {
+  border-color: var(--rm-line) !important;
+}
+.rm-card { box-shadow: 0 3px 12px rgba(15, 23, 42, .035); }
+/* Owner/tenant shell: neutral top bar, quiet dividers, green active navigation. */
+.rm-owner-header { background: #fff !important; border-bottom: 1px solid var(--rm-line) !important; }
+.rm-mobile-nav { background: #fff !important; border-top: 1px solid var(--rm-line) !important; }
+.rm-mobile-nav button[aria-current="page"] span { background: var(--rm-mint) !important; color: var(--rm-forest) !important; }
+/* Section headings and data tables */
+main h1, main h2, main h3 { color: var(--rm-text); }
+table { border-color: var(--rm-line); }
+thead, thead tr { background: #F0F7F2; }
+th { color: #475569; font-weight: 700; }
+td, th { border-color: var(--rm-line); }
+/* Status indicators retain their meaning and improve contrast. */
+.stamp-green { color: #166534; border-color: #BBF7D0; background: #F0FDF4; }
+.stamp-amber { color: #92400E; border-color: #FDE68A; background: #FFFBEB; }
+.stamp-red { color: #B91C1C; border-color: #FECACA; background: #FEF2F2; }
+/* House cards use a forest-green top band, matching the green-led Figma visual language. */
+.rm-house-card-header { background: var(--rm-forest) !important; color: #fff !important; border-bottom-color: var(--rm-forest-deep) !important; }
+.rm-house-card-header h2, .rm-house-card-header h3, .rm-house-card-header .font-display,
+.rm-house-card-header .text-ink, .rm-house-card-header .text-ink-soft,
+.rm-house-card-header .text-brand, .rm-house-card-header .text-brass-light { color: #fff !important; }
+.rm-house-card-header .stamp { background: #fff !important; }
+.rm-house-card-header .stamp-green { color: #166534 !important; }
+.rm-house-card-header .stamp-amber { color: #92400E !important; }
+.rm-house-card-header .stamp-red { color: #B91C1C !important; }
+.rm-house-profile-header { background: #F0F7F2 !important; color: var(--rm-text) !important; }
+/* Forms across rent, bills, tenant, settings, notices and maintenance screens. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+textarea, select {
+  border-color: #CBD5CE !important;
+  border-radius: 9px;
+}
+input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 3px var(--rm-focus) !important; }
+/* Dialogs/popovers share the same white surface and restrained shadow. */
+[role="dialog"], .fixed[role="dialog"] > div, .fixed[role="dialog"] > form {
+  border-color: var(--rm-line);
+}
+/* Mobile density: avoid clipped cards/forms and maintain touch targets. */
+@media (max-width: 640px) {
+  main { min-width: 0; }
+  main .grid { min-width: 0; }
+  main .overflow-x-auto { max-width: 100%; }
+  main button, main a[role="button"] { min-height: 40px; }
+  .rm-house-card-header { padding: .75rem .875rem; }
+  .rm-house-card-header .font-display { font-size: 1.05rem; }
+  .rm-dashboard-welcome { border-radius: 20px !important; }
 }
