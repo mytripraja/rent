@@ -6,20 +6,20 @@
    The old oxblood/aged-paper treatment has been replaced with a cleaner, premium interface.
 */
 @theme {
-  --color-paper: #f5f7f6;
-  --color-paper-raised: #ffffff;
-  --color-ink: #18212f;
+  --color-paper: #F7F8FA;
+  --color-paper-raised: #FFFFFF;
+  --color-ink: #17211B;
   --color-ink-soft: #667085;
-  --color-cover: #172033;
-  --color-cover-dark: #0e1523;
+  --color-cover: #166534;
+  --color-cover-dark: #14532D;
   --color-brass: #d4943a;
   --color-brass-light: #f2c878;
-  --color-stamp-green: #16836b;
-  --color-stamp-amber: #c88425;
-  --color-stamp-red: #d14b4b;
-  --color-brand: #0f766e;
-  --color-brand-dark: #0b5d57;
-  --color-paid: #16836b;
+  --color-stamp-green: #15803D;
+  --color-stamp-amber: #D97706;
+  --color-stamp-red: #DC2626;
+  --color-brand: #16A34A;
+  --color-brand-dark: #166534;
+  --color-paid: #15803D;
   --color-waiting: #c88425;
   --color-notpaid: #d14b4b;
   --font-sans: 'DM Sans', system-ui, sans-serif;
@@ -28,11 +28,11 @@
 }
 
 :root {
-  --rm-border: #e4e8e5;
-  --rm-border-strong: #d7ddd9;
-  --rm-surface-soft: #eef5f3;
-  --rm-shadow: 0 8px 28px rgba(23, 32, 51, .07);
-  --rm-shadow-hover: 0 14px 34px rgba(23, 32, 51, .11);
+  --rm-border: #E4E7EC;
+  --rm-border-strong: #D0D5DD;
+  --rm-surface-soft: #F2F5F3;
+  --rm-shadow: 0 4px 18px rgba(23, 33, 27, .045);
+  --rm-shadow-hover: 0 8px 24px rgba(23, 33, 27, .08);
 }
 
 .dark {
@@ -40,12 +40,12 @@
   --color-paper-raised: #172033;
   --color-ink: #eef3f5;
   --color-ink-soft: #a6b1bd;
-  --color-cover: #0b1220;
-  --color-cover-dark: #070c15;
+  --color-cover: #102016;
+  --color-cover-dark: #0B160E;
   --color-brass: #e0a94f;
   --color-brass-light: #f0c77e;
-  --color-brand: #2aa897;
-  --color-brand-dark: #218c80;
+  --color-brand: #4ADE80;
+  --color-brand-dark: #16A34A;
   --rm-border: #283444;
   --rm-border-strong: #354255;
   --rm-surface-soft: #1d2b3b;
@@ -59,9 +59,7 @@ body {
   margin: 0;
   min-width: 320px;
   font-family: var(--font-sans);
-  background:
-    radial-gradient(circle at 90% -10%, rgba(15,118,110,.07), transparent 28rem),
-    var(--color-paper);
+  background: var(--color-paper);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
 }
@@ -148,7 +146,7 @@ label { font-weight: 500; }
 .rm-card {
   background: var(--color-paper-raised);
   border: 1px solid var(--rm-border);
-  border-radius: 18px;
+  border-radius: 14px;
   box-shadow: var(--rm-shadow);
 }
 .rm-card-hover { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
@@ -486,3 +484,28 @@ input[type="date"], input[type="month"], input[type="datetime-local"] { width: 1
   }
   .min-w-max { max-width: none; }
 }
+
+
+/* Figma-aligned owner workspace shell */
+.rm-owner-header { background: #fff !important; color: #17211B !important; border-bottom: 1px solid #E4E7EC !important; box-shadow: 0 2px 8px rgba(23,33,27,.035) !important; }
+.rm-owner-header .text-white, .rm-owner-header .text-white\/65, .rm-owner-header .text-white\/10 { color: #17211B !important; }
+.rm-owner-header .bg-white\/10 { background: #F2F5F3 !important; }
+.rm-owner-header .border-white\/15 { border-color: #E4E7EC !important; }
+.rm-owner-header button:hover { background-color: #F2F5F3 !important; }
+.rm-owner-header .rm-icon-button { color: #17211B !important; background: #fff !important; }
+.rm-mobile-nav { border-top-color: #E4E7EC !important; box-shadow: 0 -4px 18px rgba(23,33,27,.06) !important; }
+.rm-mobile-nav button { min-height: 58px; }
+.rm-mobile-nav button[aria-current=page] span { background: #DCFCE7 !important; color: #166534 !important; }
+.rm-card { border-radius: 14px; }
+input, textarea, select { border-radius: 8px; }
+button { -webkit-tap-highlight-color: transparent; }
+@media (min-width: 1024px) { .rm-owner-header + div aside { border-right-color: #E4E7EC; } }
+
+.rm-dashboard-welcome { background: #fff !important; color: #17211B !important; border: 1px solid #E4E7EC; box-shadow: 0 4px 18px rgba(23,33,27,.045) !important; }
+.rm-dashboard-welcome .text-white\/65, .rm-dashboard-welcome .text-white\/55, .rm-dashboard-welcome .text-white\/70, .rm-dashboard-welcome .text-white\/60 { color: #667085 !important; }
+.rm-dashboard-welcome .border-white\/10 { border-color: #E4E7EC !important; }
+.rm-dashboard-welcome .bg-white\/10 { background: #F0FDF4 !important; }
+.rm-dashboard-welcome .text-white { color: #17211B !important; }
+.rm-dashboard-welcome .bg-brand\/30 { background: rgba(22,163,74,.09) !important; }
+.rm-dashboard-welcome .bg-amber-300\/10 { background: rgba(217,119,6,.04) !important; }
+.rm-dashboard-welcome .rm-aurora { opacity: .08 !important; }
