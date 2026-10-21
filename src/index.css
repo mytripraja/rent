@@ -486,7 +486,7 @@ input[type="date"], input[type="month"], input[type="datetime-local"] { width: 1
 }
 
 
-/* Figma-aligned owner workspace shell */
+/* Figma-aligned owner workspace shell — Pass 2: softer green, less saturated card chrome */
 .rm-owner-header { background: #fff !important; color: #17211B !important; border-bottom: 1px solid #E4E7EC !important; box-shadow: 0 2px 8px rgba(23,33,27,.035) !important; }
 .rm-owner-header .text-white, .rm-owner-header .text-white\/65, .rm-owner-header .text-white\/10 { color: #17211B !important; }
 .rm-owner-header .bg-white\/10 { background: #F2F5F3 !important; }
@@ -509,3 +509,50 @@ button { -webkit-tap-highlight-color: transparent; }
 .rm-dashboard-welcome .bg-brand\/30 { background: rgba(22,163,74,.09) !important; }
 .rm-dashboard-welcome .bg-amber-300\/10 { background: rgba(217,119,6,.04) !important; }
 .rm-dashboard-welcome .rm-aurora { opacity: .08 !important; }
+
+
+/* Pass 2: align owner screens to the Figma palette: clean white surfaces,
+   pale green section headers, green primary actions, neutral borders. */
+:root {
+  --color-brand: #16A34A;
+  --color-brand-dark: #15803D;
+  --color-stamp-green: #15803D;
+  --color-stamp-amber: #B45309;
+  --color-stamp-red: #DC2626;
+  --rm-border: #E2E8E4;
+  --rm-border-strong: #CBD5CE;
+  --rm-surface-soft: #F0F7F2;
+  --rm-shadow: 0 3px 12px rgba(22, 101, 52, .045);
+  --rm-shadow-hover: 0 8px 22px rgba(22, 101, 52, .09);
+}
+.rm-house-card-header {
+  background: #E8F5EC;
+  color: #14532D;
+  border-bottom: 1px solid #D3EBDD;
+}
+.rm-house-card-header .stamp {
+  font-size: .61rem;
+  letter-spacing: .025em;
+  padding: .28rem .55rem;
+  background: #FFFFFF;
+}
+.rm-house-card-header .stamp-green { color: #166534; border-color: #BBF7D0; }
+.rm-house-card-header .stamp-ink { color: #64748B; border-color: #D8E1DB; }
+.rm-house-profile-header {
+  background: #F0FDF4;
+  color: #17211B;
+  border-bottom: 1px solid #D3EBDD;
+}
+.rm-house-profile-header h2 { color: #14532D; }
+.rm-house-card-header .text-brand { color: #15803D !important; }
+.rm-house-card-header .text-brass-light { color: #15803D !important; }
+.rm-house-card-header .border-red-200 { border-color: #FECACA !important; }
+.rm-house-card-header .border-amber-200 { border-color: #FDE68A !important; }
+.rm-house-card-header .border-emerald-200 { border-color: #BBF7D0 !important; }
+.rm-house-card-header .border-slate-200 { border-color: #D8E1DB !important; }
+.rm-owner-header .rm-logo-mark { box-shadow: none; }
+.rm-owner-header input:focus, .rm-owner-header select:focus { box-shadow: 0 0 0 3px rgba(22,163,74,.12); }
+@media (max-width: 640px) {
+  .rm-house-card-header { padding: .75rem .875rem; }
+  .rm-house-card-header .font-display { font-size: 1.05rem; }
+}

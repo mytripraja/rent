@@ -158,7 +158,7 @@ export default function HouseManager() {
               onClick={() => bulkMode ? toggleSelection(h.id) : setDetailHouse(h)}
             >
               {/* Door plate header */}
-              <div className="bg-cover text-paper px-4 py-3 flex items-center justify-between">
+              <div className="rm-house-card-header px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {bulkMode && (
                     <input 
@@ -168,7 +168,7 @@ export default function HouseManager() {
                       className="w-4 h-4 rounded text-cover border-paper bg-white cursor-pointer mr-2 accent-brass"
                     />
                   )}
-                  <DoorOpen size={16} className="text-brass-light" />
+                  <DoorOpen size={16} className="text-brand" />
                   <span className="font-display text-lg tracking-wide">{h.internalDoorNumber}</span>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -178,7 +178,7 @@ export default function HouseManager() {
                   {h.status === 'occupied' && currentRentStatuses[h.id] && (() => {
                     const rentStatus = currentRentStatuses[h.id]
                     const label = rentStatus === 'paid' ? 'RENT PAID' : rentStatus === 'waiting_approval' ? 'RENT WAITING' : rentStatus === 'not_paid' ? 'RENT UNPAID' : rentStatus === 'not_tracked' ? 'NOT TRACKED' : 'RENT STATUS'
-                    const styles = rentStatus === 'paid' ? 'border-emerald-300 text-emerald-200 bg-emerald-900/30' : rentStatus === 'waiting_approval' ? 'border-amber-300 text-amber-100 bg-amber-900/30' : rentStatus === 'not_tracked' ? 'border-white/30 text-white/70 bg-white/10' : 'border-red-300 text-red-100 bg-red-900/30'
+                    const styles = rentStatus === 'paid' ? 'border-emerald-200 text-emerald-800 bg-emerald-50' : rentStatus === 'waiting_approval' ? 'border-amber-200 text-amber-800 bg-amber-50' : rentStatus === 'not_tracked' ? 'border-slate-200 text-slate-600 bg-slate-50' : 'border-red-200 text-red-700 bg-red-50'
                     return <span title={`Current month (${currentMonthStr()}): ${label}`} className={`inline-flex items-center rounded-full border px-2 py-1 text-[0.58rem] font-bold tracking-wide ${styles}`}>{label}</span>
                   })()}
                 </div>
@@ -291,13 +291,13 @@ function HouseDetailModal({ house, user, onClose, onVacate, onBook }) {
   return (
     <div className="fixed inset-0 z-[70] bg-black/55 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <motion.div initial={{ opacity: 0, y: 18, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="w-full max-w-3xl max-h-[calc(100dvh-env(safe-area-inset-bottom))] sm:max-h-[92vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-paper-raised border border-[var(--rm-border)] shadow-2xl flex flex-col pb-[env(safe-area-inset-bottom)]">
-        <div className="px-5 sm:px-7 py-5 bg-cover text-paper flex items-start justify-between gap-4">
+        <div className="rm-house-profile-header px-5 sm:px-7 py-5 flex items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] uppercase tracking-[.18em] text-brass-light font-bold">House profile</p>
+            <p className="text-[10px] uppercase tracking-[.18em] text-brand font-bold">House profile</p>
             <h2 className="font-display text-2xl font-extrabold mt-1">{house.internalDoorNumber}</h2>
-            <p className="text-sm text-paper/70 mt-1">{house.govtDoorNumber || 'Government door number not set'}</p>
+            <p className="text-sm text-ink-soft mt-1">{house.govtDoorNumber || 'Government door number not set'}</p>
           </div>
-          <button onClick={onClose} className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center" aria-label="Close"><X size={20}/></button>
+          <button onClick={onClose} className="w-10 h-10 rounded-xl border border-[var(--rm-border)] bg-white hover:bg-[#F0FDF4] text-ink flex items-center justify-center" aria-label="Close"><X size={20}/></button>
         </div>
 
         <div className="px-4 sm:px-7 pt-3 border-b border-[var(--rm-border)] overflow-x-auto sticky top-0 bg-paper-raised z-10">
