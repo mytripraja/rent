@@ -16,6 +16,8 @@ export default function EBBillCreator() {
   const [cycleLabel, setCycleLabel] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [billNote, setBillNote] = useState('')
+  const [billingMode, setBillingMode] = useState('individual-house')
+  const [houseBillEntries, setHouseBillEntries] = useState([])
   const [paymentDetails, setPaymentDetails] = useState({ upiId: '', payeeName: '', bankName: '', accountName: '', accountNumber: '', ifsc: '', paymentInstructions: '' })
   const [sharingBill, setSharingBill] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -49,6 +51,10 @@ export default function EBBillCreator() {
       const houseRows = await listHouses()
       setHouses(houseRows)
       const occupied = houseRows.filter(h => h.status === 'occupied')
+      setHouseBillEntries(current => {
+        const existing = new Map(current.map(row => [row.houseId, row]))
+        return occupied.map(h => existing.get(h.id) || { houseId: h.id, selected: !h.hasOwnEbMeter, amount: '', units: '', previousReading: '', currentReading: '' })
+      })
 
       // Load the bill list independently. A temporary bill-query failure must
       // not blank the physical meter register or the house adjustment screen.
@@ -99,10 +105,11 @@ export default function EBBillCreator() {
   }
 
   const occupiedHouses = houses.filter((h) => h.status === 'occupied')
-  const preview =
-    totalAmount && !isNaN(Number(totalAmount))
+  const preview = billingMode === 'shared-split' && totalAmount !== '' && !isNaN(Number(totalAmount))
       ? calculateEbSplit(Number(totalAmount), Number(cycleMonths), houses)
       : []
+  const individualTotal = houseBillEntries.filter(row => row.selected).reduce((sum, row) => sum + Math.max(0, Number(row.amount || 0)), 0)
+  function updateHouseBillEntry(houseId, field, value) { setHouseBillEntries(rows => rows.map(row => row.houseId === houseId ? { ...row, [field]: value } : row)) }
 
   function updateMeterRow(houseId, field, value) {
     setMeterRows(rows => rows.map(row => row.houseId === houseId ? { ...row, [field]: value } : row))
@@ -154,12 +161,18 @@ export default function EBBillCreator() {
 
   async function submit(e) {
     e.preventDefault()
+    if (billingMode === 'individual-house') {
+      const selected = houseBillEntries.filter(row => row.selected)
+      if (!selected.length) { showToast({ message: 'Select at least one house for an EB bill.', type: 'error' }); return }
+      const invalid = selected.find(row => row.amount === '' || !Number.isFinite(Number(row.amount)) || Number(row.amount) < 0)
+      if (invalid) { showToast({ message: 'Enter a valid bill amount for every selected house. ₹0 is allowed.', type: 'error' }); return }
+    }
     setSaving(true)
     try {
       await createEbBillCycle({
         propertyId: houses[0]?.propertyId || 'default',
         cycleLabel,
-        totalAmount: Number(totalAmount),
+        totalAmount: billingMode === 'individual-house' ? individualTotal : Number(totalAmount),
         cycleMonths: Number(cycleMonths),
         dueDate,
         previousMeterReading: document.getElementById('eb-previous-reading')?.value || '',
@@ -167,13 +180,15 @@ export default function EBBillCreator() {
         meterReadingDate: document.getElementById('eb-reading-date')?.value || '',
         meterReadingTime: document.getElementById('eb-reading-time')?.value || '',
         note: billNote,
-        paymentDetails,
+        paymentDetails: billingMode === 'individual-house' ? {} : paymentDetails,
+        houseBillEntries: billingMode === 'individual-house' ? houseBillEntries : null,
       })
       setCreatedCycle({ label: cycleLabel, dueDate })
       setTotalAmount('')
       setCycleLabel('')
       setDueDate('')
       setBillNote('')
+      setHouseBillEntries(rows => rows.map(row => ({ ...row, selected: false, amount: '', units: '', previousReading: '', currentReading: '' })))
       setPaymentDetails({ upiId: '', payeeName: '', bankName: '', accountName: '', accountNumber: '', ifsc: '', paymentInstructions: '' })
       showToast({ message: "Bill cycle created and sent", type: "success" })
       refresh()
@@ -189,7 +204,7 @@ export default function EBBillCreator() {
     <div className="space-y-8">
       <div>
         <h2 className="text-lg font-semibold text-ink">EB Bill</h2>
-        <p className="text-sm text-ink-soft">Every 2 months by default — override per house below if needed.</p>
+        <p className="text-sm text-ink-soft">Record each house's own EB bill amount and TANCTO units. Shared splitting remains available for genuinely shared bills.</p>
       </div>
 
       {/* Physical meter register */}
@@ -258,19 +273,21 @@ export default function EBBillCreator() {
       {/* Create new cycle */}
       <form onSubmit={submit} className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 space-y-3 max-w-md">
         <h3 className="text-sm font-semibold text-ink">New Bill Cycle</h3>
+        <label className="block text-xs font-semibold text-ink-soft">EB billing method<select value={billingMode} onChange={e=>setBillingMode(e.target.value)} className="mt-1 w-full border border-brass/30 rounded-lg px-3 py-2 text-sm text-ink"><option value="individual-house">Separate EB bill per house (recommended)</option><option value="shared-split">Shared EB bill split across houses</option></select></label>
         <input required placeholder="Label (e.g. Jul-Aug 2026)" value={cycleLabel}
           onChange={(e) => setCycleLabel(e.target.value)}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
-        <input required type="number" placeholder="Total bill amount (₹)" value={totalAmount}
+        {billingMode === 'shared-split' && <><input required type="number" min="0" placeholder="Total shared EB bill amount (₹)" value={totalAmount}
           onChange={(e) => setTotalAmount(e.target.value)}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
         <input required type="number" min="1" placeholder="Cycle length in months" value={cycleMonths}
           onChange={(e) => setCycleMonths(e.target.value)}
-          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+          className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" /></>}
+        {billingMode === 'individual-house' && <div className="rounded-xl border border-brass/20 bg-paper p-3 space-y-3"><div><p className="text-sm font-semibold text-ink">House-wise EB bills</p><p className="text-xs text-ink-soft mt-1">Select only houses whose EB bill you are recording. Houses marked as paying their own EB bill are not selected automatically. Amount ₹0 is allowed.</p></div><div className="space-y-3">{occupiedHouses.map(h => { const row = houseBillEntries.find(x=>x.houseId===h.id) || { selected:false, amount:'', units:'', previousReading:'', currentReading:'' }; return <div key={h.id} className="rounded-lg border border-brass/15 p-3 space-y-2"><label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={!!row.selected} onChange={e=>updateHouseBillEntry(h.id,'selected',e.target.checked)}/><span>{h.internalDoorNumber || h.govtDoorNumber || h.id} · {h.tenantName || 'Tenant'}</span>{h.hasOwnEbMeter && <span className="text-[10px] text-amber-700">Pays own EB</span>}</label>{row.selected && <div className="grid grid-cols-2 sm:grid-cols-4 gap-2"><label className="text-[11px] text-ink-soft">Bill amount (₹)<input type="number" min="0" step="0.01" value={row.amount} onChange={e=>updateHouseBillEntry(h.id,'amount',e.target.value)} placeholder="0 allowed" required className="mt-1 w-full border border-brass/30 rounded px-2 py-1.5 text-sm text-ink"/></label><label className="text-[11px] text-ink-soft">Units used<input type="number" min="0" step="0.01" value={row.units} onChange={e=>updateHouseBillEntry(h.id,'units',e.target.value)} placeholder="Units" className="mt-1 w-full border border-brass/30 rounded px-2 py-1.5 text-sm text-ink"/></label><label className="text-[11px] text-ink-soft">Previous reading<input type="number" min="0" step="0.01" value={row.previousReading} onChange={e=>updateHouseBillEntry(h.id,'previousReading',e.target.value)} placeholder="Optional" className="mt-1 w-full border border-brass/30 rounded px-2 py-1.5 text-sm text-ink"/></label><label className="text-[11px] text-ink-soft">Current reading<input type="number" min="0" step="0.01" value={row.currentReading} onChange={e=>updateHouseBillEntry(h.id,'currentReading',e.target.value)} placeholder="Optional" className="mt-1 w-full border border-brass/30 rounded px-2 py-1.5 text-sm text-ink"/></label></div>}</div>})}</div><p className="text-sm font-semibold text-ink">Selected EB total: ₹{individualTotal.toLocaleString('en-IN')}</p></div>}
         <input required type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
         <textarea value={billNote} onChange={e => setBillNote(e.target.value)} rows={2} placeholder="Optional note for residents" className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
-        <details className="rounded-xl border border-brass/20 p-3"><summary className="cursor-pointer text-sm font-semibold">Payment account for this EB bill</summary><p className="text-xs text-ink-soft mt-2">These details are shown on the bill link. Leave fields blank if you do not want to publish them.</p><div className="grid gap-2 mt-3"><input value={paymentDetails.payeeName} onChange={e=>setPaymentDetails({...paymentDetails,payeeName:e.target.value})} placeholder="UPI / account holder name" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.upiId} onChange={e=>setPaymentDetails({...paymentDetails,upiId:e.target.value})} placeholder="UPI ID (e.g. name@bank)" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.bankName} onChange={e=>setPaymentDetails({...paymentDetails,bankName:e.target.value})} placeholder="Bank name" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.accountName} onChange={e=>setPaymentDetails({...paymentDetails,accountName:e.target.value})} placeholder="Bank account holder name" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.accountNumber} onChange={e=>setPaymentDetails({...paymentDetails,accountNumber:e.target.value})} placeholder="Bank account number" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.ifsc} onChange={e=>setPaymentDetails({...paymentDetails,ifsc:e.target.value.toUpperCase()})} placeholder="IFSC" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.paymentInstructions} onChange={e=>setPaymentDetails({...paymentDetails,paymentInstructions:e.target.value})} placeholder="Payment instructions (optional)" className="w-full border rounded-lg px-3 py-2 text-sm"/></div></details>
+        {billingMode === 'shared-split' && <details className="rounded-xl border border-brass/20 p-3"><summary className="cursor-pointer text-sm font-semibold">Payment account for this EB bill</summary><p className="text-xs text-ink-soft mt-2">These details are shown on the bill link. Leave fields blank if you do not want to publish them.</p><div className="grid gap-2 mt-3"><input value={paymentDetails.payeeName} onChange={e=>setPaymentDetails({...paymentDetails,payeeName:e.target.value})} placeholder="UPI / account holder name" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.upiId} onChange={e=>setPaymentDetails({...paymentDetails,upiId:e.target.value})} placeholder="UPI ID (e.g. name@bank)" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.bankName} onChange={e=>setPaymentDetails({...paymentDetails,bankName:e.target.value})} placeholder="Bank name" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.accountName} onChange={e=>setPaymentDetails({...paymentDetails,accountName:e.target.value})} placeholder="Bank account holder name" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.accountNumber} onChange={e=>setPaymentDetails({...paymentDetails,accountNumber:e.target.value})} placeholder="Bank account number" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.ifsc} onChange={e=>setPaymentDetails({...paymentDetails,ifsc:e.target.value.toUpperCase()})} placeholder="IFSC" className="w-full border rounded-lg px-3 py-2 text-sm"/><input value={paymentDetails.paymentInstructions} onChange={e=>setPaymentDetails({...paymentDetails,paymentInstructions:e.target.value})} placeholder="Payment instructions (optional)" className="w-full border rounded-lg px-3 py-2 text-sm"/></div></details>}
         <div className="rounded-xl bg-paper border border-brass/20 p-3 space-y-2">
           <p className="text-xs font-semibold text-ink">Government bill reading (optional)</p>
           <p className="text-[11px] text-ink-soft">Use the official EB bill values when available. The system calculates consumption as current − previous; it does not claim an individual tenant's unit usage for a shared meter.</p>
@@ -278,7 +295,7 @@ export default function EBBillCreator() {
           <div className="grid grid-cols-2 gap-2"><input id="eb-reading-date" type="date" className="border border-brass/30 rounded-lg px-3 py-2 text-sm" /><input id="eb-reading-time" type="time" className="border border-brass/30 rounded-lg px-3 py-2 text-sm" /></div>
         </div>
 
-        {preview.length > 0 && (
+        {billingMode === 'shared-split' && preview.length > 0 && (
           <div className="bg-paper rounded-lg p-3 text-xs space-y-1">
             <p className="font-medium text-ink-soft mb-1">Preview split:</p>
             {preview.map((s) => (
@@ -291,7 +308,7 @@ export default function EBBillCreator() {
         )}
 
         <button disabled={saving} className="w-full bg-brand text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
-          {saving ? 'Creating…' : 'Create & Send Bill'}
+          {saving ? 'Creating…' : billingMode === 'individual-house' ? 'Create selected house EB bills' : 'Create & Send Shared Bill'}
         </button>
       </form>
 

@@ -9,7 +9,7 @@ export { calculateWaterSplit } from '../utils/billSplit'
 
 const billsRef = collection(db, 'waterBills')
 
-export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId, note = '', paymentDetails = {} }) {
+export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId, note = '', paymentDetails = {}, additionalCharges = [] }) {
   const houses = await listHouses()
   const shares = calculateWaterSplit(totalAmount, cycleMonths, houses)
 
@@ -17,6 +17,7 @@ export async function createWaterBillCycle({ cycleLabel, totalAmount, cycleMonth
     cycleLabel,
     propertyId: propertyId || houses[0]?.propertyId || getActivePropertyId() || 'default',
     totalAmount,
+    additionalCharges: Array.isArray(additionalCharges) ? additionalCharges.map(item => ({ label: String(item.label || '').slice(0, 100), amount: Math.max(0, Number(item.amount || 0)), frequency: item.frequency === 'yearly' ? 'yearly' : 'cycle', year: item.year || null })) : [],
     cycleMonths,
     dueDate,
     note: String(note || '').trim(),

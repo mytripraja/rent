@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     const id = String(req.query?.id || '').trim()
     const token = String(req.query?.token || '').trim()
     const details = req.query?.details === '1'
-    const showPayment = req.query?.pay === '1'
+    const requestedPayment = req.query?.pay === '1'
     if (!['water', 'eb'].includes(type) || !id || !token || id.length > 160 || token.length > 200) return res.status(400).json({ error: 'Invalid bill link' })
     const collectionName = type === 'eb' ? 'ebBills' : 'waterBills'
     const snap = await db.collection(collectionName).doc(id).get()
@@ -23,6 +23,8 @@ export default async function handler(req, res) {
       note: String(data.note || ''),
       createdAt: data.createdAt || null,
       cycleMonths: data.cycleMonths ?? null,
+      billingMode: data.billingMode || 'shared-split',
+      paymentEnabled: data.paymentEnabled !== false,
       consumptionUnits: data.consumptionUnits ?? null,
       previousMeterReading: data.previousMeterReading ?? null,
       currentMeterReading: data.currentMeterReading ?? null,
@@ -41,9 +43,13 @@ export default async function handler(req, res) {
           residentName: String(h.tenantName || h.currentTenantName || h.name || 'Resident'),
           shareAmount: Number(s.shareAmount || 0),
           monthsOccupied: s.monthsOccupied ?? null,
+          consumptionUnits: s.consumptionUnits ?? null,
+          previousMeterReading: s.previousMeterReading ?? null,
+          currentMeterReading: s.currentMeterReading ?? null,
         }
       })
     }
+    const showPayment = requestedPayment && data.paymentEnabled !== false
     if (showPayment) {
       const p = data.paymentDetails || {}
       result.paymentDetails = {

@@ -23,24 +23,34 @@ const billsRef = collection(db, 'ebBills')
  * @param {number} cycleMonths - normally 2
  * @param {Array} houses - from listHouses(), each with { id, status, hasOwnEbMeter, ebShareOverrideMonths }
  */
-export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId, previousMeterReading, currentMeterReading, meterReadingDate, meterReadingTime, note = '', paymentDetails = {} }) {
+export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, dueDate, propertyId, previousMeterReading, currentMeterReading, meterReadingDate, meterReadingTime, note = '', paymentDetails = {}, houseBillEntries = null }) {
   const houses = await listHouses()
-  const shares = calculateEbSplit(totalAmount, cycleMonths, houses)
+  const individualEntries = Array.isArray(houseBillEntries) ? houseBillEntries.filter(row => row && row.selected && row.houseId) : null
+  const shares = individualEntries ? individualEntries.map(row => {
+    const house = houses.find(h => h.id === row.houseId) || {}
+    const previous = row.previousReading === '' || row.previousReading == null ? null : Number(row.previousReading)
+    const current = row.currentReading === '' || row.currentReading == null ? null : Number(row.currentReading)
+    const units = row.units === '' || row.units == null ? (previous != null && current != null && current >= previous ? current - previous : null) : Number(row.units)
+    return { houseId: row.houseId, propertyId: house.propertyId || propertyId || getActivePropertyId() || 'default', internalDoorNumber: house.internalDoorNumber || '', houseLabel: house.internalDoorNumber || house.govtDoorNumber || row.houseId, residentName: house.tenantName || house.currentTenantName || 'Resident', tenantId: house.tenantId || house.currentTenantId || null, shareAmount: Math.max(0, Number(row.amount || 0)), monthsOccupied: Number(cycleMonths || 2), previousMeterReading: previous, currentMeterReading: current, consumptionUnits: Number.isFinite(units) && units >= 0 ? units : null }
+  }) : calculateEbSplit(totalAmount, cycleMonths, houses)
+  const actualTotalAmount = individualEntries ? shares.reduce((sum, share) => sum + Number(share.shareAmount || 0), 0) : Number(totalAmount || 0)
 
   const docRef = await addDoc(billsRef, {
     cycleLabel, // e.g. 'Jul-Aug 2026'
     propertyId: propertyId || houses[0]?.propertyId || getActivePropertyId() || 'default',
-    totalAmount,
+    totalAmount: actualTotalAmount,
+    billingMode: individualEntries ? 'individual-house' : 'shared-split',
+    paymentEnabled: individualEntries ? false : true,
     cycleMonths,
     dueDate,
     note: String(note || '').trim(),
-    paymentDetails: sanitizeBillPaymentDetails(paymentDetails),
+    paymentDetails: individualEntries ? {} : sanitizeBillPaymentDetails(paymentDetails),
     publicShareToken: globalThis.crypto?.randomUUID?.() || `EBS-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`,
-    previousMeterReading: previousMeterReading === '' || previousMeterReading == null ? null : Number(previousMeterReading),
-    currentMeterReading: currentMeterReading === '' || currentMeterReading == null ? null : Number(currentMeterReading),
+    previousMeterReading: individualEntries ? null : (previousMeterReading === '' || previousMeterReading == null ? null : Number(previousMeterReading)),
+    currentMeterReading: individualEntries ? null : (currentMeterReading === '' || currentMeterReading == null ? null : Number(currentMeterReading)),
     meterReadingDate: meterReadingDate || null,
     meterReadingTime: meterReadingTime || null,
-    consumptionUnits: (previousMeterReading !== '' && previousMeterReading != null && currentMeterReading !== '' && currentMeterReading != null)
+    consumptionUnits: !individualEntries && (previousMeterReading !== '' && previousMeterReading != null && currentMeterReading !== '' && currentMeterReading != null)
       ? (Number(currentMeterReading) >= Number(previousMeterReading) ? Number(currentMeterReading) - Number(previousMeterReading) : null)
       : null,
     shares,
@@ -69,7 +79,7 @@ export async function createEbBillCycle({ cycleLabel, totalAmount, cycleMonths, 
     await createBulkNotifications(notifications)
   }
 
-  return { id: docRef.id, shares }
+  return { id: docRef.id, shares, totalAmount: actualTotalAmount, billingMode: individualEntries ? 'individual-house' : 'shared-split' }
 }
 
 export async function listEbBillCycles(houseId = null) {

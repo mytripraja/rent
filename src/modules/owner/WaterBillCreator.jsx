@@ -13,6 +13,9 @@ export default function WaterBillCreator() {
   const [cycleLabel, setCycleLabel] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [billNote, setBillNote] = useState('')
+  const [includeCctvSim, setIncludeCctvSim] = useState(true)
+  const [includeAnnualCleaning, setIncludeAnnualCleaning] = useState(false)
+  const [annualCleaningAmount, setAnnualCleaningAmount] = useState('')
   const [paymentDetails, setPaymentDetails] = useState({ upiId: '', payeeName: '', bankName: '', accountName: '', accountNumber: '', ifsc: '', paymentInstructions: '' })
   const [sharingBill, setSharingBill] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -32,9 +35,15 @@ export default function WaterBillCreator() {
   }
 
   const occupiedHouses = houses.filter((h) => h.status === 'occupied')
-  const preview =
-    totalAmount && !isNaN(Number(totalAmount))
-      ? calculateWaterSplit(Number(totalAmount), Number(cycleMonths), houses)
+  const currentYear = new Date().getFullYear()
+  const annualCleaningAlreadyCollected = cycles.some(c => (c.additionalCharges || []).some(item => item.label === 'Annual building cleaning' && Number(item.year) === currentYear))
+  const additionalCharges = [
+    ...(includeCctvSim ? [{ label: 'CCTV SIM recharge', amount: 250, frequency: 'monthly' }] : []),
+    ...(includeAnnualCleaning && !annualCleaningAlreadyCollected && Number(annualCleaningAmount) >= 0 && annualCleaningAmount !== '' ? [{ label: 'Annual building cleaning', amount: Number(annualCleaningAmount), frequency: 'yearly', year: currentYear }] : []),
+  ]
+  const effectiveTotal = Math.max(0, Number(totalAmount || 0)) + additionalCharges.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  const preview = totalAmount !== '' && !isNaN(Number(totalAmount))
+      ? calculateWaterSplit(effectiveTotal, Number(cycleMonths), houses)
       : []
 
   async function setPartialMonths(house, months) {
@@ -57,7 +66,8 @@ export default function WaterBillCreator() {
       await createWaterBillCycle({
         propertyId: houses[0]?.propertyId || 'default',
         cycleLabel,
-        totalAmount: Number(totalAmount),
+        totalAmount: effectiveTotal,
+        additionalCharges,
         cycleMonths: Number(cycleMonths),
         dueDate,
         note: billNote,
@@ -67,6 +77,9 @@ export default function WaterBillCreator() {
       setCycleLabel('')
       setDueDate('')
       setBillNote('')
+      setIncludeCctvSim(true)
+      setIncludeAnnualCleaning(false)
+      setAnnualCleaningAmount('')
       setPaymentDetails({ upiId: '', payeeName: '', bankName: '', accountName: '', accountNumber: '', ifsc: '', paymentInstructions: '' })
       showToast({ message: "Bill cycle created and sent", type: "success" })
       refresh()
@@ -115,9 +128,17 @@ export default function WaterBillCreator() {
         <input required placeholder="Label (e.g. Jul 2026)" value={cycleLabel}
           onChange={(e) => setCycleLabel(e.target.value)}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
-        <input required type="number" placeholder="Total bill amount (₹)" value={totalAmount}
+        <input required type="number" min="0" placeholder="Water bill amount only (₹)" value={totalAmount}
           onChange={(e) => setTotalAmount(e.target.value)}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
+        <div className="rounded-xl border border-brass/20 bg-paper p-3 space-y-3">
+          <p className="text-xs font-semibold text-ink">Additional shared collections</p>
+          <label className="flex items-center justify-between gap-3 text-sm"><span>CCTV SIM recharge <span className="text-ink-soft">(₹250)</span></span><input type="checkbox" checked={includeCctvSim} onChange={e=>setIncludeCctvSim(e.target.checked)} /></label>
+          <label className="flex items-center justify-between gap-3 text-sm"><span>Annual building cleaning (once per year)</span><input type="checkbox" disabled={annualCleaningAlreadyCollected} checked={includeAnnualCleaning} onChange={e=>setIncludeAnnualCleaning(e.target.checked)} /></label>{annualCleaningAlreadyCollected && <p className="text-xs text-emerald-700">Annual cleaning has already been included in a bill cycle for {currentYear}; the option is disabled to help prevent duplicate collection.</p>}
+          {includeAnnualCleaning && <input type="number" min="0" required={includeAnnualCleaning} value={annualCleaningAmount} onChange={e=>setAnnualCleaningAmount(e.target.value)} placeholder="Total annual cleaning collection (₹)" className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />}
+          <p className="text-[11px] text-ink-soft">Selected charges are added to this cycle's total and split across eligible houses. The annual cleaning option is a manual once-a-year collection; check the previous cycles before selecting it again.</p>
+          <p className="text-xs font-semibold">Total to split: ₹{effectiveTotal.toLocaleString('en-IN')}</p>
+        </div>
         <input required type="number" min="1" placeholder="Cycle length in months" value={cycleMonths}
           onChange={(e) => setCycleMonths(e.target.value)}
           className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
@@ -153,6 +174,7 @@ export default function WaterBillCreator() {
                 <span className="font-medium">{c.cycleLabel}</span>
                 <span>₹{c.totalAmount} · due {c.dueDate}</span>
               </div>
+              {Array.isArray(c.additionalCharges) && c.additionalCharges.length > 0 && <p className="text-xs text-ink-soft mt-1">Includes: {c.additionalCharges.map(x => `${x.label} ₹${x.amount}`).join(' · ')}</p>}
               {c.note && <p className="text-xs text-ink-soft mt-1">Note: {c.note}</p>}
               <button type="button" onClick={() => setSharingBill(c)} className="mt-2 bg-brand text-white rounded-lg px-3 py-1.5 text-xs">Share bill</button>
             </div>

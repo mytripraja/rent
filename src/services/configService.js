@@ -73,7 +73,7 @@ export async function updateCashReceivers(receivers) {
 
 const DEFAULT_TEMPLATES = [
   { id: 't1', title: 'Water will be stopped', body: 'Water supply will be stopped today from 10 AM to 2 PM for motor maintenance.' },
-  { id: 't2', title: 'EB maintenance scheduled', body: 'EB power cut scheduled tomorrow from 9 AM to 5 PM.' },
+  { id: 't2', title: 'EB shutdown', body: 'EB power supply will be shut down from 9:00 AM to 5:30 PM for maintenance.', type: 'eb', category: 'Power shutdown', windowText: '9:00 AM – 5:30 PM', titleTamil: 'மின்தடை அறிவிப்பு', messageTamil: 'பராமரிப்பு பணிக்காக காலை 9:00 மணி முதல் மாலை 5:30 மணி வரை மின்சாரம் நிறுத்தப்படும்.', categoryTamil: 'மின்தடை', reasonTamil: 'பராமரிப்பு பணிகள்' },
   { id: 't3', title: 'Rent reminder', body: 'Friendly reminder that rent is due by the 5th of this month. Please pay to avoid late fees.' },
   { id: 't4', title: 'Common area cleaning', body: 'Common area cleaning will take place tomorrow. Please keep the corridors clear.' }
 ]

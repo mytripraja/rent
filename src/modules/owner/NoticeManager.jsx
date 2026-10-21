@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Megaphone, Share2, Trash2, GitBranch, Link2, Search, X, CalendarDays, Clock3 } from 'lucide-react'
 import { listHouses } from '../../services/houseService'
 import { createNotice, listAllNoticesForHouses, deleteNotice, ensureNoticePublicShare, linkNotices } from '../../services/noticeService'
-import { getTemplates } from '../../services/configService'
+import { getTemplates, updateTemplates } from '../../services/configService'
 import NoticeBanner from '../shared/NoticeBanner'
 import NoticeShareModal from './NoticeShareModal'
 import ConfirmDialog from '../shared/ui/ConfirmDialog'
@@ -40,6 +40,12 @@ export default function NoticeManager() {
   const [linkingNotice, setLinkingNotice] = useState(null)
   const [detailNotice, setDetailNotice] = useState(null)
   const [noticeSearch, setNoticeSearch] = useState('')
+  const [templateTitle, setTemplateTitle] = useState('')
+  const [templateBody, setTemplateBody] = useState('')
+  const [templateType, setTemplateType] = useState('general')
+  const [templateWindow, setTemplateWindow] = useState('')
+  const [templateTamilTitle, setTemplateTamilTitle] = useState('')
+  const [templateTamilBody, setTemplateTamilBody] = useState('')
 
   useEffect(() => { refresh() }, [])
 
@@ -65,9 +71,10 @@ export default function NoticeManager() {
     let type = 'general'
     if (/water/i.test(body)) type = 'water'
     else if (/eb|power/i.test(body)) type = 'eb'
-    const next = { ...form, message: body, title: template.title || '', type }
+    const isEbShutdown = (template.type || type) === 'eb' && /shutdown|power|eb/i.test(`${template.title || ''} ${body}`)
+    const next = { ...form, message: body, title: template.title || '', type: template.type || type, category: template.category || form.category, windowText: template.windowText || form.windowText, ...(isEbShutdown ? { audience: 'all', selectedHouseIds: [], showTimeDetails: true } : {}), titleTamil: template.titleTamil || '', messageTamil: template.messageTamil || '', categoryTamil: template.categoryTamil || '', reasonTamil: template.reasonTamil || '', additionalDetailsTamil: template.additionalDetailsTamil || '' }
     const translated = translateAnnouncementFields(next)
-    setForm(f => ({ ...f, ...next, ...translated, tamilManual: false }))
+    setForm(f => ({ ...f, ...next, ...translated, titleTamil: template.titleTamil || translated.titleTamil, messageTamil: template.messageTamil || translated.messageTamil, categoryTamil: template.categoryTamil || translated.categoryTamil, tamilManual: !!(template.titleTamil || template.messageTamil) }))
   }
 
 
@@ -113,6 +120,20 @@ export default function NoticeManager() {
     setForm(f => ({ ...f, ...next, ...translated, tamilManual: false }))
     window.scrollTo({ top: 0, behavior: 'smooth' })
     showToast({ message: `Continuing “${notice.title || 'announcement'}” as Update #${nextNumber}`, type: 'success' })
+  }
+
+
+  async function saveCustomTemplate(e) {
+    e.preventDefault()
+    if (!templateTitle.trim() || !templateBody.trim()) return showToast({ message: 'Enter a template title and message.', type: 'error' })
+    const row = { id: `custom-${Date.now()}`, title: templateTitle.trim(), body: templateBody.trim(), type: templateType, windowText: templateWindow.trim(), titleTamil: templateTamilTitle.trim(), messageTamil: templateTamilBody.trim() }
+    try {
+      const next = [...templates.filter(t => t.id !== row.id), row]
+      await updateTemplates(next)
+      setTemplates(next)
+      setTemplateTitle(''); setTemplateBody(''); setTemplateType('general'); setTemplateWindow(''); setTemplateTamilTitle(''); setTemplateTamilBody('')
+      showToast({ message: 'Notice template saved.', type: 'success' })
+    } catch (err) { showToast({ message: err.message || 'Could not save template.', type: 'error' }) }
   }
 
 
@@ -188,6 +209,7 @@ export default function NoticeManager() {
     <form onSubmit={submit} className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-4 sm:p-5 space-y-4 max-w-3xl">
       <div className="flex items-center gap-2 text-brand"><Megaphone size={18}/><span className="text-sm font-bold">Create announcement</span></div>
       {templates.length > 0 && <select onChange={handleTemplateSelect} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm bg-paper"><option value="">Use a template (optional)</option>{templates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select>}
+      <details className="rounded-xl border border-brass/20 bg-paper p-3"><summary className="cursor-pointer text-sm font-semibold text-ink">Create my own reusable notice template</summary><div className="mt-3 space-y-2"><input value={templateTitle} onChange={e=>setTemplateTitle(e.target.value)} placeholder="Template title" className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" required/><select value={templateType} onChange={e=>setTemplateType(e.target.value)} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm"><option value="general">General</option><option value="eb">EB / power</option><option value="water">Water</option><option value="urgent">Urgent</option><option value="other">Other</option></select><input value={templateWindow} onChange={e=>setTemplateWindow(e.target.value)} placeholder="Default time window (optional)" className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm"/><textarea value={templateBody} onChange={e=>setTemplateBody(e.target.value)} placeholder="English message" rows={3} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" required/><input value={templateTamilTitle} onChange={e=>setTemplateTamilTitle(e.target.value)} placeholder="Tamil title (optional)" className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm"/><textarea value={templateTamilBody} onChange={e=>setTemplateTamilBody(e.target.value)} placeholder="Tamil message (optional)" rows={2} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm"/><button type="button" onClick={() => saveCustomTemplate({ preventDefault: () => {} })} className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white">Save template</button></div></details>
 
       <div className="grid sm:grid-cols-2 gap-3">
         <input required placeholder="Title — e.g. Power cut in G1 & F3" value={form.title} onChange={e => updateEnglishField('title', e.target.value)} className="w-full border border-brass/30 rounded-lg px-3 py-2 text-sm" />
