@@ -1,24 +1,39 @@
-# Rental Manager v0.1.89 — Security remediation status
+# Security remediation status — v0.1.89
 
-## Changes included in this patch
+## Applied in this archive
+- Removed `api_dump.txt` from the distributable source archive. `.gitignore` excludes it going forward.
+- Removed `'unsafe-eval'` from the report-only Content Security Policy because a source scan of `src/`, `api/`, `lib/`, and root JavaScript did not find direct `eval()` or `new Function()` use. Keep the policy in Report-Only until tested in a browser against Firebase, reCAPTCHA/App Check, Cloudinary, and all normal workflows.
+- The existing `apiRateLimits` Firestore-backed throttling helpers and tenant utility bill endpoint are retained.
+- Capacitor Android/Core/CLI are pinned by the lockfile to 6.2.2, the fixed version stated in the referenced advisory.
 
-- Capacitor Android, Core, and CLI are set to the patched 6.2.2 release line in `package.json` and the lockfile entries. The registry was unreachable in the patching environment, so npm could not regenerate registry integrity metadata. On a machine with internet access, run `npm install` before deployment so npm refreshes the lockfile metadata, then run `npm audit` and `npm run build`. Do not publish the Android app until `npm audit` confirms the Capacitor advisory is resolved and the native app has been rebuilt.
-- Added shared Firestore-transaction-backed server-side request throttling in `lib/firebaseAdmin.js`. Authenticated API calls are limited per user and route; sensitive write routes use a tighter limit. Rate limits return HTTP 429 and `Retry-After` when handled by the API catch block.
-- Replaced the in-memory per-instance rate limit on customer-ID resolution with a Firestore-backed IP limit. This works across serverless instances, unlike an in-memory `Map`.
-- App Check enforcement remains an explicit production setting. The client already attaches an App Check token when `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` is configured. Because this environment cannot inspect the Vercel production environment or verify real tokens, enforcement has intentionally not been switched on automatically.
-- Kept the CSP in report-only mode so the site can collect violation reports without unexpectedly blocking app functionality.
-- Kept environment files and `api_dump.txt` excluded via `.gitignore`.
+## Still requires a connected Git checkout
+This archive does not include `.git` metadata, so it cannot untrack `api_dump.txt` from the remote repository or create a commit. From a real clone, run:
 
-## Required deployment steps
+```bash
+git rm --cached --ignore-unmatch api_dump.txt
+git add .gitignore vercel.json SECURITY_REMEDIATION_STATUS.md
+git commit -m "security: untrack API dump and tighten CSP"
+git push
+```
 
-1. In an internet-connected checkout, run `npm install` to regenerate `package-lock.json` and integrity metadata, then `npm audit` and `npm run build`.
-2. Fix every remaining high/critical audit finding without using `npm audit fix --force` blindly. Test any Firebase Admin major-version changes against all `/api` functions.
-3. In Firebase Console, register `rent.deepusiva.com` with reCAPTCHA Enterprise App Check and configure Vercel `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` for the client build.
-4. Deploy first with `FIREBASE_APPCHECK_ENFORCED=false`; verify App Check requests from the production client and inspect failures. Then set `FIREBASE_APPCHECK_ENFORCED=true` in Vercel and redeploy server functions. If the client token is missing or invalid, protected API requests will return 401.
-5. Test login, tenant bill views, rent submission, owner approvals, uploads, notices, and all mobile/Android flows with test accounts before production rollout.
-6. Firestore rate-limit records are stored in `apiRateLimits`. Configure a Firestore TTL policy on `updatedAt` or periodically clean old records to control collection growth; TTL is optional for correctness but recommended operationally.
-7. Keep CSP in report-only mode until real browser reports show all required Firebase, reCAPTCHA, Cloudinary, and Vercel endpoints. Then move to an enforced CSP after review.
+If `api_dump.txt` should be absent from the working tree too, `git rm --ignore-unmatch api_dump.txt` may be used instead of `git rm --cached`.
 
-## Verification limits
+## Dependency audit status
+Dependency findings are **not verified as resolved**. `npm audit` could not reach `https://registry.npmjs.org/` in the build environment (DNS/network failure), so no safe dependency graph update or fresh audit result was possible. On a machine with registry access, run:
 
-The source syntax and JSON configuration can be checked locally, but the npm registry was unreachable in this environment. Therefore the npm dependency tree, complete Vite build, npm audit result, production App Check tokens, and live production behavior have not been verified here. This ZIP is a security-hardening candidate and must pass the deployment steps above before it is considered production-ready.
+```bash
+npm ci
+npm audit
+npm audit fix
+npm audit
+npm run build
+npm test
+```
+
+Review any remaining fixes individually. Do not use `npm audit fix --force` on production without a branch, tests, and a review of major-version changes—especially `firebase-admin`, `@grpc/grpc-js`, and Firestore-related packages. Commit both `package.json` and `package-lock.json` after successful testing.
+
+## App Check rollout
+`FIREBASE_APPCHECK_ENFORCED=false` remains intentionally unchanged. Verify that the deployed client obtains and sends valid App Check tokens for all protected API requests, test with a staging deployment, then set `FIREBASE_APPCHECK_ENFORCED=true` in Vercel and redeploy. Monitor failed requests before considering the rollout complete.
+
+## Validation boundary
+This is a source patch, not proof of a production-safe release. No live production test or deployment was performed.
