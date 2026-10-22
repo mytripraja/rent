@@ -251,7 +251,8 @@ export async function sendTenantLoginSetup({ tenantUid, houseId }) {
 }
 
 export async function resetPassword(email) {
-  await sendPasswordResetEmail(auth, email)
+  const appUrl = typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined
+  await sendPasswordResetEmail(auth, email, appUrl ? { url: appUrl, handleCodeInApp: true } : undefined)
 }
 
 // ---- Phone verification (NOT currently wired to any UI — see below) ----
