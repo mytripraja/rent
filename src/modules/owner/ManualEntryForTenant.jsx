@@ -21,6 +21,7 @@ export default function ManualEntryForTenant() {
   const [cashReceivers, setCashReceivers] = useState([])
   const [existingEntries, setExistingEntries] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
 
   useEffect(() => {
     listHouses().then((all) => setHouses(all.filter((h) => h.status === 'occupied'))).catch((err) => {
@@ -56,8 +57,7 @@ export default function ManualEntryForTenant() {
     return () => { live = false }
   }, [form.houseId, form.month])
 
-  async function submit(e) {
-    e.preventDefault()
+  async function submit() {
     setSaving(true)
     try {
       const applicationNumber = await submitRentPayment({
@@ -135,7 +135,7 @@ export default function ManualEntryForTenant() {
         <p className="text-sm text-ink-soft">For tenants who can't submit through the app themselves.</p>
       </div>
 
-      <form onSubmit={submit} className="bg-paper-raised rounded-2xl border border-[var(--rm-border)] shadow-lg p-4 sm:p-5 space-y-4 max-w-xl">
+      <form onSubmit={(e) => { e.preventDefault(); setReviewOpen(true) }} className="bg-paper-raised rounded-2xl border border-[var(--rm-border)] shadow-lg p-4 sm:p-5 space-y-4 max-w-xl">
         <div className="rounded-xl bg-brand/5 border border-brand/15 p-3"><p className="text-sm font-semibold text-ink">Record a rent payment</p><p className="text-xs text-ink-soft mt-1">Choose the house and month. Existing records appear below before you submit, so you can avoid duplicate entries.</p></div>
         <select required value={form.houseId} onChange={(e) => setForm({ ...form, houseId: e.target.value })}
           className="w-full min-h-11 border border-[var(--rm-border)] rounded-xl px-3 py-2.5 text-sm bg-paper-raised focus:ring-2 focus:ring-brand/30">
@@ -194,9 +194,13 @@ export default function ManualEntryForTenant() {
         )}
 
         <button disabled={saving} className="w-full min-h-12 bg-brand text-white py-3 rounded-xl text-sm font-semibold shadow-sm hover:brightness-105 disabled:opacity-60">
-          {saving ? 'Submitting…' : 'Submit Entry'}
+          {saving ? 'Submitting…' : 'Review before recording'}
         </button>
       </form>
+
+      {reviewOpen && <div className="fixed inset-0 z-[90] bg-black/45 p-4 grid place-items-center" role="dialog" aria-modal="true" aria-labelledby="manual-entry-review-title"><div className="w-full max-w-md rounded-2xl bg-paper-raised border border-[var(--rm-border)] shadow-2xl p-5 space-y-4"><div><p className="text-xs font-bold uppercase tracking-wide text-brand">Manual entry · Review</p><h3 id="manual-entry-review-title" className="mt-1 font-display text-xl font-bold text-ink">Confirm payment details</h3></div><div className="divide-y divide-[var(--rm-border)] rounded-xl border border-[var(--rm-border)] bg-paper px-3"><ReviewRow label="House" value={selectedHouse?.internalDoorNumber || '—'} /><ReviewRow label="Tenant" value={selectedHouse?.tenantName || '—'} /><ReviewRow label="Rent month" value={form.month || '—'} /><ReviewRow label="Amount received" value={`₹${Number(form.amount || 0).toLocaleString('en-IN')}`} /><ReviewRow label="Payment date" value={form.dateSent || '—'} /><ReviewRow label="Method" value={form.mode} /></div><p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Confirm the funds were received and the house, tenant, month, and amount are correct. The payment will be submitted for the normal approval workflow.</p><div className="flex gap-2"><button type="button" onClick={() => setReviewOpen(false)} className="flex-1 min-h-11 rounded-lg border border-[var(--rm-border)] bg-white text-sm font-semibold text-ink">Back to edit</button><button type="button" disabled={saving} onClick={() => { setReviewOpen(false); submit() }} className="flex-1 min-h-11 rounded-lg bg-brand text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Recording…' : 'Confirm and record'}</button></div></div></div>}
     </div>
   )
 }
+
+function ReviewRow({ label, value }) { return <div className="flex items-center justify-between gap-3 py-2.5 text-sm"><span className="text-ink-soft">{label}</span><span className="text-right font-semibold text-ink">{value}</span></div> }

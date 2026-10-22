@@ -65,7 +65,7 @@ export default function TenantDashboard() {
 
   async function handleRefresh() { setRefreshKey(k => k + 1); await new Promise(r => setTimeout(r, 500)) }
 
-  return <div className="min-h-screen bg-paper">
+  return <div className="rm-figma-workspace rm-figma-tenant min-h-screen bg-paper">
     <a href="#main-content" className="skip-link">Skip to main content</a>
     <header className="bg-cover text-paper px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 sticky top-0 z-50 shadow-lg">
       <div className="flex items-center gap-2.5 min-w-0">

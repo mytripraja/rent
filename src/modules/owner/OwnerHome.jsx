@@ -23,6 +23,8 @@ export default function OwnerHome({ onNavigate }) {
   const [notices, setNotices] = useState([])
   const [openComplaints, setOpenComplaints] = useState(0)
   const [attention, setAttention] = useState([])
+  const [rentTrend, setRentTrend] = useState([])
+  const [recentPayments, setRecentPayments] = useState([])
 
   useEffect(() => { load() }, [])
 
@@ -34,6 +36,7 @@ export default function OwnerHome({ onNavigate }) {
       const occupied = houses.filter((h) => h.status === 'occupied')
       const month = currentMonthStr()
       const paymentsList = await Promise.all(occupied.map((h) => listRentHistory(h.id)))
+      const paymentRows = paymentsList.flatMap((rows, index) => rows.map(payment => ({ ...payment, _house: occupied[index] })))
       let collected = 0
       let pendingHouses = 0
       const attentionRows = []
@@ -51,6 +54,20 @@ export default function OwnerHome({ onNavigate }) {
 
       setStats({ occupied: occupied.length, total: houses.length, collected, pendingHouses })
       setAttention(attentionRows.sort((a, b) => b.months - a.months).slice(0, 5))
+      const months = Array.from({ length: 6 }, (_, index) => {
+        const date = new Date()
+        date.setDate(1)
+        date.setMonth(date.getMonth() - (5 - index))
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+        const total = paymentRows.filter(payment => payment.month === key && payment.status === 'approved')
+          .reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+        return { key, label: date.toLocaleDateString('en-IN', { month: 'short' }), total }
+      })
+      setRentTrend(months)
+      setRecentPayments(paymentRows
+        .slice()
+        .sort((a, b) => Number(b.approvedAt || b.submittedAt || b.createdAt || 0) - Number(a.approvedAt || a.submittedAt || a.createdAt || 0))
+        .slice(0, 5))
       setNotices(await listActiveNoticesForHouses(houses.map((h) => h.id)))
       const complaints = await listAllComplaints(houses.map((h) => h.id), houses[0]?.propertyId || null)
       setOpenComplaints(complaints.filter((c) => c.status === 'open').length)
@@ -90,20 +107,17 @@ export default function OwnerHome({ onNavigate }) {
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[26px] sm:rounded-[30px] bg-cover text-white p-5 sm:p-7 lg:p-8 shadow-[0_20px_55px_rgba(23,32,51,.16)]">
-        <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-brand/30 blur-3xl" />
-        <div className="absolute -left-24 -bottom-32 h-72 w-72 rounded-full bg-amber-300/10 blur-3xl" />
-        <div className="rm-aurora pointer-events-none absolute inset-0 opacity-50 mix-blend-soft-light" aria-hidden="true" />
+      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-xl border border-[var(--rm-border)] bg-white text-ink p-4 sm:p-6 shadow-sm">
         <div className="relative flex flex-col sm:flex-row sm:items-end justify-between gap-5">
           <div>
-            <div className="flex items-center gap-2 text-white/65 text-[10px] uppercase tracking-[.18em] font-bold"><Sparkles size={13}/> Property overview</div>
-            <p className="font-mono-tab text-[11px] text-white/55 uppercase tracking-wide mt-4">{todayLabel()}</p>
-            <h2 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight mt-1">{greeting()}, {user?.name?.split(' ')[0]}</h2>
-            <p className="text-sm text-white/70 mt-2 max-w-xl">Rent, residents and property work at a glance.</p>
+            <div className="flex items-center gap-2 text-brand text-[10px] uppercase tracking-[.15em] font-bold"><Sparkles size={13}/> Property workspace</div>
+            <p className="font-mono-tab text-[11px] text-ink-soft uppercase tracking-wide mt-3">{todayLabel()}</p>
+            <h2 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">{greeting()}, {user?.name?.split(' ')[0]}</h2>
+            <p className="text-sm text-ink-soft mt-1 max-w-xl">Rent, residents and property work at a glance.</p>
           </div>
-          <div className="rm-3d rm-tilt-hover rounded-2xl border border-white/10 bg-white/10 backdrop-blur-md px-4 py-3 min-w-[180px]">
-            <div className="flex items-center gap-2 text-white/70 text-xs"><ShieldCheck size={16}/> This month</div>
-            <div className="flex items-end gap-2 mt-1"><strong className="font-mono-tab text-3xl">{stats.occupied}/{stats.total}</strong><span className="text-xs text-white/60 pb-1">homes occupied</span></div>
+          <div className="rounded-xl border border-[var(--rm-border)] bg-[#f8faf9] px-4 py-3 min-w-[180px]">
+            <div className="flex items-center gap-2 text-ink-soft text-xs"><ShieldCheck size={16}/> This month</div>
+            <div className="flex items-end gap-2 mt-1"><strong className="font-mono-tab text-3xl text-ink">{stats.occupied}/{stats.total}</strong><span className="text-xs text-ink-soft pb-1">homes occupied</span></div>
           </div>
         </div>
       </motion.section>
@@ -128,10 +142,29 @@ export default function OwnerHome({ onNavigate }) {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">{actions.map(([Icon, label, hint, tab], i) => <QuickAction key={label} icon={Icon} label={label} hint={hint} onClick={() => onNavigate(tab)} delay={i}/>)}</div>
       </section>
 
+      <section className="rm-card p-4 sm:p-6" aria-labelledby="rm-rent-trend-title">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div><SectionHeader icon={BarChart3} label="Rent collection"/><h3 id="rm-rent-trend-title" className="font-display text-lg font-bold text-ink mt-1">Monthly rent collection</h3><p className="text-xs text-ink-soft mt-1">Approved rent across the last six months.</p></div>
+          <button onClick={() => onNavigate('reports')} className="text-xs font-semibold text-brand">View report</button>
+        </div>
+        <div className="grid grid-cols-6 gap-2 sm:gap-4 items-end h-36 pt-2" role="img" aria-label={`Approved rent collection: ${rentTrend.map(item => `${item.label} ₹${item.total.toLocaleString('en-IN')}`).join(', ')}`}>
+          {rentTrend.map(item => {
+            const max = Math.max(1, ...rentTrend.map(point => point.total))
+            const height = item.total ? Math.max(10, Math.round((item.total / max) * 100)) : 4
+            return <div key={item.key} className="flex h-full flex-col items-center justify-end gap-2 min-w-0"><span className="hidden sm:block truncate text-[10px] text-ink-soft">{item.total ? `₹${item.total.toLocaleString('en-IN')}` : '—'}</span><div className="flex h-24 w-full items-end justify-center rounded-t-md bg-paper"><div className="w-4/5 rounded-t-md bg-brand transition-all" style={{ height: `${height}%` }} title={`${item.label}: ₹${item.total.toLocaleString('en-IN')}`}/></div><span className="text-[10px] font-medium text-ink-soft">{item.label}</span></div>
+          })}
+        </div>
+      </section>
+
       <div className="grid lg:grid-cols-[1.25fr_.75fr] gap-4">
         <section className="rm-card p-4 sm:p-6 overflow-hidden">
           <div className="flex items-center justify-between mb-4 min-w-0"><div className="min-w-0"><SectionHeader icon={Activity} label="Needs attention"/><h3 className="font-display text-lg font-bold text-ink mt-1">Priority follow-ups</h3></div>{attention.length > 0 && <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-bold">{attention.length}</span>}</div>
           {attention.length ? <div className="space-y-2">{attention.map(a => <button key={a.house} onClick={() => onNavigate('tenants')} className="w-full min-w-0 overflow-hidden flex items-center gap-3 rounded-2xl border border-[var(--rm-border)] bg-paper p-3 text-left hover:border-brand/30 transition"><div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0"><Clock3 size={18}/></div><div className="flex-1 min-w-0"><p className="text-sm font-semibold text-ink truncate">{a.tenant || 'Tenant'} · House {a.house}</p><p className="text-xs text-ink-soft break-words leading-5">{a.months} month{a.months === 1 ? '' : 's'} without an approved rent payment</p></div><ArrowRight size={16} className="text-ink-soft"/></button>)}</div> : <div className="rounded-2xl bg-brand/5 border border-brand/10 p-4 text-sm text-ink-soft flex gap-2"><CircleCheck size={18} className="text-brand shrink-0"/> No rent follow-ups at the moment.</div>}
+        </section>
+
+        <section className="rm-card p-4 sm:p-6 min-w-0" aria-labelledby="rm-recent-activity-title">
+          <div className="flex items-center justify-between gap-2 mb-4"><div><SectionHeader icon={Activity} label="Recent activity"/><h3 id="rm-recent-activity-title" className="font-display text-lg font-bold text-ink mt-1">Rent submissions</h3></div><button onClick={() => onNavigate('approvals')} className="text-xs font-semibold text-brand">View all</button></div>
+          {recentPayments.length ? <div className="divide-y divide-[var(--rm-border)]">{recentPayments.map(payment => <div key={payment.id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"><div className="min-w-0"><p className="text-sm font-semibold text-ink truncate">{payment._house?.internalDoorNumber || 'House'} · {payment._house?.tenantName || 'Tenant'}</p><p className="text-xs text-ink-soft mt-0.5">{payment.month} · {payment.mode || 'Payment submitted'}</p></div><div className="shrink-0 text-right"><p className="text-sm font-semibold text-ink">₹{Number(payment.amount || 0).toLocaleString('en-IN')}</p><span className={`text-[10px] font-semibold ${payment.status === 'approved' ? 'text-green-700' : payment.status === 'rejected' ? 'text-red-600' : 'text-amber-700'}`}>{payment.status === 'approved' ? 'Approved' : payment.status === 'rejected' ? 'Rejected' : 'Pending approval'}</span></div></div>)}</div> : <p className="rounded-xl bg-paper p-4 text-sm text-ink-soft">No rent submissions yet.</p>}
         </section>
 
         <section className="rm-card p-4 sm:p-6">

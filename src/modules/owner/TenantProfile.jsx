@@ -100,7 +100,7 @@ export default function TenantProfile({ houseId, onBack }) {
             </div>
             <div className="flex flex-wrap gap-2 shrink-0">
               <button onClick={() => setEditingContact(true)} className="rm-secondary-button px-3 py-2 text-xs">Edit</button>
-              {house.currentTenantId && house.tenantEmail && <button type="button" disabled={sendingLogin} onClick={async () => { setSendingLogin(true); try { await sendTenantLoginSetup({ tenantUid: house.currentTenantId, houseId: house.id }); showToast({ message: 'Login setup email sent', type: 'success' }) } catch (e) { showToast({ message: e.message || 'Could not send login setup', type: 'error' }) } finally { setSendingLogin(false) } }} className="rm-hero-button px-3 py-2 text-xs">{sendingLogin ? 'Sending…' : 'Send login setup'}</button>}
+              {house.currentTenantId && house.tenantEmail && <button type="button" disabled={sendingLogin} onClick={async () => { setSendingLogin(true); try { await sendTenantLoginSetup({ tenantUid: house.currentTenantId, houseId: house.id }); showToast({ message: 'Login setup email sent', type: 'success' }) } catch (e) { showToast({ message: e.message || 'Could not send login setup', type: 'error' }) } finally { setSendingLogin(false) } }} className="rm-hero-button px-3 py-2 text-xs">{sendingLogin ? 'Sending…' : 'Reset / send login setup'}</button>}
             </div>
           </div>
           <div className="grid sm:grid-cols-3 gap-2 text-sm text-ink-soft">

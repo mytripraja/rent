@@ -237,6 +237,91 @@ label { font-weight: 500; }
   .rm-mobile-nav button > span:first-child { width: 30px; }
 }
 
+/* Figma boards 02–08: compact, green-forward rental workspace used by the
+   owner, house, tenant, payment, and approval screens. */
+.rm-figma-workspace {
+  --color-brand: #16a34a;
+  --color-brand-dark: #15803d;
+  --color-paper: #f5f7f8;
+  --color-paper-raised: #ffffff;
+  --color-ink: #17211b;
+  --color-ink-soft: #667085;
+  --rm-border: #e5e9e7;
+  --rm-border-strong: #d9dfdc;
+  --rm-surface-soft: #f1f7f3;
+  --rm-shadow: 0 2px 8px rgba(16, 24, 40, .045);
+  --rm-shadow-hover: 0 8px 22px rgba(16, 24, 40, .085);
+  background: #f5f7f8;
+}
+.rm-figma-workspace .rm-card,
+.rm-figma-workspace .bg-paper-raised {
+  border-radius: 12px;
+  box-shadow: var(--rm-shadow);
+}
+.rm-figma-workspace input,
+.rm-figma-workspace select,
+.rm-figma-workspace textarea { border-radius: 7px; }
+.rm-figma-workspace header.bg-cover {
+  background: #fff !important;
+  color: #17211b !important;
+  border-bottom: 1px solid #e5e9e7;
+  box-shadow: 0 1px 4px rgba(16,24,40,.04) !important;
+}
+.rm-figma-workspace header *:not(img),
+.rm-figma-workspace .bg-cover,
+.rm-figma-workspace header .text-paper,
+.rm-figma-workspace .text-paper,
+.rm-figma-workspace .text-brass-light { color: #17211b !important; }
+.rm-figma-workspace [class~="text-paper/70"],
+.rm-figma-workspace [class~="text-white/90"],
+.rm-figma-workspace [class~="text-white/75"],
+.rm-figma-workspace [class~="text-white/70"],
+.rm-figma-workspace [class~="text-white/65"] { color: #667085 !important; }
+.rm-figma-workspace .bg-brass { background-color: #16a34a !important; }
+.rm-figma-workspace .text-cover-dark { color: #fff !important; }
+.rm-figma-workspace header .border-white\/10,
+.rm-figma-workspace header .border-white\/15 { border-color: #e5e9e7 !important; }
+.rm-figma-workspace header button:hover { background-color: #f3f6f4 !important; }
+.rm-figma-workspace .rm-mobile-nav,
+.rm-figma-workspace .tenant-mobile-nav { background: rgba(255,255,255,.97); border-color: #e5e9e7; }
+.rm-figma-workspace .rm-mobile-nav button,
+.rm-figma-workspace .tenant-mobile-nav button { min-height: 58px; }
+.rm-figma-workspace .rm-mobile-nav button[aria-current="page"],
+.rm-figma-workspace .tenant-mobile-nav button[aria-current="page"] { color: #15803d; }
+.rm-figma-workspace .rm-mobile-nav button[aria-current="page"] span:first-child,
+.rm-figma-workspace .tenant-mobile-nav button[aria-current="page"] span:first-child { background: #e9f6ed; }
+.rm-figma-workspace .bg-cover { background-color: #f1f7f3 !important; }
+.rm-figma-workspace button.bg-cover:not(header button) { background-color: #16a34a !important; color: #fff !important; }
+.rm-figma-workspace button.bg-cover:not(header button):hover { background-color: #15803d !important; }
+.rm-figma-workspace header.bg-cover .bg-cover { background-color: #f1f7f3 !important; }
+.rm-figma-workspace header.bg-cover .text-white { color: #17211b !important; }
+.rm-figma-workspace header.bg-cover .text-paper\/70 { color: #667085 !important; }
+.rm-figma-workspace .rm-card-hover:hover { transform: translateY(-1px); }
+.dark .rm-figma-workspace {
+  --color-paper: #0f1724;
+  --color-paper-raised: #172033;
+  --color-ink: #eef3f5;
+  --color-ink-soft: #a6b1bd;
+  --color-brand: #2aa897;
+  --color-brand-dark: #218c80;
+  --rm-border: #283444;
+  --rm-border-strong: #354255;
+  --rm-surface-soft: #1d2b3b;
+  background: #0f1724;
+}
+.dark .rm-figma-workspace header.bg-cover { background: #172033 !important; color: #eef3f5 !important; border-color: #283444; }
+.dark .rm-figma-workspace header *:not(img),
+.dark .rm-figma-workspace .bg-cover,
+.dark .rm-figma-workspace .text-paper,
+.dark .rm-figma-workspace .text-brass-light { color: #eef3f5 !important; }
+.dark .rm-figma-workspace [class~="text-paper/70"],
+.dark .rm-figma-workspace [class~="text-white/90"],
+.dark .rm-figma-workspace [class~="text-white/75"],
+.dark .rm-figma-workspace [class~="text-white/70"],
+.dark .rm-figma-workspace [class~="text-white/65"] { color: #a6b1bd !important; }
+.dark .rm-figma-workspace .bg-cover { background-color: #1d2b3b !important; }
+.dark .rm-figma-workspace .bg-brass { background-color: #2aa897 !important; }
+
 
 /* V6.4 mobile polish: notifications and attention cards stay inside the viewport. */
 .rm-notification-panel { max-width: calc(100vw - 24px); }

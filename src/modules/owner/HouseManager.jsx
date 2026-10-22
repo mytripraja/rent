@@ -121,6 +121,7 @@ export default function HouseManager() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button type="button" onClick={() => navigate('/owner/house-setup')} className="min-h-10 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand-dark">+ Add house</button>
           {bulkMode && (
             <button onClick={toggleSelectAll} className="text-sm font-medium text-ink bg-paper border border-brass/30 px-3 py-1.5 rounded-lg hover:bg-black/5">
               {selectedHouseIds.size === houses.length ? 'Deselect All' : 'Select All'}
@@ -199,7 +200,7 @@ export default function HouseManager() {
                       onClick={(e) => { e.stopPropagation(); setBookingHouse(h) }}
                       className="mt-1 text-xs bg-cover text-paper px-3 py-1.5 rounded-full font-medium hover:bg-cover-dark transition"
                     >
-                      Book this house
+                      Add tenant to this house
                     </button>
                   )
                 )}
