@@ -90,7 +90,7 @@ export default function OwnerHome({ onNavigate }) {
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rm-dashboard-welcome relative overflow-hidden rounded-[26px] sm:rounded-[30px] p-5 sm:p-7 lg:p-8">
+      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[26px] sm:rounded-[30px] bg-cover text-white p-5 sm:p-7 lg:p-8 shadow-[0_20px_55px_rgba(23,32,51,.16)]">
         <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-brand/30 blur-3xl" />
         <div className="absolute -left-24 -bottom-32 h-72 w-72 rounded-full bg-amber-300/10 blur-3xl" />
         <div className="rm-aurora pointer-events-none absolute inset-0 opacity-50 mix-blend-soft-light" aria-hidden="true" />

@@ -6,20 +6,20 @@
    The old oxblood/aged-paper treatment has been replaced with a cleaner, premium interface.
 */
 @theme {
-  --color-paper: #F7F8FA;
-  --color-paper-raised: #FFFFFF;
-  --color-ink: #17211B;
+  --color-paper: #f5f7f6;
+  --color-paper-raised: #ffffff;
+  --color-ink: #18212f;
   --color-ink-soft: #667085;
-  --color-cover: #166534;
-  --color-cover-dark: #14532D;
+  --color-cover: #172033;
+  --color-cover-dark: #0e1523;
   --color-brass: #d4943a;
   --color-brass-light: #f2c878;
-  --color-stamp-green: #15803D;
-  --color-stamp-amber: #D97706;
-  --color-stamp-red: #DC2626;
-  --color-brand: #16A34A;
-  --color-brand-dark: #166534;
-  --color-paid: #15803D;
+  --color-stamp-green: #16836b;
+  --color-stamp-amber: #c88425;
+  --color-stamp-red: #d14b4b;
+  --color-brand: #0f766e;
+  --color-brand-dark: #0b5d57;
+  --color-paid: #16836b;
   --color-waiting: #c88425;
   --color-notpaid: #d14b4b;
   --font-sans: 'DM Sans', system-ui, sans-serif;
@@ -28,11 +28,11 @@
 }
 
 :root {
-  --rm-border: #E4E7EC;
-  --rm-border-strong: #D0D5DD;
-  --rm-surface-soft: #F2F5F3;
-  --rm-shadow: 0 4px 18px rgba(23, 33, 27, .045);
-  --rm-shadow-hover: 0 8px 24px rgba(23, 33, 27, .08);
+  --rm-border: #e4e8e5;
+  --rm-border-strong: #d7ddd9;
+  --rm-surface-soft: #eef5f3;
+  --rm-shadow: 0 8px 28px rgba(23, 32, 51, .07);
+  --rm-shadow-hover: 0 14px 34px rgba(23, 32, 51, .11);
 }
 
 .dark {
@@ -40,12 +40,12 @@
   --color-paper-raised: #172033;
   --color-ink: #eef3f5;
   --color-ink-soft: #a6b1bd;
-  --color-cover: #102016;
-  --color-cover-dark: #0B160E;
+  --color-cover: #0b1220;
+  --color-cover-dark: #070c15;
   --color-brass: #e0a94f;
   --color-brass-light: #f0c77e;
-  --color-brand: #4ADE80;
-  --color-brand-dark: #16A34A;
+  --color-brand: #2aa897;
+  --color-brand-dark: #218c80;
   --rm-border: #283444;
   --rm-border-strong: #354255;
   --rm-surface-soft: #1d2b3b;
@@ -59,7 +59,9 @@ body {
   margin: 0;
   min-width: 320px;
   font-family: var(--font-sans);
-  background: var(--color-paper);
+  background:
+    radial-gradient(circle at 90% -10%, rgba(15,118,110,.07), transparent 28rem),
+    var(--color-paper);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
 }
@@ -146,7 +148,7 @@ label { font-weight: 500; }
 .rm-card {
   background: var(--color-paper-raised);
   border: 1px solid var(--rm-border);
-  border-radius: 14px;
+  border-radius: 18px;
   box-shadow: var(--rm-shadow);
 }
 .rm-card-hover { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
@@ -175,6 +177,7 @@ label { font-weight: 500; }
 .rm-public-card,.rm-role-card{border:1px solid var(--rm-border);border-radius:20px;background:var(--color-paper-raised);padding:1.35rem;box-shadow:var(--rm-shadow);transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease}.rm-public-card:hover,.rm-role-card:hover{transform:translateY(-4px);box-shadow:var(--rm-shadow-hover);border-color:var(--rm-border-strong)}.rm-feature-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:rgba(15,118,110,.09);color:var(--color-brand)}.rm-role-number{font-family:var(--font-mono);font-size:.72rem;font-weight:700;letter-spacing:.08em;color:var(--color-brand)}
 .rm-trust-panel{display:grid;gap:1.5rem;border-radius:28px;background:linear-gradient(135deg,#172033,#0b5d57);padding:1.5rem;box-shadow:0 24px 60px rgba(15,118,110,.15)}@media(min-width:900px){.rm-trust-panel{grid-template-columns:1fr 1fr;padding:2rem}}
 .rm-login-shell{background:radial-gradient(circle at 20% 0%,rgba(15,118,110,.08),transparent 24rem),var(--color-paper)}.rm-login-grid{position:absolute;inset:0;opacity:.32;background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:38px 38px;mask-image:linear-gradient(to bottom,black,transparent)}.rm-login-card{border:1px solid var(--rm-border);border-radius:25px;background:var(--color-paper-raised);padding:1.5rem;box-shadow:0 22px 70px rgba(23,32,51,.09)}
+.rm-auth{font-family:Inter,'DM Sans',system-ui,sans-serif;background:#f7f8fa}.rm-auth section input{min-height:48px;border:1px solid #e4e7ec!important;border-radius:8px;background:#fff!important;padding:12px!important;color:#17211b!important;font-size:14px;line-height:1.45;box-shadow:none!important}.rm-auth section input:focus{border-color:#16a34a!important;outline:2px solid rgba(22,163,74,.18)}.rm-auth section label{display:block;color:#17211b;font-size:13px;font-weight:600;line-height:1.45}.rm-auth section label input[type=checkbox]{min-height:16px;width:16px;padding:0!important;margin-top:2px;accent-color:#166534}.rm-auth .rm-auth-eye{position:absolute;right:12px;bottom:14px;display:grid;place-items:center;color:#667085}.rm-auth .rm-auth-primary{display:flex;min-height:48px;width:100%;align-items:center;justify-content:center;border:1px solid #fff;border-radius:8px;background:#16a34a!important;padding:12px 16px;color:#fff!important;font-size:14px;font-weight:600}.rm-auth .rm-auth-primary:hover{background:#15803d!important}.rm-auth .rm-auth-secondary{display:flex;min-height:48px;width:100%;align-items:center;justify-content:center;gap:8px;border:1px solid #e4e7ec;border-radius:8px;background:#fff;padding:12px;color:#17211b;font-size:14px;font-weight:600}
 .rm-legal-icon{display:grid;place-items:center;flex:0 0 auto;width:48px;height:48px;border-radius:15px;background:rgba(15,118,110,.1);color:var(--color-brand)}.rm-legal-meta{border:1px solid var(--rm-border);border-radius:14px;background:var(--color-paper-raised);padding:.8rem 1rem;font-size:.75rem;color:var(--color-ink-soft)}.rm-legal-section{border:1px solid var(--rm-border);border-radius:18px;background:var(--color-paper-raised);padding:1.25rem 1.35rem;box-shadow:0 5px 20px rgba(23,32,51,.035)}
 @keyframes rm-fade-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}.rm-public main section{animation:rm-fade-up .65s ease both}.rm-public main section:nth-child(2){animation-delay:.05s}.rm-public main section:nth-child(3){animation-delay:.1s}.rm-public main section:nth-child(4){animation-delay:.15s}
 @media(max-width:640px){.rm-dashboard-preview{transform:none;border-radius:22px}.rm-float-card{right:10px;bottom:14px}.rm-login-card{padding:1.2rem;border-radius:20px}}
@@ -483,154 +486,4 @@ input[type="date"], input[type="month"], input[type="datetime-local"] { width: 1
     padding-bottom: calc(1rem + env(safe-area-inset-bottom));
   }
   .min-w-max { max-width: none; }
-}
-
-
-/* Figma-aligned owner workspace shell — Pass 2: softer green, less saturated card chrome */
-.rm-owner-header { background: #fff !important; color: #17211B !important; border-bottom: 1px solid #E4E7EC !important; box-shadow: 0 2px 8px rgba(23,33,27,.035) !important; }
-.rm-owner-header .text-white, .rm-owner-header .text-white\/65, .rm-owner-header .text-white\/10 { color: #17211B !important; }
-.rm-owner-header .bg-white\/10 { background: #F2F5F3 !important; }
-.rm-owner-header .border-white\/15 { border-color: #E4E7EC !important; }
-.rm-owner-header button:hover { background-color: #F2F5F3 !important; }
-.rm-owner-header .rm-icon-button { color: #17211B !important; background: #fff !important; }
-.rm-mobile-nav { border-top-color: #E4E7EC !important; box-shadow: 0 -4px 18px rgba(23,33,27,.06) !important; }
-.rm-mobile-nav button { min-height: 58px; }
-.rm-mobile-nav button[aria-current=page] span { background: #DCFCE7 !important; color: #166534 !important; }
-.rm-card { border-radius: 14px; }
-input, textarea, select { border-radius: 8px; }
-button { -webkit-tap-highlight-color: transparent; }
-@media (min-width: 1024px) { .rm-owner-header + div aside { border-right-color: #E4E7EC; } }
-
-.rm-dashboard-welcome { background: #fff !important; color: #17211B !important; border: 1px solid #E4E7EC; box-shadow: 0 4px 18px rgba(23,33,27,.045) !important; }
-.rm-dashboard-welcome .text-white\/65, .rm-dashboard-welcome .text-white\/55, .rm-dashboard-welcome .text-white\/70, .rm-dashboard-welcome .text-white\/60 { color: #667085 !important; }
-.rm-dashboard-welcome .border-white\/10 { border-color: #E4E7EC !important; }
-.rm-dashboard-welcome .bg-white\/10 { background: #F0FDF4 !important; }
-.rm-dashboard-welcome .text-white { color: #17211B !important; }
-.rm-dashboard-welcome .bg-brand\/30 { background: rgba(22,163,74,.09) !important; }
-.rm-dashboard-welcome .bg-amber-300\/10 { background: rgba(217,119,6,.04) !important; }
-.rm-dashboard-welcome .rm-aurora { opacity: .08 !important; }
-
-
-/* Pass 3: Figma palette system — forest-green anchors, clean white surfaces,
-   pale-green supporting surfaces, readable semantic status colours. */
-:root {
-  --color-brand: #16A34A;
-  --color-brand-dark: #15803D;
-  --color-stamp-green: #15803D;
-  --color-stamp-amber: #B45309;
-  --color-stamp-red: #DC2626;
-  --rm-border: #E2E8E4;
-  --rm-border-strong: #CBD5CE;
-  --rm-surface-soft: #F0F7F2;
-  --rm-shadow: 0 3px 12px rgba(22, 101, 52, .045);
-  --rm-shadow-hover: 0 8px 22px rgba(22, 101, 52, .09);
-}
-.rm-house-card-header {
-  background: #166534;
-  color: #FFFFFF;
-  border-bottom: 1px solid #14532D;
-}
-.rm-house-card-header .stamp {
-  font-size: .61rem;
-  letter-spacing: .025em;
-  padding: .28rem .55rem;
-  background: #FFFFFF;
-}
-.rm-house-card-header .stamp-green { color: #166534; border-color: #BBF7D0; }
-.rm-house-card-header .stamp-ink { color: #64748B; border-color: #D8E1DB; }
-.rm-house-profile-header {
-  background: #F0FDF4;
-  color: #17211B;
-  border-bottom: 1px solid #D3EBDD;
-}
-.rm-house-profile-header h2 { color: #14532D; }
-.rm-house-card-header .text-brand { color: #FFFFFF !important; }
-.rm-house-card-header .text-brass-light { color: #FFFFFF !important; }
-.rm-house-card-header .border-red-200 { border-color: #FECACA !important; }
-.rm-house-card-header .border-amber-200 { border-color: #FDE68A !important; }
-.rm-house-card-header .border-emerald-200 { border-color: #BBF7D0 !important; }
-.rm-house-card-header .border-slate-200 { border-color: #D8E1DB !important; }
-.rm-owner-header .rm-logo-mark { box-shadow: none; }
-.rm-owner-header input:focus, .rm-owner-header select:focus { box-shadow: 0 0 0 3px rgba(22,163,74,.12); }
-@media (max-width: 640px) {
-  .rm-house-card-header { padding: .75rem .875rem; }
-  .rm-house-card-header .font-display { font-size: 1.05rem; }
-}
-
-
-/* Pass 3 — shared Figma design system across the full application.
-   Keep business logic and component structure unchanged; normalize only presentation. */
-:root {
-  --rm-forest: #166534;
-  --rm-forest-deep: #14532D;
-  --rm-action: #16A34A;
-  --rm-action-hover: #15803D;
-  --rm-mint: #E8F5EC;
-  --rm-canvas: #F5F7F8;
-  --rm-surface: #FFFFFF;
-  --rm-text: #17211B;
-  --rm-muted: #64748B;
-  --rm-line: #E2E8E4;
-  --rm-focus: rgba(22, 163, 74, .16);
-}
-body { background: var(--rm-canvas); color: var(--rm-text); }
-main, .min-h-screen { color: var(--rm-text); }
-/* Main action buttons are consistent on dashboards, forms, dialogs, and detail pages. */
-button.bg-brand, a.bg-brand, .bg-brand.text-white, button.bg-cover, a.bg-cover {
-  background-color: var(--rm-action) !important;
-  color: #fff !important;
-  border-color: transparent !important;
-  box-shadow: 0 2px 5px rgba(22, 163, 74, .12);
-}
-button.bg-brand:hover, a.bg-brand:hover, .bg-brand.text-white:hover,
-button.bg-cover:hover, a.bg-cover:hover { background-color: var(--rm-action-hover) !important; }
-/* Shared cards and containers */
-.rm-card, .bg-paper-raised, main .rounded-2xl.border, main .rounded-xl.border {
-  border-color: var(--rm-line) !important;
-}
-.rm-card { box-shadow: 0 3px 12px rgba(15, 23, 42, .035); }
-/* Owner/tenant shell: neutral top bar, quiet dividers, green active navigation. */
-.rm-owner-header { background: #fff !important; border-bottom: 1px solid var(--rm-line) !important; }
-.rm-mobile-nav { background: #fff !important; border-top: 1px solid var(--rm-line) !important; }
-.rm-mobile-nav button[aria-current="page"] span { background: var(--rm-mint) !important; color: var(--rm-forest) !important; }
-/* Section headings and data tables */
-main h1, main h2, main h3 { color: var(--rm-text); }
-table { border-color: var(--rm-line); }
-thead, thead tr { background: #F0F7F2; }
-th { color: #475569; font-weight: 700; }
-td, th { border-color: var(--rm-line); }
-/* Status indicators retain their meaning and improve contrast. */
-.stamp-green { color: #166534; border-color: #BBF7D0; background: #F0FDF4; }
-.stamp-amber { color: #92400E; border-color: #FDE68A; background: #FFFBEB; }
-.stamp-red { color: #B91C1C; border-color: #FECACA; background: #FEF2F2; }
-/* House cards use a forest-green top band, matching the green-led Figma visual language. */
-.rm-house-card-header { background: var(--rm-forest) !important; color: #fff !important; border-bottom-color: var(--rm-forest-deep) !important; }
-.rm-house-card-header h2, .rm-house-card-header h3, .rm-house-card-header .font-display,
-.rm-house-card-header .text-ink, .rm-house-card-header .text-ink-soft,
-.rm-house-card-header .text-brand, .rm-house-card-header .text-brass-light { color: #fff !important; }
-.rm-house-card-header .stamp { background: #fff !important; }
-.rm-house-card-header .stamp-green { color: #166534 !important; }
-.rm-house-card-header .stamp-amber { color: #92400E !important; }
-.rm-house-card-header .stamp-red { color: #B91C1C !important; }
-.rm-house-profile-header { background: #F0F7F2 !important; color: var(--rm-text) !important; }
-/* Forms across rent, bills, tenant, settings, notices and maintenance screens. */
-input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
-textarea, select {
-  border-color: #CBD5CE !important;
-  border-radius: 9px;
-}
-input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 3px var(--rm-focus) !important; }
-/* Dialogs/popovers share the same white surface and restrained shadow. */
-[role="dialog"], .fixed[role="dialog"] > div, .fixed[role="dialog"] > form {
-  border-color: var(--rm-line);
-}
-/* Mobile density: avoid clipped cards/forms and maintain touch targets. */
-@media (max-width: 640px) {
-  main { min-width: 0; }
-  main .grid { min-width: 0; }
-  main .overflow-x-auto { max-width: 100%; }
-  main button, main a[role="button"] { min-height: 40px; }
-  .rm-house-card-header { padding: .75rem .875rem; }
-  .rm-house-card-header .font-display { font-size: 1.05rem; }
-  .rm-dashboard-welcome { border-radius: 20px !important; }
 }

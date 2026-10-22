@@ -122,7 +122,7 @@ export default function OwnerDashboard() {
     <div className="min-h-screen bg-paper text-ink">
       <a href="#main-content" className="skip-link">Skip to main content</a>
 
-      <header className="rm-owner-header sticky top-0 z-50 border-b">
+      <header className="sticky top-0 z-50 bg-cover text-white border-b border-white/10 shadow-lg">
         <div className="h-[72px] px-4 lg:px-6 flex items-center justify-between gap-3">
           <div className="hidden sm:flex items-center gap-3 min-w-0">
             <div className="rm-owner-avatar w-10 h-10 rounded-xl bg-white/10 border border-white/15 items-center justify-center font-bold overflow-hidden shrink-0 flex">
