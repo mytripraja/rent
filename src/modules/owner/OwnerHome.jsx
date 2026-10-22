@@ -1,30 +1,20 @@
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
-import {
-  Home, AlertCircle, Users, Zap, Bell, PenSquare, ArrowRight, CalendarDays,
-  ReceiptIndianRupee, Wrench, UserPlus, FileBarChart, Megaphone, Droplets,
-  MoreHorizontal, Activity, BarChart3, ShieldCheck, WalletCards, Settings2,
-  ClipboardCheck, CircleCheck, Building2, Clock3, Sparkles
-} from 'lucide-react'
+import { ArrowRight, Bell, CalendarDays, ChartNoAxesColumn, CircleAlert, CircleCheck, FileText, Megaphone, Plus, Upload, Wallet, Wrench } from 'lucide-react'
 import { listHouses } from '../../services/houseService'
-import { listRentHistory, countMonthsPending, currentMonthStr, resolveMonthStatus } from '../../services/rentService'
+import { listRentHistory, currentMonthStr } from '../../services/rentService'
 import { listActiveNoticesForHouses } from '../../services/noticeService'
 import { listAllComplaints } from '../../services/complaintService'
+import { listAllRequests } from '../../services/maintenanceService'
 import { useAuth } from '../../context/AuthContext'
 import { Skeleton } from '../shared/ui/Skeleton'
-import Tilt3D from '../shared/ui/Tilt3D'
-import AnimatedCounter from '../shared/ui/AnimatedCounter'
+
+const money = value => `₹${Number(value || 0).toLocaleString('en-IN')}`
 
 export default function OwnerHome({ onNavigate }) {
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [stats, setStats] = useState(null)
-  const [notices, setNotices] = useState([])
-  const [openComplaints, setOpenComplaints] = useState(0)
-  const [attention, setAttention] = useState([])
-  const [rentTrend, setRentTrend] = useState([])
-  const [recentPayments, setRecentPayments] = useState([])
+  const [data, setData] = useState(null)
 
   useEffect(() => { load() }, [])
 
@@ -33,159 +23,102 @@ export default function OwnerHome({ onNavigate }) {
     setError(null)
     try {
       const houses = await listHouses()
-      const occupied = houses.filter((h) => h.status === 'occupied')
+      const occupied = houses.filter(h => h.status === 'occupied')
       const month = currentMonthStr()
-      const paymentsList = await Promise.all(occupied.map((h) => listRentHistory(h.id)))
-      const paymentRows = paymentsList.flatMap((rows, index) => rows.map(payment => ({ ...payment, _house: occupied[index] })))
-      let collected = 0
-      let pendingHouses = 0
-      const attentionRows = []
-
-      occupied.forEach((h, index) => {
-        const payments = paymentsList[index] || []
-        const currentPayment = payments.find(p => p.month === month && p.status === 'approved')
-        if (currentPayment) collected += Number(currentPayment.amount || 0)
-        const monthsPending = countMonthsPending(payments)
-        if (monthsPending > 0) {
-          pendingHouses++
-          attentionRows.push({ house: h.internalDoorNumber, tenant: h.tenantName, months: monthsPending })
-        }
-      })
-
-      setStats({ occupied: occupied.length, total: houses.length, collected, pendingHouses })
-      setAttention(attentionRows.sort((a, b) => b.months - a.months).slice(0, 5))
-      const months = Array.from({ length: 6 }, (_, index) => {
-        const date = new Date()
-        date.setDate(1)
-        date.setMonth(date.getMonth() - (5 - index))
+      const histories = await Promise.all(occupied.map(h => listRentHistory(h.id)))
+      const payments = histories.flat()
+      const expected = occupied.reduce((sum, house) => sum + Number(house.rentAmount || 0), 0)
+      const received = payments.filter(p => p.month === month && p.status === 'approved').reduce((sum, p) => sum + Number(p.amount || 0), 0)
+      const pending = payments.filter(p => p.month === month && p.status === 'waiting_approval')
+      const pendingAmount = pending.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+      const pendingHouseIds = new Set(pending.map(p => p.houseId))
+      const needsAttention = occupied.filter(h => {
+        const paid = payments.some(p => p.houseId === h.id && p.month === month && p.status === 'approved')
+        return !paid && !pendingHouseIds.has(h.id)
+      }).slice(0, 4)
+      const [notices, complaints, maintenance] = await Promise.all([
+        listActiveNoticesForHouses(houses.map(h => h.id)),
+        listAllComplaints(houses.map(h => h.id), houses[0]?.propertyId || null),
+        listAllRequests('all', houses.map(h => h.id)),
+      ])
+      const current = new Date()
+      const months = Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(current.getFullYear(), current.getMonth() - 6 + index, 1)
         const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-        const total = paymentRows.filter(payment => payment.month === key && payment.status === 'approved')
-          .reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
-        return { key, label: date.toLocaleDateString('en-IN', { month: 'short' }), total }
+        return { key, label: date.toLocaleDateString('en-IN', { month: 'short' }), amount: payments.filter(p => p.month === key && p.status === 'approved').reduce((sum, p) => sum + Number(p.amount || 0), 0) }
       })
-      setRentTrend(months)
-      setRecentPayments(paymentRows
-        .slice()
-        .sort((a, b) => Number(b.approvedAt || b.submittedAt || b.createdAt || 0) - Number(a.approvedAt || a.submittedAt || a.createdAt || 0))
-        .slice(0, 5))
-      setNotices(await listActiveNoticesForHouses(houses.map((h) => h.id)))
-      const complaints = await listAllComplaints(houses.map((h) => h.id), houses[0]?.propertyId || null)
-      setOpenComplaints(complaints.filter((c) => c.status === 'open').length)
+      const activity = [
+        ...payments.map(p => ({ id: `rent-${p.id}`, type: 'rent', title: `${p.houseId ? `${houses.find(h => h.id === p.houseId)?.internalDoorNumber || 'House'} · ` : ''}Rent ${p.status === 'approved' ? 'approved' : p.status === 'waiting_approval' ? 'submitted for review' : 'updated'}`, detail: `${p.month || month} · ${money(p.amount)}${p.mode ? ` · ${p.mode}` : ''}`, time: Number(p.updatedAt || p.createdAt || p.timestamp || 0), action: p.status === 'waiting_approval' ? 'Review' : 'Payment history', route: p.status === 'waiting_approval' ? 'approvals' : 'reports' })),
+        ...notices.map(n => ({ id: `notice-${n.id}`, type: 'notice', title: 'Notice published', detail: n.message || n.title || 'Resident announcement', time: Number(n.createdAt || n.timestamp || 0), action: 'View notice', route: 'notices' })),
+      ].sort((a, b) => b.time - a.time).slice(0, 5)
+      setData({ houses, occupied, expected, received, outstanding: Math.max(expected - received, 0), pendingAmount, pendingCount: pending.length, needsAttention, notices, openIssues: maintenance.filter(request => request.status === 'open' || request.status === 'in_progress').length + complaints.filter(c => c.status === 'open').length, months, activity, month })
     } catch (err) {
       console.error(err)
       setError(err)
     } finally { setLoading(false) }
   }
 
+  if (loading) return <DashboardSkeleton />
+  if (error) return <div className="rm-empty-state"><p>We couldn’t load your property overview.</p><button onClick={load} className="rm-primary-button">Try again</button></div>
+  if (!data) return null
 
-
-  if (loading) return <HomeSkeleton />
-  if (error) return <div className="py-12 text-center"><p className="text-sm text-stamp-red mb-2">Failed to load property overview.</p><button onClick={load} className="text-xs bg-cover text-paper px-3 py-2 rounded-xl">Retry</button></div>
-  if (!stats) return null
-
-  const cards = [
-    { id: 'houses', label: 'Occupied homes', value: `${stats.occupied}/${stats.total}`, icon: Home, tab: 'houses', sub: stats.total ? `${Math.round(stats.occupied / stats.total * 100)}% occupied` : 'No houses' },
-    { id: 'rent', label: `Rent collected · ${monthLabel()}`, value: `₹${stats.collected.toLocaleString('en-IN')}`, count: stats.collected, prefix: '₹', icon: WalletCards, tab: 'approvals', sub: stats.pendingHouses ? `${stats.pendingHouses} house${stats.pendingHouses === 1 ? '' : 's'} need attention` : 'All current rent clear' },
-    { id: 'pending', label: 'Rent follow-ups', value: stats.pendingHouses, count: stats.pendingHouses, icon: AlertCircle, tab: 'tenants', urgent: stats.pendingHouses > 0, sub: stats.pendingHouses ? 'Open payment items' : 'All clear' },
-    { id: 'complaints', label: 'Open issues', value: openComplaints, count: openComplaints, icon: Wrench, tab: 'complaints', urgent: openComplaints > 0, sub: openComplaints ? 'Needs your attention' : 'No open issues' },
+  const maxBar = Math.max(...data.months.map(item => item.amount), 1)
+  const monthLabel = new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+  const actionRows = [
+    { icon: Plus, label: 'Add payment', route: 'manualEntry', primary: true },
+    { icon: Upload, label: 'Manual entry', route: 'manualEntry' },
+    { icon: FileText, label: 'Add bill', route: 'eb' },
+    { icon: Plus, label: 'Add tenant', route: 'houses' },
   ]
 
-  const actions = [
-    [Home, 'Houses', 'Property setup', 'houses'],
-    [UserPlus, 'Add tenant', 'New resident', 'houses'],
-    [ClipboardCheck, 'Review rent', 'Approvals', 'approvals'],
-    [CalendarDays, 'Payment calendar', 'Monthly view', 'calendar'],
-    [Zap, 'Create EB bill', 'Electricity', 'eb'],
-    [Droplets, 'Create water bill', 'Water', 'water'],
-    [Megaphone, 'Post notice', 'Residents', 'notices'],
-    [Wrench, 'Maintenance', 'Repairs & requests', 'more'],
-    [BarChart3, 'Analytics', 'Trends', 'analytics'],
-    [FileBarChart, 'Reports', 'Monthly report', 'reports'],
-    [Users, 'Household accounts', 'Family accounts', 'tenants'],
-    [MoreHorizontal, 'More tools', 'Settings', 'more'],
-  ]
+  return <div className="rm-dashboard">
+    <section className="rm-page-heading">
+      <div><h1>Good {greeting()}, {user?.name?.split(' ')[0] || 'there'}</h1><p>Your property, at a glance · {data.houses.length} houses · {data.occupied.length} occupied · {data.houses.length - data.occupied.length} vacant</p></div>
+      <button className="rm-month-picker" type="button" aria-label={`Selected month ${monthLabel}`}><span>{monthLabel}</span><CalendarDays size={15}/></button>
+    </section>
 
-  return (
-    <div className="space-y-6 sm:space-y-8">
-      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-xl border border-[var(--rm-border)] bg-white text-ink p-4 sm:p-6 shadow-sm">
-        <div className="relative flex flex-col sm:flex-row sm:items-end justify-between gap-5">
-          <div>
-            <div className="flex items-center gap-2 text-brand text-[10px] uppercase tracking-[.15em] font-bold"><Sparkles size={13}/> Property workspace</div>
-            <p className="font-mono-tab text-[11px] text-ink-soft uppercase tracking-wide mt-3">{todayLabel()}</p>
-            <h2 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">{greeting()}, {user?.name?.split(' ')[0]}</h2>
-            <p className="text-sm text-ink-soft mt-1 max-w-xl">Rent, residents and property work at a glance.</p>
-          </div>
-          <div className="rounded-xl border border-[var(--rm-border)] bg-[#f8faf9] px-4 py-3 min-w-[180px]">
-            <div className="flex items-center gap-2 text-ink-soft text-xs"><ShieldCheck size={16}/> This month</div>
-            <div className="flex items-end gap-2 mt-1"><strong className="font-mono-tab text-3xl text-ink">{stats.occupied}/{stats.total}</strong><span className="text-xs text-ink-soft pb-1">homes occupied</span></div>
-          </div>
+    <section className="rm-summary-grid" aria-label="Monthly rent summary">
+      <Summary label="Expected rent" value={money(data.expected)} detail={`${monthLabel} · ${data.occupied.length} occupied houses`} />
+      <Summary label="Rent received" value={money(data.received)} detail={data.expected ? `${Math.round(data.received / data.expected * 100)}% collected` : 'No active rent this month'} />
+      <Summary label="Outstanding rent" value={money(data.outstanding)} detail={data.pendingAmount ? `Includes ${money(data.pendingAmount)} pending approval` : 'Approved payments deducted'} />
+    </section>
+
+    <section className="rm-dashboard-grid rm-dashboard-grid-primary">
+      <div className="rm-panel rm-collection-panel">
+        <div className="rm-panel-heading"><div><h2>Rent collection</h2><p>Received as a share of expected rent</p></div><button className="rm-inline-link" onClick={() => onNavigate('reports')}>View report <ArrowRight size={14}/></button></div>
+        <div className="rm-chart-heading"><span>{monthLabel}</span><strong>{data.expected ? `${Math.round(data.received / data.expected * 100)}%` : '0%'} collected</strong></div>
+        <div className="rm-collection-chart" role="img" aria-label={`Rent received for seven months, current collection ${money(data.received)}`}>
+          {data.months.map(item => <div className="rm-chart-column" key={item.key}><div className={`rm-chart-bar ${item.key === data.month ? 'is-current' : ''}`} style={{ height: `${Math.max(item.amount ? item.amount / maxBar * 100 : 0, 8)}%` }} title={`${item.label}: ${money(item.amount)}`}/><span>{item.label}</span></div>)}
         </div>
-      </motion.section>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {cards.map((c, i) => (
-          <Tilt3D key={c.id} className="h-full" max={7}>
-            <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * .05 }} whileTap={{ scale: .98 }} onClick={() => onNavigate(c.tab)} className="rm-card rm-card-hover flex h-full w-full flex-col text-left p-4 sm:p-5">
-              <div className="flex items-center justify-between"><span className={`w-9 h-9 rounded-xl flex items-center justify-center ${c.urgent ? 'bg-red-50 text-stamp-red' : 'bg-brand/10 text-brand'}`}><c.icon size={17}/></span><ArrowRight size={15} className="text-ink-soft"/></div>
-              <p className="font-mono-tab text-xl sm:text-2xl text-ink mt-3">
-                {c.count != null ? <AnimatedCounter value={c.count} prefix={c.prefix || ''} /> : c.value}
-              </p>
-              <p className="text-xs font-semibold text-ink mt-1 leading-4">{c.label}</p>
-              <p className="text-[11px] text-ink-soft mt-1 leading-4">{c.sub}</p>
-            </motion.button>
-          </Tilt3D>
-        ))}
+        <p className="rm-chart-note">{money(data.received)} collected in approved rent this month.</p>
       </div>
 
-      <section className="rm-card p-4 sm:p-6">
-        <div className="flex items-end justify-between gap-3 mb-4"><div><SectionHeader icon={PenSquare} label="Daily workflow"/><h3 className="font-display text-xl font-bold text-ink mt-1">What do you want to do?</h3></div><span className="text-xs text-ink-soft">Quick actions</span></div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">{actions.map(([Icon, label, hint, tab], i) => <QuickAction key={label} icon={Icon} label={label} hint={hint} onClick={() => onNavigate(tab)} delay={i}/>)}</div>
-      </section>
-
-      <section className="rm-card p-4 sm:p-6" aria-labelledby="rm-rent-trend-title">
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div><SectionHeader icon={BarChart3} label="Rent collection"/><h3 id="rm-rent-trend-title" className="font-display text-lg font-bold text-ink mt-1">Monthly rent collection</h3><p className="text-xs text-ink-soft mt-1">Approved rent across the last six months.</p></div>
-          <button onClick={() => onNavigate('reports')} className="text-xs font-semibold text-brand">View report</button>
+      <div className="rm-panel rm-attention-panel">
+        <div className="rm-panel-heading"><div><h2>Needs your attention</h2><p>{data.pendingCount + data.needsAttention.length + data.openIssues} items need a look</p></div></div>
+        {data.pendingCount > 0 && <div className="rm-approval-summary"><div><strong>{data.pendingCount} rent submission{data.pendingCount === 1 ? '' : 's'} · {money(data.pendingAmount)}</strong><small>Waiting for owner review</small></div><button onClick={() => onNavigate('approvals')}>Approve rent</button></div>}
+        <div className="rm-attention-list">
+          {data.needsAttention.slice(0, 3).map(h => <button key={h.id} className="rm-attention-row" onClick={() => onNavigate('houses')}><span className="rm-attention-icon"><CircleAlert size={15}/></span><span><strong>{h.internalDoorNumber} · {h.tenantName || 'Tenant'}</strong><small>{money(h.rentAmount)} rent not yet approved</small></span><ArrowRight size={15}/></button>)}
+          {data.openIssues > 0 && <button className="rm-attention-row" onClick={() => onNavigate('maintenance')}><span className="rm-attention-icon"><Wrench size={15}/></span><span><strong>{data.openIssues} open maintenance request{data.openIssues === 1 ? '' : 's'}</strong><small>Review resident issues</small></span><ArrowRight size={15}/></button>}
+          {!data.pendingCount && !data.needsAttention.length && !data.openIssues && <div className="rm-attention-clear"><CircleCheck size={17}/> Everything is up to date.</div>}
         </div>
-        <div className="grid grid-cols-6 gap-2 sm:gap-4 items-end h-36 pt-2" role="img" aria-label={`Approved rent collection: ${rentTrend.map(item => `${item.label} ₹${item.total.toLocaleString('en-IN')}`).join(', ')}`}>
-          {rentTrend.map(item => {
-            const max = Math.max(1, ...rentTrend.map(point => point.total))
-            const height = item.total ? Math.max(10, Math.round((item.total / max) * 100)) : 4
-            return <div key={item.key} className="flex h-full flex-col items-center justify-end gap-2 min-w-0"><span className="hidden sm:block truncate text-[10px] text-ink-soft">{item.total ? `₹${item.total.toLocaleString('en-IN')}` : '—'}</span><div className="flex h-24 w-full items-end justify-center rounded-t-md bg-paper"><div className="w-4/5 rounded-t-md bg-brand transition-all" style={{ height: `${height}%` }} title={`${item.label}: ₹${item.total.toLocaleString('en-IN')}`}/></div><span className="text-[10px] font-medium text-ink-soft">{item.label}</span></div>
-          })}
-        </div>
-      </section>
-
-      <div className="grid lg:grid-cols-[1.25fr_.75fr] gap-4">
-        <section className="rm-card p-4 sm:p-6 overflow-hidden">
-          <div className="flex items-center justify-between mb-4 min-w-0"><div className="min-w-0"><SectionHeader icon={Activity} label="Needs attention"/><h3 className="font-display text-lg font-bold text-ink mt-1">Priority follow-ups</h3></div>{attention.length > 0 && <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-bold">{attention.length}</span>}</div>
-          {attention.length ? <div className="space-y-2">{attention.map(a => <button key={a.house} onClick={() => onNavigate('tenants')} className="w-full min-w-0 overflow-hidden flex items-center gap-3 rounded-2xl border border-[var(--rm-border)] bg-paper p-3 text-left hover:border-brand/30 transition"><div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0"><Clock3 size={18}/></div><div className="flex-1 min-w-0"><p className="text-sm font-semibold text-ink truncate">{a.tenant || 'Tenant'} · House {a.house}</p><p className="text-xs text-ink-soft break-words leading-5">{a.months} month{a.months === 1 ? '' : 's'} without an approved rent payment</p></div><ArrowRight size={16} className="text-ink-soft"/></button>)}</div> : <div className="rounded-2xl bg-brand/5 border border-brand/10 p-4 text-sm text-ink-soft flex gap-2"><CircleCheck size={18} className="text-brand shrink-0"/> No rent follow-ups at the moment.</div>}
-        </section>
-
-        <section className="rm-card p-4 sm:p-6 min-w-0" aria-labelledby="rm-recent-activity-title">
-          <div className="flex items-center justify-between gap-2 mb-4"><div><SectionHeader icon={Activity} label="Recent activity"/><h3 id="rm-recent-activity-title" className="font-display text-lg font-bold text-ink mt-1">Rent submissions</h3></div><button onClick={() => onNavigate('approvals')} className="text-xs font-semibold text-brand">View all</button></div>
-          {recentPayments.length ? <div className="divide-y divide-[var(--rm-border)]">{recentPayments.map(payment => <div key={payment.id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"><div className="min-w-0"><p className="text-sm font-semibold text-ink truncate">{payment._house?.internalDoorNumber || 'House'} · {payment._house?.tenantName || 'Tenant'}</p><p className="text-xs text-ink-soft mt-0.5">{payment.month} · {payment.mode || 'Payment submitted'}</p></div><div className="shrink-0 text-right"><p className="text-sm font-semibold text-ink">₹{Number(payment.amount || 0).toLocaleString('en-IN')}</p><span className={`text-[10px] font-semibold ${payment.status === 'approved' ? 'text-green-700' : payment.status === 'rejected' ? 'text-red-600' : 'text-amber-700'}`}>{payment.status === 'approved' ? 'Approved' : payment.status === 'rejected' ? 'Rejected' : 'Pending approval'}</span></div></div>)}</div> : <p className="rounded-xl bg-paper p-4 text-sm text-ink-soft">No rent submissions yet.</p>}
-        </section>
-
-        <section className="rm-card p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-4"><div><SectionHeader icon={Bell} label="Communication"/><h3 className="font-display text-lg font-bold text-ink mt-1">Latest notices</h3></div><button onClick={() => onNavigate('notices')} className="text-xs font-semibold text-brand">View all</button></div>
-          {notices.length ? <div className="space-y-2">{notices.slice(0, 4).map(n => <div key={n.id} className="rounded-2xl bg-paper border border-[var(--rm-border)] p-3"><p className="text-sm font-medium text-ink line-clamp-2">{n.message}</p><p className="text-xs text-ink-soft mt-1">Active notice</p></div>)}</div> : <div className="rounded-2xl bg-paper border border-[var(--rm-border)] p-4 text-sm text-ink-soft">No active notices. Publish one when residents need an update.</div>}
-        </section>
+        {data.notices.length > 0 && <div className="rm-attention-foot"><span>Latest notice</span><strong>{data.notices[0].title || data.notices[0].message || 'Resident announcement'}</strong></div>}
       </div>
+    </section>
 
-      <section className="grid sm:grid-cols-3 gap-3">
-        <MiniInsight icon={Building2} title="Property" value={`${stats.total} homes`} detail={`${stats.occupied} currently occupied`} onClick={() => onNavigate('houses')} />
-        <MiniInsight icon={WalletCards} title="Finance" value={`₹${stats.collected.toLocaleString('en-IN')}`} detail={`${monthLabel()} rent collected`} onClick={() => onNavigate('reports')} />
-        <MiniInsight icon={Settings2} title="Operations" value={`${openComplaints} open`} detail="Maintenance & complaints" onClick={() => onNavigate('complaints')} />
-      </section>
-    </div>
-  )
+    <section className="rm-dashboard-grid rm-dashboard-grid-secondary">
+      <div className="rm-panel rm-activity-panel">
+        <div className="rm-panel-heading"><h2>Recent activity</h2><button className="rm-inline-link" onClick={() => onNavigate('reports')}>View all <ArrowRight size={14}/></button></div>
+        {data.activity.length ? <div className="rm-activity-list">{data.activity.map(item => <div className="rm-activity-row" key={item.id}><span className={`rm-activity-icon ${item.type}`} aria-hidden="true">{item.type === 'notice' ? <Megaphone size={15}/> : <Wallet size={15}/>}</span><span className="rm-activity-copy"><strong>{item.title}</strong><small>{item.detail}</small></span><button onClick={() => onNavigate(item.route)}>{item.action} <ArrowRight size={13}/></button></div>)}</div> : <div className="rm-attention-clear"><Bell size={17}/> No recent activity yet.</div>}
+      </div>
+      <div className="rm-panel rm-quick-panel">
+        <div className="rm-panel-heading"><h2>Quick actions</h2></div>
+        <div className="rm-quick-actions">{actionRows.map(({ icon: Icon, label, route, primary }) => <button key={label} onClick={() => onNavigate(route)} className={primary ? 'is-primary' : ''}><Icon size={15}/>{label}</button>)}</div>
+        {data.openIssues > 0 && <button className="rm-quick-maintenance" onClick={() => onNavigate('maintenance')}><Wrench size={14}/> {data.openIssues} maintenance request{data.openIssues === 1 ? '' : 's'} open <ArrowRight size={13}/></button>}
+      </div>
+    </section>
+  </div>
 }
 
-function HomeSkeleton() { return <div className="space-y-6"><Skeleton className="h-48 w-full rounded-[28px]"/><div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{Array.from({length:4}).map((_,i)=><Skeleton key={i} className="h-32 rounded-2xl"/>)}</div><Skeleton className="h-64 rounded-3xl"/></div> }
-function SectionHeader({ icon: Icon, label }) { return <div className="flex items-center gap-2 text-ink-soft"><Icon size={14}/><p className="text-xs font-semibold uppercase tracking-wide">{label}</p></div> }
-function QuickAction({ icon: Icon, label, hint, onClick, delay = 0 }) { return <motion.button initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: delay * .025 }} whileTap={{ scale: .98 }} onClick={onClick} className="group text-left rounded-2xl border border-[var(--rm-border)] bg-paper p-3 hover:border-brand/30 hover:shadow-sm transition min-w-0"><div className="flex items-center gap-2"><span className="w-9 h-9 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0"><Icon size={17}/></span><ArrowRight size={14} className="ml-auto text-ink-soft group-hover:text-brand transition"/></div><p className="text-sm font-semibold text-ink mt-2 truncate">{label}</p><p className="text-[11px] text-ink-soft mt-0.5 truncate">{hint}</p></motion.button> }
-function MiniInsight({ icon: Icon, title, value, detail, onClick }) { return <button onClick={onClick} className="rm-card rm-card-hover p-4 text-left flex items-center gap-3"><span className="w-10 h-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center"><Icon size={18}/></span><span className="min-w-0"><span className="block text-[10px] uppercase tracking-[.14em] text-ink-soft font-bold">{title}</span><strong className="block text-lg text-ink mt-0.5">{value}</strong><span className="block text-xs text-ink-soft truncate">{detail}</span></span></button> }
-function greeting() { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' }
-function todayLabel() { return new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) }
-function monthLabel() { return new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) }
+function Summary({ label, value, detail }) { return <article className="rm-summary-card"><span>{label}</span><strong>{value}</strong><small>{detail}</small></article> }
+function DashboardSkeleton() { return <div className="rm-dashboard"><Skeleton className="h-16 w-full rounded-xl"/><div className="grid md:grid-cols-3 gap-3">{Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-20 rounded-xl"/>)}</div><Skeleton className="h-64 rounded-xl"/></div> }
+function greeting() { const h = new Date().getHours(); return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening' }

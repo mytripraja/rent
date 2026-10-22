@@ -32,8 +32,6 @@ export default function RentApprovalQueue() {
   const [historyRows, setHistoryRows] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7))
-  const [submissionQuery, setSubmissionQuery] = useState('')
-  const [confirmingPayment, setConfirmingPayment] = useState(null)
 
   useEffect(() => { refresh() }, [])
 
@@ -132,16 +130,12 @@ export default function RentApprovalQueue() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold text-ink">Rent approvals & history</h2><p className="text-xs text-ink-soft mt-1">Review the payment details before approving or rejecting a submission.</p></div><div className="flex rounded-xl border border-[var(--rm-border)] p-1 bg-paper-raised"><button onClick={() => setView('pending')} className={`px-3 py-2 rounded-lg text-sm ${view === 'pending' ? 'bg-brand text-white' : 'text-ink-soft'}`}>Pending ({pending.length})</button><button onClick={() => setView('history')} className={`px-3 py-2 rounded-lg text-sm ${view === 'history' ? 'bg-brand text-white' : 'text-ink-soft'}`}>Approval history</button></div></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold text-ink">Rent approvals & history</h2><div className="flex rounded-xl border border-[var(--rm-border)] p-1 bg-paper-raised"><button onClick={() => setView('pending')} className={`px-3 py-2 rounded-lg text-sm ${view === 'pending' ? 'bg-brand text-white' : 'text-ink-soft'}`}>Pending ({pending.length})</button><button onClick={() => setView('history')} className={`px-3 py-2 rounded-lg text-sm ${view === 'history' ? 'bg-brand text-white' : 'text-ink-soft'}`}>Approval history</button></div></div>
       {view === 'history' ? (
         <section className="rounded-2xl border border-[var(--rm-border)] bg-paper-raised p-4 space-y-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-ink">Monthly rent history</h3><p className="text-xs text-ink-soft">Approved, waiting and rejected entries grouped month by month.</p></div><input aria-label="Filter history by month" type="month" value={historyMonth} onChange={e => setHistoryMonth(e.target.value)} className="border border-[var(--rm-border)] rounded-lg px-3 py-2 text-sm" /></div>{historyLoading ? <p className="text-sm text-ink-soft py-4">Loading history…</p> : historyRows.filter(p => p.month === historyMonth).length === 0 ? <p className="text-sm text-ink-soft py-5 text-center">No rent entries for {historyMonth}.</p> : <div className="space-y-2">{historyRows.filter(p => p.month === historyMonth).map(p => <div key={p.id} className="rounded-xl border border-[var(--rm-border)] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"><div><p className="font-medium text-ink">{p._house?.internalDoorNumber || p.houseId} · {p._house?.tenantName || 'Tenant'} · ₹{Number(p.amount || 0).toLocaleString('en-IN')}</p><p className="text-xs text-ink-soft">{p.month} · {p.dateSent || 'No payment date'} · Ref {p.applicationNumber || p.id}</p>{p.rejectionReason && <p className="text-xs text-red-600">Reason: {p.rejectionReason}</p>}</div><span className={`text-xs font-semibold rounded-full px-3 py-1 self-start ${p.status === 'approved' ? 'bg-green-100 text-green-700' : p.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{p.status === 'approved' ? 'Approved' : p.status === 'rejected' ? 'Rejected' : 'Waiting'}</span></div>)}</div>}</section>
       ) : (
-        <><div className="relative"><input type="search" value={submissionQuery} onChange={e => setSubmissionQuery(e.target.value)} placeholder="Search unit, tenant, month or reference" aria-label="Search rent submissions" className="w-full rounded-lg border border-[var(--rm-border)] bg-paper-raised px-3 py-2.5 text-sm" /></div><h3 className="text-sm text-ink-soft">Pending approvals · {pending.length}</h3>{pending.length === 0 ? <p className="text-sm text-ink-soft py-8 text-center rounded-2xl border border-[var(--rm-border)] bg-paper-raised">No rent submissions waiting for approval.</p> : <AnimatePresence>
-        {pending.filter(p => {
-          const house = houseMap[p.houseId]
-          const query = submissionQuery.trim().toLowerCase()
-          return !query || [house?.tenantName, house?.internalDoorNumber, p.month, p.applicationNumber, p.amount, p.mode].some(value => String(value || '').toLowerCase().includes(query))
-        }).map((p) => {
+        <><h3 className="text-sm text-ink-soft">Pending approvals</h3>{pending.length === 0 ? <p className="text-sm text-ink-soft py-8 text-center rounded-2xl border border-[var(--rm-border)] bg-paper-raised">No rent submissions waiting for approval.</p> : <AnimatePresence>
+        {pending.map((p) => {
           const house = houseMap[p.houseId]
           const lateFee = (appConfig && house && p.dateSent) 
             ? calculateLateFee(house.rentAmount, `${p.month}-05`, p.dateSent, appConfig) 
@@ -152,7 +146,7 @@ export default function RentApprovalQueue() {
               key={p.id}
               className="mb-3"
               hint="← Reject | Approve →"
-              onApprove={() => setConfirmingPayment(p)}
+              onApprove={() => handleApprove(p)}
               onReject={() => setRejectingId(p.id)}
             >
               <div className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
@@ -174,7 +168,7 @@ export default function RentApprovalQueue() {
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => { setConfirmingPayment(p) }} className="text-xs bg-green-600 text-white px-3 py-1.5 min-h-11 rounded-lg font-medium">
+                  <button onClick={() => { triggerHaptic('success'); handleApprove(p) }} className="text-xs bg-green-600 text-white px-3 py-1.5 min-h-11 rounded-lg font-medium">
                     Approve
                   </button>
                   <button onClick={() => { triggerHaptic('error'); setRejectingId(p.id) }} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 min-h-11 rounded-lg font-medium">
@@ -185,10 +179,6 @@ export default function RentApprovalQueue() {
             </SwipeableApprovalCard>
           )
         })}
-        {pending.length > 0 && !pending.some(p => {
-          const house = houseMap[p.houseId]; const query = submissionQuery.trim().toLowerCase()
-          return !query || [house?.tenantName, house?.internalDoorNumber, p.month, p.applicationNumber, p.amount, p.mode].some(value => String(value || '').toLowerCase().includes(query))
-        }) && <p className="rounded-xl border border-[var(--rm-border)] bg-paper-raised p-5 text-center text-sm text-ink-soft">No pending submissions match “{submissionQuery}”.</p>}
       </AnimatePresence>}</>
       )}
 
@@ -223,17 +213,6 @@ export default function RentApprovalQueue() {
             <option key={r} value={r}>{r}</option>
           ))}
         </select>
-      </ConfirmDialog>
-
-      <ConfirmDialog
-        open={!!confirmingPayment}
-        onClose={() => setConfirmingPayment(null)}
-        onConfirm={() => { if (confirmingPayment) { triggerHaptic('success'); handleApprove(confirmingPayment) } }}
-        title="Confirm rent approval"
-        message={confirmingPayment ? `Approve ₹${Number(confirmingPayment.amount || 0).toLocaleString('en-IN')} for ${houseMap[confirmingPayment.houseId]?.tenantName || 'this tenant'} · House ${houseMap[confirmingPayment.houseId]?.internalDoorNumber || confirmingPayment.houseId} · ${confirmingPayment.month}?` : ''}
-        confirmText="Confirm approval"
-      >
-        <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Verify the payment against the actual receipt or bank record. A screenshot alone does not confirm that funds reached the owner.</p>
       </ConfirmDialog>
 
       {receiptPayment && (

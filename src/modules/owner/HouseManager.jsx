@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { DoorOpen, Phone, X, Users, IndianRupee, CalendarDays, History, ChevronRight, MoreHorizontal, ShieldCheck, UserRoundPlus, UserRound, Share2 } from 'lucide-react'
+import { DoorOpen, Phone, X, Users, IndianRupee, CalendarDays, History, ChevronRight, MoreHorizontal, ShieldCheck, UserRoundPlus, UserRound, Share2, Plus, Search, ChevronDown } from 'lucide-react'
 import TextField from '../shared/ui/TextField'
 import SelectField from '../shared/ui/SelectField'
 import Button from '../shared/ui/Button'
@@ -32,6 +32,8 @@ export default function HouseManager() {
   const [bulkMode, setBulkMode] = useState(false)
   const [selectedHouseIds, setSelectedHouseIds] = useState(new Set())
   const [shareHouses, setShareHouses] = useState(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [occupancyFilter, setOccupancyFilter] = useState('all')
   const { showToast } = useToast()
 
   useEffect(() => {
@@ -110,110 +112,33 @@ export default function HouseManager() {
   }
 
   const occupiedCount = houses.filter((h) => h.status === 'occupied').length
+  const vacantCount = houses.length - occupiedCount
+  const expectedRent = houses.filter(h => h.status === 'occupied').reduce((sum, h) => sum + Number(h.rentAmount || 0), 0)
+  const receivedRent = houses.filter(h => h.status === 'occupied' && currentRentStatuses[h.id] === 'paid').reduce((sum, h) => sum + Number(h.rentAmount || 0), 0)
+  const filteredHouses = houses.filter(h => {
+    const query = searchTerm.trim().toLowerCase()
+    const matchesSearch = !query || `${h.internalDoorNumber || ''} ${h.govtDoorNumber || ''} ${h.tenantName || ''}`.toLowerCase().includes(query)
+    const matchesStatus = occupancyFilter === 'all' || (occupancyFilter === 'occupied' ? h.status === 'occupied' : h.status !== 'occupied')
+    return matchesSearch && matchesStatus
+  })
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="font-display text-xl text-ink">Houses</h2>
-          <p className="font-mono-tab text-xs text-ink-soft mt-0.5">
-            {occupiedCount} occupied · {houses.length} total · tap a house for its complete profile
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => navigate('/owner/house-setup')} className="min-h-10 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand-dark">+ Add house</button>
-          {bulkMode && (
-            <button onClick={toggleSelectAll} className="text-sm font-medium text-ink bg-paper border border-brass/30 px-3 py-1.5 rounded-lg hover:bg-black/5">
-              {selectedHouseIds.size === houses.length ? 'Deselect All' : 'Select All'}
-            </button>
-          )}
-          <button 
-            onClick={() => { setBulkMode(!bulkMode); setSelectedHouseIds(new Set()) }}
-            className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${bulkMode ? 'bg-cover text-white' : 'bg-paper border border-brass/30 text-ink hover:bg-black/5'}`}
-          >
-            {bulkMode ? 'Cancel Bulk' : 'Bulk Select'}
-          </button>
-        </div>
-      </div>
-
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {loading ? (
-          Array.from({ length: 6 }).map((_, i) => (
-            <motion.div
-              key={`skeleton-${i}`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05, duration: 0.3 }}
-            >
-              <SkeletonCard />
-            </motion.div>
-          ))
-        ) : (
-          houses.map((h, i) => (
-            <motion.div
-              key={h.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05, duration: 0.3 }}
-              className={`bg-paper-raised rounded-2xl shadow-sm border overflow-hidden transition-colors ${selectedHouseIds.has(h.id) ? 'border-cover' : 'border-brass/20'}`}
-              onClick={() => bulkMode ? toggleSelection(h.id) : setDetailHouse(h)}
-            >
-              {/* Door plate header */}
-              <div className="bg-cover text-paper px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {bulkMode && (
-                    <input 
-                      type="checkbox" 
-                      checked={selectedHouseIds.has(h.id)}
-                      onChange={() => {}}
-                      className="w-4 h-4 rounded text-cover border-paper bg-white cursor-pointer mr-2 accent-brass"
-                    />
-                  )}
-                  <DoorOpen size={16} className="text-brass-light" />
-                  <span className="font-display text-lg tracking-wide">{h.internalDoorNumber}</span>
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-1.5">
-                  <span className={`stamp ${h.status === 'occupied' ? 'stamp-green' : 'stamp-ink'} !rotate-0 !text-[0.62rem]`}>
-                    {h.status}
-                  </span>
-                  {h.status === 'occupied' && currentRentStatuses[h.id] && (() => {
-                    const rentStatus = currentRentStatuses[h.id]
-                    const label = rentStatus === 'paid' ? 'RENT PAID' : rentStatus === 'waiting_approval' ? 'RENT WAITING' : rentStatus === 'not_paid' ? 'RENT UNPAID' : rentStatus === 'not_tracked' ? 'NOT TRACKED' : 'RENT STATUS'
-                    const styles = rentStatus === 'paid' ? 'border-emerald-300 text-emerald-200 bg-emerald-900/30' : rentStatus === 'waiting_approval' ? 'border-amber-300 text-amber-100 bg-amber-900/30' : rentStatus === 'not_tracked' ? 'border-white/30 text-white/70 bg-white/10' : 'border-red-300 text-red-100 bg-red-900/30'
-                    return <span title={`Current month (${currentMonthStr()}): ${label}`} className={`inline-flex items-center rounded-full border px-2 py-1 text-[0.58rem] font-bold tracking-wide ${styles}`}>{label}</span>
-                  })()}
-                </div>
-              </div>
-
-              <div className="p-4">
-                <p className="text-xs text-ink-soft mb-2">Govt door no: {h.govtDoorNumber}</p>
-                {h.status === 'occupied' ? (
-                  <>
-                    <p className="text-sm font-medium text-ink">{h.tenantName}</p>
-                    <p className="text-xs text-ink-soft flex items-center gap-1 mt-0.5"><Phone size={11} />{h.tenantPhone}</p>
-                    <p className="font-mono-tab text-sm text-brass mt-2">₹{h.rentAmount}<span className="text-ink-soft">/mo</span></p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2"><p className="text-xs text-ink-soft flex-1">Tap for complete house details →</p><button type="button" onClick={(e) => { e.stopPropagation(); navigate('/owner/manual-entry', { state: { houseId: h.id } }) }} className="min-h-10 rounded-xl bg-brand text-white px-3 py-2 text-xs font-semibold shadow-sm hover:brightness-105">+ Enter rent</button></div>
-                  </>
-                ) : (
-                  !bulkMode && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setBookingHouse(h) }}
-                      className="mt-1 text-xs bg-cover text-paper px-3 py-1.5 rounded-full font-medium hover:bg-cover-dark transition"
-                    >
-                      Add tenant to this house
-                    </button>
-                  )
-                )}
-              </div>
-            </motion.div>
-          ))
-        )}
-        {!loading && houses.length === 0 && (
-          <p className="text-sm text-ink-soft col-span-full">
-            No houses yet — add your properties once under More → Property Setup, then manage bookings and vacates here.
-          </p>
-        )}
-      </div>
+    <div className="rm-houses-page">
+      <div className="rm-houses-heading"><div><h1>Houses</h1><p>{houses.length} homes · {occupiedCount} occupied · {vacantCount} vacant</p></div><div className="rm-houses-actions"><button onClick={() => navigate('/owner/setup')} className="rm-primary-button"><Plus size={14}/> Add house</button>{bulkMode && <button onClick={toggleSelectAll} className="rm-filter-button">{selectedHouseIds.size === houses.length ? 'Deselect all' : 'Select all'}</button>}<button onClick={() => { setBulkMode(!bulkMode); setSelectedHouseIds(new Set()) }} className="rm-filter-button">{bulkMode ? 'Cancel' : 'Bulk select'}</button></div></div>
+      <div className="rm-houses-summary"><div><span>Expected rent</span><strong>₹{expectedRent.toLocaleString('en-IN')}</strong></div><div><span>Received</span><strong>₹{receivedRent.toLocaleString('en-IN')}</strong></div><div><span>Outstanding</span><strong>₹{Math.max(expectedRent - receivedRent, 0).toLocaleString('en-IN')}</strong></div><div><span>Awaiting review</span><strong>{Object.values(currentRentStatuses).filter(status => status === 'waiting_approval').length} submissions</strong></div></div>
+      <div className="rm-house-filters"><label className="rm-house-search"><Search size={14}/><input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search unit or tenant" aria-label="Search houses"/></label><div className="rm-house-filter-tabs" role="group" aria-label="Filter houses">{[['all',`All ${houses.length}`],['occupied',`Occupied ${occupiedCount}`],['vacant',`Vacant ${vacantCount}`]].map(([id,label])=><button key={id} className={occupancyFilter===id?'is-active':''} onClick={()=>setOccupancyFilter(id)}>{label}</button>)}</div><label className="rm-status-select"><select aria-label="Sort house status" value={occupancyFilter} onChange={e=>setOccupancyFilter(e.target.value)}><option value="all">All statuses</option><option value="occupied">Occupied</option><option value="vacant">Vacant</option></select><ChevronDown size={13}/></label><span className="rm-current-month">{new Date().toLocaleDateString('en-IN',{month:'short',year:'numeric'})}</span></div>
+      <div className="rm-house-table-wrap"><table className="rm-house-table"><thead><tr>{bulkMode&&<th><span className="sr-only">Select</span></th>}<th>House / tenant</th><th>Occupancy</th><th>Monthly rent</th><th>Payment status</th><th>Outstanding</th></tr></thead><tbody>
+        {loading ? Array.from({length:5},(_,i)=><tr key={`loading-${i}`}><td colSpan={bulkMode?6:5}><Skeleton className="h-6 w-full"/></td></tr>) : filteredHouses.map(h=>{
+          const status=currentRentStatuses[h.id]||'not_paid'; const paid=status==='paid'; const waiting=status==='waiting_approval'; const vacant=h.status!=='occupied';
+          const statusLabel=vacant?'Vacant · not collectible':paid?'Paid / Approved':waiting?'Pending Approval':status==='not_tracked'?'Not tracked':'Overdue';
+          return <tr key={h.id} onClick={()=>bulkMode?toggleSelection(h.id):setDetailHouse(h)} className={selectedHouseIds.has(h.id)?'is-selected':''}>
+            {bulkMode&&<td><input type="checkbox" checked={selectedHouseIds.has(h.id)} onChange={()=>toggleSelection(h.id)} aria-label={`Select house ${h.internalDoorNumber}`}/></td>}
+            <td><button className="rm-house-link" onClick={e=>{e.stopPropagation();setDetailHouse(h)}}>{h.internalDoorNumber || 'House'}{h.status==='occupied'&&h.tenantName?` · ${h.tenantName}`:''}</button>{h.govtDoorNumber&&<small className="rm-house-subline">Door no. {h.govtDoorNumber}</small>}</td>
+            <td>{vacant?'Available to let':'Occupied'}</td><td>{vacant?'—':`₹${Number(h.rentAmount||0).toLocaleString('en-IN')}`}</td><td><span className={`rm-payment-status ${paid?'paid':waiting?'waiting':vacant?'vacant':'overdue'}`}>{statusLabel}</span></td><td>{vacant?'—':paid?'₹0':`₹${Number(h.rentAmount||0).toLocaleString('en-IN')}`}</td>
+          </tr>
+        })}
+        {!loading&&filteredHouses.length===0&&<tr><td colSpan={bulkMode?6:5} className="rm-house-empty">{houses.length?'No houses match your search.':'No houses yet. Add your first house to get started.'}</td></tr>}
+      </tbody><tfoot><tr><td colSpan={bulkMode?6:5}><span>Showing {filteredHouses.length} of {houses.length} houses · open a row for house details.</span><strong>Total outstanding ₹{Math.max(expectedRent-receivedRent,0).toLocaleString('en-IN')}</strong></td></tr></tfoot></table></div>
 
       {detailHouse && (
         <HouseDetailModal
@@ -290,9 +215,9 @@ function HouseDetailModal({ house, user, onClose, onVacate, onBook }) {
   function patchFixture(index, patch) { setFixtures(v => v.map((x,i)=>i===index?{...x,...patch}:x)) }
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/55 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <motion.div initial={{ opacity: 0, y: 18, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="w-full max-w-3xl max-h-[calc(100dvh-env(safe-area-inset-bottom))] sm:max-h-[92vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-paper-raised border border-[var(--rm-border)] shadow-2xl flex flex-col pb-[env(safe-area-inset-bottom)]">
-        <div className="px-5 sm:px-7 py-5 bg-cover text-paper flex items-start justify-between gap-4">
+    <div className="rm-house-detail-overlay fixed inset-0 z-[70] bg-black/55 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ opacity: 0, y: 18, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="rm-house-detail-modal w-full max-w-3xl max-h-[calc(100dvh-env(safe-area-inset-bottom))] sm:max-h-[92vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-paper-raised border border-[var(--rm-border)] shadow-2xl flex flex-col pb-[env(safe-area-inset-bottom)]">
+        <div className="rm-house-detail-header px-5 sm:px-7 py-5 bg-cover text-paper flex items-start justify-between gap-4">
           <div>
             <p className="text-[10px] uppercase tracking-[.18em] text-brass-light font-bold">House profile</p>
             <h2 className="font-display text-2xl font-extrabold mt-1">{house.internalDoorNumber}</h2>

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Search, SlidersHorizontal, ChevronRight, Users, Home, Clock3, Sparkles, Share2, X } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
 import { listHouses, listPastTenants } from '../../services/houseService'
 import { listRentHistory, countMonthsPending } from '../../services/rentService'
 import { Skeleton } from '../shared/ui/Skeleton'
@@ -14,7 +13,6 @@ const FILTERS = [
 ]
 
 export default function TenantsList({ onSelectHouse }) {
-  const navigate = useNavigate()
   const [filter, setFilter] = useState('current')
   const [query, setQuery] = useState('')
   const [current, setCurrent] = useState([])
@@ -70,13 +68,11 @@ export default function TenantsList({ onSelectHouse }) {
             <h2 className="text-lg font-semibold text-ink">Tenants</h2>
             <p className="text-sm text-ink-soft mt-0.5">{current.length} current · {old.length} past · {pending.length} pending</p>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="hidden sm:flex items-center gap-1.5 text-xs text-ink-soft bg-paper-raised border border-[var(--rm-border)] rounded-full px-3 py-1.5"><Users size={14} /> {current.length + old.length} records</div>
-            <button type="button" onClick={() => navigate('/owner/houses')} className="min-h-10 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand-dark">+ Add tenant</button>
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-ink-soft bg-paper-raised border border-[var(--rm-border)] rounded-full px-3 py-1.5">
+            <Users size={14} /> {current.length + old.length} records
           </div>
         </div>
       </div>
-      <p className="text-xs text-ink-soft">Choose a vacant house to add a resident and link their login to that home.</p>
 
       <div className="relative">
         <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-soft pointer-events-none" />

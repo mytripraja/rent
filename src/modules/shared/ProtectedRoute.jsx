@@ -7,13 +7,13 @@ export default function ProtectedRoute({ role, children }) {
   const location = useLocation()
 
   if (loading) return <LoadingScreen />
-  if (!user) return <Navigate to={`/login?status=session-expired&returnTo=${encodeURIComponent(location.pathname + location.search)}`} replace />
+  if (!user) return <Navigate to={`/login?returnTo=${encodeURIComponent(location.pathname + location.search)}`} replace />
 
   // "owner" routes admit both co-owners and the super-admin — they share the
   // same dashboard, just with an extra Owner Management tab for admins only.
   const isOwnerLevel = user.role === 'owner' || user.role === 'admin'
-  if (role === 'owner' && !isOwnerLevel) return <Navigate to={`/login?status=access-denied&returnTo=${encodeURIComponent(location.pathname + location.search)}`} replace />
-  if (role === 'tenant' && user.role !== 'tenant') return <Navigate to={`/login?status=access-denied&returnTo=${encodeURIComponent(location.pathname + location.search)}`} replace />
+  if (role === 'owner' && !isOwnerLevel) return <Navigate to="/" replace />
+  if (role === 'tenant' && user.role !== 'tenant') return <Navigate to="/" replace />
 
   return children
 }

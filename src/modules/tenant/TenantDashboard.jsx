@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, Suspense } from 'react'
-import { CalendarDays, FileText, Home, IndianRupee, LogOut, Map, ReceiptText, Settings, UsersRound, MessagesSquare } from 'lucide-react'
+import { CalendarDays, FileText, Home, IndianRupee, LogOut, Map, ReceiptText, Settings, UsersRound, MessagesSquare, Building2, LayoutDashboard, Megaphone, Wrench, WalletCards, Search, ArrowRight } from 'lucide-react'
 
 const RentSubmission = React.lazy(() => import('./RentSubmission'))
 const RentHistory = React.lazy(() => import('./RentHistory'))
@@ -65,26 +65,17 @@ export default function TenantDashboard() {
 
   async function handleRefresh() { setRefreshKey(k => k + 1); await new Promise(r => setTimeout(r, 500)) }
 
-  return <div className="rm-figma-workspace rm-figma-tenant min-h-screen bg-paper">
+  return <div className="min-h-screen bg-paper rm-tenant-app">
     <a href="#main-content" className="skip-link">Skip to main content</a>
-    <header className="bg-cover text-paper px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 sticky top-0 z-50 shadow-lg">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <div className="w-10 h-10 rounded-xl bg-brass/30 border border-brass overflow-hidden flex items-center justify-center text-sm font-semibold shrink-0" aria-hidden="true">{user?.name?.[0]}</div>
-        <div className="min-w-0"><h1 className="font-display text-base sm:text-lg leading-tight truncate">Welcome, {user?.name}</h1><p className="text-[11px] sm:text-xs text-brass-light truncate">Customer ID {user?.customerId}</p></div>
-      </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <NotificationBell userId={user?.uid} darkHeader />
-        <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={19}/></button>
-        <ThemeToggle />
-        <IconButton icon={LogOut} label="Log out" onClick={logout} />
-      </div>
-    </header>
-
-    <PullToRefresh onRefresh={handleRefresh}>
-      <Suspense fallback={<LoadingScreen />}>
-        {isMobile ? <MobileTenantContent user={user} refreshKey={refreshKey} setRefreshKey={setRefreshKey} /> : <DesktopTenantContent user={user} refreshKey={refreshKey} setRefreshKey={setRefreshKey} />}
-      </Suspense>
-    </PullToRefresh>
+    {isMobile ? <>
+      <header className="rm-tenant-mobile-topbar">
+        <div className="rm-tenant-mobile-brand"><span className="rm-profile-avatar">{user?.name?.[0]}</span><span><strong>{user?.propertyName || 'Rental Manager'}</strong><small>{user?.name} · {user?.houseId}</small></span></div>
+        <div className="flex items-center gap-1"><NotificationBell userId={user?.uid}/><button type="button" onClick={() => setSettingsOpen(true)} className="rm-icon-button" aria-label="Open settings"><Settings size={17}/></button></div>
+      </header>
+      <PullToRefresh onRefresh={handleRefresh}><Suspense fallback={<LoadingScreen />}><MobileTenantContent user={user} refreshKey={refreshKey} setRefreshKey={setRefreshKey} /></Suspense></PullToRefresh>
+    </> : <TenantDesktopShell user={user} onSettings={() => setSettingsOpen(true)} onLogout={logout}>
+      <PullToRefresh onRefresh={handleRefresh}><Suspense fallback={<LoadingScreen />}><DesktopTenantContent user={user} refreshKey={refreshKey} setRefreshKey={setRefreshKey} /></Suspense></PullToRefresh>
+    </TenantDesktopShell>}
 
     <InstallAppPrompt />
     <UserSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
@@ -93,23 +84,37 @@ export default function TenantDashboard() {
 
 function DesktopTenantContent({ user, refreshKey, setRefreshKey }) {
   const payRef = useRef(null)
-  return <>
-    <div id="tenant-home" className="p-4 sm:p-6 max-w-7xl mx-auto space-y-4 scroll-mt-4">
-      {tenantCan(user, 'rentStatus') && <TenantRentHero key={`hero-${refreshKey}`} canSubmit={tenantCan(user, 'rentSubmit')} showDetails={tenantCan(user, 'rentDetails')} onPayNow={() => payRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />}
-      {tenantCan(user, 'rentDetails') && <RentRevisionBanner />}
-      {tenantCan(user, 'notices') && <NoticeFeed />}
+  return <main id="main-content" tabIndex={-1} className="rm-tenant-workspace">
+    <div id="tenant-home" className="rm-tenant-heading"><div><h1>Welcome home, {user?.name?.split(' ')[0] || 'there'}</h1><p>{user?.houseId ? `${user.houseId} · ` : ''}{user?.propertyName || 'Your rental home'} · Your home workspace</p></div></div>
+    <div className="rm-tenant-home-grid">
+      <div className="rm-tenant-home-main">
+        {tenantCan(user, 'rentStatus') && <TenantRentHero key={`hero-${refreshKey}`} canSubmit={tenantCan(user, 'rentSubmit')} showDetails={tenantCan(user, 'rentDetails')} onPayNow={() => payRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />}
+        {tenantCan(user, 'rentDetails') && <RentRevisionBanner />}
+        {tenantCan(user, 'notices') && <section id="tenant-messages" className="rm-tenant-panel"><div className="rm-tenant-panel-heading"><h2>Around your home</h2><a href="#tenant-messages">View notices <ArrowRight size={13}/></a></div><NoticeFeed />{tenantCan(user, 'maintenance') && <div className="rm-tenant-embedded"><MaintenanceRequest /></div>}{tenantCan(user, 'rentDetails') && <div className="rm-tenant-embedded"><RentAgreementView /></div>}</section>}
+        {tenantCan(user, 'rentDetails') && <section id="tenant-rent" className="rm-tenant-panel"><div className="rm-tenant-panel-heading"><h2>Rent history</h2><a href="#tenant-rent">All payments <ArrowRight size={13}/></a></div><RentHistory key={`history-${refreshKey}`} /></section>}
+        <div id="tenant-more" className="rm-tenant-services">
+          {tenantCan(user, 'complaints') && <RaiseComplaint />}{tenantCan(user, 'directory') && <Directory />}{tenantCan(user, 'serviceContacts') && <ServiceContacts />}{tenantCan(user, 'documents') && <DocumentUpload />}{tenantCan(user, 'blueprint') && <div id="tenant-blueprint"><BlueprintManager /></div>}{tenantCan(user, 'visitors') && <VisitorLog />}{tenantCan(user, 'commonArea') && <BookCommonArea />}{isSubAccount(user) && <FamilyAccessNotice />}
+        </div>
+        {tenantCan(user, 'calendar') && <section id="tenant-calendar" className="rm-tenant-panel"><div className="rm-tenant-panel-heading"><h2>Home calendar</h2></div><IndiaCalendar compact/><WasteSchedule/></section>}
+        {tenantCan(user, 'community') && <CommunityBoard user={user} />}{tenantCan(user, 'community') && <WifiShareBoard />}{isPrimary(user) && tenantCan(user, 'family') && <FamilyAccounts />}
+        <footer className="rm-tenant-footer">Need help? Open Service contacts or send a maintenance request to your property owner.</footer>
+      </div>
+      <aside className="rm-tenant-home-aside">
+        {tenantCan(user, 'bills') && <section id="tenant-bills" className="rm-tenant-panel rm-tenant-bill-panel"><div className="rm-tenant-panel-heading"><h2>Water bill</h2></div><WaterBillShare key={`water-${refreshKey}`} /></section>}
+        {tenantCan(user, 'bills') && <section className="rm-tenant-panel rm-tenant-bill-panel"><div className="rm-tenant-panel-heading"><h2>Electricity / EB</h2></div><EBBillShare key={`eb-${refreshKey}`} /></section>}
+        {tenantCan(user, 'rentSubmit') && <section ref={payRef} className="rm-tenant-panel rm-tenant-payment-panel"><div className="rm-tenant-panel-heading"><h2>Already made a payment?</h2></div><p>Submit proof for another bill or payment. Your rent is reviewed by the property owner.</p><RentSubmission onSubmitted={() => setRefreshKey(k => k + 1)} /></section>}
+      </aside>
     </div>
-    <main id="main-content" tabIndex={-1} className="px-4 sm:px-6 pb-24 lg:pb-8 max-w-7xl mx-auto space-y-6 scroll-mt-4">
-      {(tenantCan(user, 'rentStatus') || tenantCan(user, 'rentDetails') || tenantCan(user, 'rentSubmit')) && <div id="tenant-rent" ref={payRef} className="grid md:grid-cols-2 gap-4">{tenantCan(user, 'rentSubmit') && <RentSubmission onSubmitted={() => setRefreshKey(k => k + 1)} />}{tenantCan(user, 'rentDetails') && <RentHistory key={`history-${refreshKey}`} />}</div>}
-      {tenantCan(user, 'bills') && <section id="tenant-bills" className="space-y-4"><EBBillShare key={`eb-${refreshKey}`} /><WaterBillShare key={`water-${refreshKey}`} /></section>}
-      <section id="tenant-more" aria-labelledby="more-heading"><h2 id="more-heading" className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-2">More</h2><div className="grid md:grid-cols-2 gap-4">
-        {tenantCan(user, 'complaints') && <RaiseComplaint />}{tenantCan(user, 'rentDetails') && <RentAgreementView />}{tenantCan(user, 'directory') && <Directory />}{tenantCan(user, 'serviceContacts') && <ServiceContacts />}{tenantCan(user, 'documents') && <DocumentUpload />}{tenantCan(user, 'blueprint') && <div id="tenant-blueprint"><BlueprintManager /></div>}{tenantCan(user, 'maintenance') && <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><MaintenanceRequest /></div>}{tenantCan(user, 'visitors') && <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><VisitorLog /></div>}{tenantCan(user, 'commonArea') && <div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><BookCommonArea /></div>}{isSubAccount(user) && <FamilyAccessNotice />}
-      </div></section>
-      {tenantCan(user, 'calendar') && <div id="tenant-calendar" className="grid lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,.75fr)] gap-4 items-start"><div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><IndiaCalendar compact /></div><div className="bg-paper-raised rounded-2xl border border-brass/20 shadow-sm p-5"><WasteSchedule /></div></div>}
-      {tenantCan(user, 'community') && <CommunityBoard user={user} />}{tenantCan(user, 'community') && <WifiShareBoard />}{isPrimary(user) && tenantCan(user, 'family') && <FamilyAccounts />}
-      <footer className="text-center text-xs text-ink-soft py-4 border-t border-brass/15">Need help? Check <span className="font-medium text-ink">Service Contacts</span> above, or raise a complaint and the owner will reach out.</footer>
-    </main>
-  </>
+  </main>
+}
+
+function TenantDesktopShell({ user, onSettings, onLogout, children }) {
+  const nav = [['Home','tenant-home',LayoutDashboard],['Payments','tenant-rent',WalletCards],['Bills','tenant-bills',ReceiptText],['Notices','tenant-messages',Megaphone],['Maintenance','tenant-more',Wrench],['Agreement','tenant-more',FileText],['Settings','tenant-more',Settings]]
+  function jump(id) { document.getElementById(id)?.scrollIntoView({ behavior:'smooth',block:'start' }) }
+  return <div className="rm-tenant-layout">
+    <aside className="rm-tenant-sidebar"><div className="rm-owner-brand"><Building2 size={19}/><span>Rental Manager</span></div><div className="rm-tenant-identity"><span>TENANT WORKSPACE</span><strong>{user?.propertyName || 'Your rental home'}</strong><small>{user?.houseId || 'Resident account'} · {user?.name}</small></div><nav>{nav.map(([label,id,Icon],index)=><button key={label} onClick={()=>jump(id)} className={index===0?'is-active':''}><Icon size={15}/>{label}</button>)}</nav><div className="rm-owner-profile"><span className="rm-profile-avatar">{user?.name?.[0]}</span><span><strong>{user?.name}</strong><small>Tenant · {user?.houseId}</small></span></div></aside>
+    <div className="rm-owner-main-column"><header className="rm-owner-topbar"><span className="rm-topbar-property">{user?.propertyName || 'Your home'}</span><div className="rm-topbar-actions"><label className="rm-tenant-global-search"><Search size={14}/><input aria-label="Search your workspace" placeholder="Search your workspace"/></label><NotificationBell userId={user?.uid}/><ThemeToggle/><button type="button" onClick={onSettings} className="rm-icon-button" aria-label="Open settings"><Settings size={17}/></button><IconButton icon={LogOut} label="Log out" onClick={onLogout}/></div></header>{children}</div>
+  </div>
 }
 
 function MobileTenantContent({ user, refreshKey, setRefreshKey }) {

@@ -5,11 +5,12 @@ import {
   Home, DoorOpen, Users, CheckCircle2, PenSquare, Zap, ZapOff,
   Bell, MessageSquareWarning, Phone, FileText, MessagesSquare, MoreHorizontal, Settings,
   LogOut, IndianRupee, BarChart3, Droplets, CalendarDays,
-  Wrench, Megaphone, ReceiptIndianRupee
+  Wrench, Megaphone, ReceiptIndianRupee, Building2
 } from 'lucide-react'
 
 const OwnerHome = React.lazy(() => import('./OwnerHome'))
 const HouseManager = React.lazy(() => import('./HouseManager'))
+const PropertySetup = React.lazy(() => import('./PropertySetup'))
 const TenantsSection = React.lazy(() => import('./TenantsSection'))
 const RentApprovalQueue = React.lazy(() => import('./RentApprovalQueue'))
 const EBBillCreator = React.lazy(() => import('./EBBillCreator'))
@@ -18,6 +19,7 @@ const WaterBillCreator = React.lazy(() => import('./WaterBillCreator'))
 const WaterApprovalQueue = React.lazy(() => import('./WaterApprovalQueue'))
 const NoticeManager = React.lazy(() => import('./NoticeManager'))
 const ComplaintInbox = React.lazy(() => import('./ComplaintInbox'))
+const MaintenanceManager = React.lazy(() => import('./MaintenanceManager'))
 const ServiceContactsManager = React.lazy(() => import('./ServiceContactsManager'))
 const ManualEntryForTenant = React.lazy(() => import('./ManualEntryForTenant'))
 const PaymentReminders = React.lazy(() => import('./PaymentReminders'))
@@ -28,7 +30,7 @@ const CommunityBoard = React.lazy(() => import('../shared/CommunityBoard'))
 const AnalyticsDashboard = React.lazy(() => import('./AnalyticsDashboard'))
 const PaymentCalendar = React.lazy(() => import('./PaymentCalendar'))
 const MoreMenu = React.lazy(() => import('./MoreMenu'))
-const PropertySetup = React.lazy(() => import('./PropertySetup'))
+const AppSettings = React.lazy(() => import('./AppSettings'))
 import LoadingScreen from '../shared/LoadingScreen'
 import DadLiteDashboard from './DadLiteDashboard'
 import SearchBar from '../shared/SearchBar'
@@ -42,29 +44,32 @@ import { logout } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
 
 const TABS = [
-  { id: 'home', route: 'home', label: 'Overview', mobileLabel: 'Home', icon: Home, group: 'Daily' },
-  { id: 'houses', route: 'houses', label: 'Houses', mobileLabel: 'Houses', icon: DoorOpen, group: 'Daily' },
-  { id: 'tenants', route: 'tenants', label: 'Tenants', mobileLabel: 'Tenants', icon: Users, group: 'Daily' },
-  { id: 'approvals', route: 'approvals', label: 'Rent approvals', mobileLabel: 'Approvals', icon: CheckCircle2, group: 'Money' },
-  { id: 'manualEntry', route: 'manual-entry', label: 'Manual payment', icon: PenSquare, group: 'Money' },
-  { id: 'eb', route: 'eb-bill', label: 'EB bills', icon: Zap, group: 'Money' },
-  { id: 'ebApprovals', route: 'eb-approvals', label: 'EB approvals', icon: ZapOff, group: 'Money' },
-  { id: 'water', route: 'water-bill', label: 'Water bills', icon: Droplets, group: 'Money' },
-  { id: 'waterApprovals', route: 'water-approvals', label: 'Water approvals', icon: Droplets, group: 'Money' },
-  { id: 'expenses', route: 'expenses', label: 'Expenses', icon: IndianRupee, group: 'Money' },
-  { id: 'calendar', route: 'calendar', label: 'Payment calendar', icon: CalendarDays, group: 'Operations' },
-  { id: 'complaints', route: 'complaints', label: 'Complaints', icon: MessageSquareWarning, group: 'Operations' },
-  { id: 'notices', route: 'notices', label: 'Notices', icon: Megaphone, group: 'Operations' },
-  { id: 'reminders', route: 'reminders', label: 'Reminders', icon: Bell, group: 'Operations' },
-  { id: 'documents', route: 'documents', label: 'Documents', icon: FileText, group: 'Operations' },
-  { id: 'contacts', route: 'contacts', label: 'Service contacts', icon: Phone, group: 'Operations' },
-  { id: 'community', route: 'community', label: 'Community', icon: MessagesSquare, group: 'Community' },
-  { id: 'reports', route: 'reports', label: 'Reports', icon: ReceiptIndianRupee, group: 'Insights' },
-  { id: 'analytics', route: 'analytics', label: 'Analytics', icon: BarChart3, group: 'Insights' },
-  { id: 'more', route: 'more', label: 'More tools', mobileLabel: 'More', icon: MoreHorizontal, group: 'Admin' },
+  { id: 'home', route: 'home', label: 'Dashboard', mobileLabel: 'Home', icon: Home, group: 'Workspace' },
+  { id: 'houses', route: 'houses', label: 'Houses', mobileLabel: 'Houses', icon: DoorOpen, group: 'Workspace' },
+  { id: 'tenants', route: 'tenants', label: 'Tenants', mobileLabel: 'Tenants', icon: Users, group: 'Workspace' },
+  { id: 'approvals', route: 'approvals', label: 'Rent Approvals', mobileLabel: 'Approvals', icon: CheckCircle2, group: 'Finance', badge: true },
+  { id: 'manualEntry', route: 'manual-entry', label: 'Manual Payments', icon: PenSquare, group: 'Finance' },
+  { id: 'water', route: 'water-bill', label: 'Water Bills', icon: Droplets, group: 'Finance' },
+  { id: 'eb', route: 'eb-bill', label: 'EB Bills', icon: Zap, group: 'Finance' },
+  { id: 'reports', route: 'reports', label: 'Payment History', icon: ReceiptIndianRupee, group: 'Finance' },
+  { id: 'notices', route: 'notices', label: 'Announcements', icon: Megaphone, group: 'Property' },
+  { id: 'maintenance', route: 'maintenance', label: 'Maintenance', icon: Wrench, group: 'Property' },
+  { id: 'documents', route: 'documents', label: 'Documents', icon: FileText, group: 'Property' },
+  { id: 'analytics', route: 'analytics', label: 'Reports', icon: BarChart3, group: 'Property' },
+  { id: 'settings', route: 'settings', label: 'Settings', icon: Settings, group: 'Property' },
+  { id: 'more', route: 'more', label: 'More tools', mobileLabel: 'More', icon: MoreHorizontal, group: 'More' },
+  { id: 'ebApprovals', route: 'eb-approvals', label: 'EB approvals', icon: ZapOff, group: 'More', hidden: true },
+  { id: 'waterApprovals', route: 'water-approvals', label: 'Water approvals', icon: Droplets, group: 'More', hidden: true },
+  { id: 'expenses', route: 'expenses', label: 'Expenses', icon: IndianRupee, group: 'More', hidden: true },
+  { id: 'calendar', route: 'calendar', label: 'Payment calendar', icon: CalendarDays, group: 'More', hidden: true },
+  { id: 'reminders', route: 'reminders', label: 'Reminders', icon: Bell, group: 'More', hidden: true },
+  { id: 'contacts', route: 'contacts', label: 'Service contacts', icon: Phone, group: 'More', hidden: true },
+  { id: 'community', route: 'community', label: 'Community', icon: MessagesSquare, group: 'More', hidden: true },
+  { id: 'setup', route: 'setup', label: 'Property setup', icon: DoorOpen, group: 'More', hidden: true },
+  { id: 'complaints', route: 'complaints', label: 'Complaints', icon: MessageSquareWarning, group: 'More', hidden: true },
 ]
 
-const GROUPS = ['Daily', 'Money', 'Operations', 'Community', 'Insights', 'Admin']
+const GROUPS = ['Workspace', 'Finance', 'Property', 'More']
 const MOBILE_PRIMARY = ['home', 'houses', 'approvals', 'tenants', 'more']
 
 export default function OwnerDashboard() {
@@ -72,7 +77,7 @@ export default function OwnerDashboard() {
   const navigate = useNavigate()
   const location = useLocation()
   const pathSegment = location.pathname.split('/owner/')[1] || 'home'
-  const activeTabObj = TABS.find(t => t.route === pathSegment) || (pathSegment === 'house-setup' ? TABS.find(t => t.id === 'houses') : TABS[0])
+  const activeTabObj = TABS.find(t => t.route === pathSegment) || TABS[0]
   const tab = activeTabObj.id
   const [searchHouseId, setSearchHouseId] = useState(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -120,77 +125,39 @@ export default function OwnerDashboard() {
   if (user?.appMode === 'dad-lite') return <DadLiteDashboard />
 
   return (
-    <div className="rm-figma-workspace rm-figma-owner min-h-screen bg-paper text-ink">
+    <div className="rm-owner-shell min-h-screen bg-paper text-ink">
       <a href="#main-content" className="skip-link">Skip to main content</a>
-
-      <header className="sticky top-0 z-50 bg-cover text-white border-b border-white/10 shadow-lg">
-        <div className="h-[72px] px-4 lg:px-6 flex items-center justify-between gap-3">
-          <div className="hidden sm:flex items-center gap-3 min-w-0">
-            <div className="rm-owner-avatar w-10 h-10 rounded-xl bg-white/10 border border-white/15 items-center justify-center font-bold overflow-hidden shrink-0 flex">
-              {user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} alt="" className="w-full h-full object-cover" /> : user?.name?.[0]}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="font-display text-lg font-extrabold truncate">Rental Manager</h1>
-                <span className="hidden lg:inline-flex"><PropertySwitcher /></span>
-              </div>
-              <p className="text-xs text-white/65 truncate">{user?.name}{user?.role === 'admin' ? ' · Super Admin' : ' · Owner'}</p>
-            </div>
-          </div>
-          <div className="sm:hidden flex items-center min-w-0 flex-1 gap-1.5">
-            <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 grid place-items-center font-bold shrink-0 overflow-hidden">{user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} alt="" className="w-full h-full object-cover" /> : user?.name?.[0]}</div>
-            <div className="min-w-0 flex-1"><PropertySwitcher /></div>
-          </div>
-
-          <div className="hidden md:flex items-center gap-2 shrink-0">
-            <SearchBar onSelectHouse={handleSearchSelect} />
-            <NotificationBell userId={user?.uid} darkHeader />
-            <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={19}/></button>
-            <ThemeToggle />
-            <IconButton icon={LogOut} label="Log out" onClick={logout} />
-          </div>
-          <div className="md:hidden flex items-center gap-1 shrink-0">
-            <NotificationBell userId={user?.uid} darkHeader />
-            <button type="button" onClick={() => setSettingsOpen(true)} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Open Settings"><Settings size={18}/></button>
-            <button type="button" onClick={logout} className="w-10 h-10 rounded-xl hover:bg-white/10 grid place-items-center" aria-label="Log out"><LogOut size={18}/></button>
-          </div>
-        </div>
-      </header>
-
-      <div className="flex min-h-[calc(100vh-72px)]">
-        <aside className="hidden lg:flex w-[252px] shrink-0 border-r border-[var(--rm-border)] bg-paper-raised sticky top-[72px] h-[calc(100vh-72px)] overflow-y-auto">
-          <div className="w-full p-4">
-            <div className="px-3 pb-4 mb-2 border-b border-[var(--rm-border)]">
-              <div className="text-[11px] font-bold uppercase tracking-[.13em] text-ink-soft">Property workspace</div>
-              <div className="mt-1 text-sm font-semibold">Daily operations & property finance</div>
-            </div>
-            {GROUPS.map(group => {
-              const items = TABS.filter(t => t.group === group)
-              return (
-                <div key={group} className="mb-5">
-                  <div className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-ink-soft">{group}</div>
-                  <div className="space-y-0.5">
-                    {items.map(t => {
-                      const active = tab === t.id
-                      return (
-                        <button key={t.id} onClick={() => go(t.id)} aria-current={active ? 'page' : undefined}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[13px] transition ${active ? 'bg-brand/10 text-brand font-bold' : 'text-ink-soft hover:bg-paper hover:text-ink'}`}>
-                          <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${active ? 'bg-brand text-white' : 'bg-paper text-ink-soft'}`}><t.icon size={16} /></span>
-                          <span className="truncate">{t.label}</span>
-                          
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+      <div className="rm-owner-layout">
+        <aside className="rm-owner-sidebar hidden lg:flex">
+          <div className="rm-owner-brand"><Building2 size={19}/><span>Rental Manager</span></div>
+          <div className="rm-workspace-badge"><span>OWNER WORKSPACE</span><strong><PropertySwitcher /></strong></div>
+          <nav aria-label="Owner workspace" className="rm-owner-nav">
+            {GROUPS.map(group => <div key={group} className="rm-owner-nav-group">
+              {group !== 'Workspace' && <div className="rm-owner-nav-heading">{group}</div>}
+              {TABS.filter(t => t.group === group && !t.hidden).map(t => {
+                const active = tab === t.id
+                return <button key={t.id} onClick={() => go(t.id)} aria-current={active ? 'page' : undefined} className={`rm-owner-nav-item ${active ? 'is-active' : ''}`}>
+                  <t.icon size={16}/><span>{t.label}</span>{t.badge && <span className="rm-nav-badge" aria-label="Pending approvals"/>}
+                </button>
+              })}
+            </div>)}
+          </nav>
+          <div className="rm-owner-profile"><span className="rm-profile-avatar">{user?.profilePhotoUrl ? <img src={user.profilePhotoUrl} alt=""/> : user?.name?.[0]}</span><span><strong>{user?.name}</strong><small>{user?.role === 'admin' ? 'Super Admin' : 'Property owner'}</small></span></div>
         </aside>
-
-
-        <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8">
-          <div className="max-w-[1400px] mx-auto">
+        <div className="rm-owner-main-column">
+          <header className="rm-owner-topbar">
+            <div className="rm-mobile-brand lg:hidden"><span className="rm-profile-avatar">{user?.name?.[0]}</span><PropertySwitcher /></div>
+            <div className="rm-topbar-property hidden lg:block"><PropertySwitcher /></div>
+            <div className="rm-topbar-actions">
+              <div className="hidden md:block"><SearchBar onSelectHouse={handleSearchSelect} /></div>
+              <NotificationBell userId={user?.uid} />
+              <ThemeToggle />
+              <button type="button" onClick={() => setSettingsOpen(true)} className="rm-icon-button" aria-label="Open account settings"><Settings size={17}/></button>
+              <IconButton icon={LogOut} label="Log out" onClick={logout} />
+            </div>
+          </header>
+          <main id="main-content" tabIndex={-1} className="rm-owner-content">
+          <div className="rm-owner-content-inner">
             <div className="md:hidden mb-4"><SearchBar onSelectHouse={handleSearchSelect} /></div>
             <AnimatePresence mode="wait">
               <motion.div key={`${location.pathname}:${propertyVersion}`} role="tabpanel" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: .16 }}>
@@ -199,7 +166,7 @@ export default function OwnerDashboard() {
                     <Routes>
                     <Route path="home" element={<OwnerHome onNavigate={go} />} />
                     <Route path="houses" element={<HouseManager />} />
-                    <Route path="house-setup" element={<PropertySetup />} />
+                    <Route path="setup" element={<PropertySetup />} />
                     <Route path="tenants" element={<TenantsSection openHouseId={searchHouseId} onOpenHouseHandled={() => setSearchHouseId(null)} />} />
                     <Route path="calendar" element={<PaymentCalendar />} />
                     <Route path="approvals" element={<RentApprovalQueue />} />
@@ -209,6 +176,7 @@ export default function OwnerDashboard() {
                     <Route path="water-approvals" element={<WaterApprovalQueue />} />
                     <Route path="notices" element={<NoticeManager />} />
                     <Route path="complaints" element={<ComplaintInbox />} />
+                    <Route path="maintenance" element={<MaintenanceManager />} />
                     <Route path="contacts" element={<ServiceContactsManager />} />
                     <Route path="manual-entry" element={<ManualEntryForTenant />} />
                     <Route path="documents" element={<DocumentVerification />} />
@@ -218,6 +186,7 @@ export default function OwnerDashboard() {
                     <Route path="analytics" element={<AnalyticsDashboard />} />
                     <Route path="community" element={<CommunityBoard user={user} canModerate />} />
                     <Route path="more" element={<MoreMenu />} />
+                    <Route path="settings" element={<AppSettings />} />
                     <Route path="*" element={<OwnerHome onNavigate={go} />} />
                     </Routes>
                   </RouteErrorBoundary>
@@ -225,13 +194,14 @@ export default function OwnerDashboard() {
               </motion.div>
             </AnimatePresence>
           </div>
-        </main>
+          </main>
+        </div>
       </div>
 
       <nav className="rm-mobile-nav lg:hidden fixed bottom-0 inset-x-0 bg-paper-raised/95 backdrop-blur-xl border-t border-[var(--rm-border)] flex items-stretch z-40 shadow-[0_-8px_24px_rgba(23,32,51,.08)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} aria-label="Primary">
         {TABS.filter(t => MOBILE_PRIMARY.includes(t.id)).map(t => {
           const active = tab === t.id
-          return <button key={t.id} onClick={() => go(t.id)} title={t.mobileLabel || t.label} aria-label={t.mobileLabel || t.label} className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 py-2 px-1 ${active ? 'text-brand' : 'text-ink-soft'}`} aria-current={active ? 'page' : undefined}><span className={`w-9 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-brand/10' : ''}`}><t.icon size={18} /></span><span className="max-w-full truncate text-[10px] font-semibold">{t.mobileLabel || t.label}</span></button>
+          return <button key={t.id} onClick={() => go(t.id)} title={t.mobileLabel || t.label} aria-label={t.mobileLabel || t.label} className={`flex-1 min-w-0 flex items-center justify-center py-2 px-1 ${active ? 'text-brand' : 'text-ink-soft'}`} aria-current={active ? 'page' : undefined}><span className={`w-11 h-10 rounded-xl flex items-center justify-center ${active ? 'bg-brand/10' : ''}`}><t.icon size={21} /></span></button>
         })}
       </nav>
 
