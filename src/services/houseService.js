@@ -89,12 +89,19 @@ export async function listHouses(propertyId) {
     // for a missing field. For admin/legacy all-property owners, read the collection
     // only when viewing the default apartment and merge those legacy records.
     if (activePropertyId === 'default' && await canReadLegacyHouseRecords()) {
-      const knownIds = new Set(houses.map((h) => h.id))
-      const legacySnap = await getDocs(housesRef)
-      const legacy = legacySnap.docs
-        .filter((d) => !d.data().propertyId && !knownIds.has(d.id))
-        .map((d) => ({ id: d.id, ...d.data(), propertyId: 'default' }))
-      return sortHouses(houses.concat(legacy))
+      try {
+        const knownIds = new Set(houses.map((h) => h.id))
+        const legacySnap = await getDocs(housesRef)
+        const legacy = legacySnap.docs
+          .filter((d) => !d.data().propertyId && !knownIds.has(d.id))
+          .map((d) => ({ id: d.id, ...d.data(), propertyId: 'default' }))
+        return sortHouses(houses.concat(legacy))
+      } catch (error) {
+        // A ruleset may allow the property-scoped query while denying a broad
+        // legacy scan. Keep the authorized property results instead of failing
+        // every owner screen that uses the house directory.
+        console.warn('Legacy house records could not be added to the directory:', error?.message || error)
+      }
     }
 
     return sortHouses(houses)
@@ -112,11 +119,15 @@ export async function listAllHouses() {
     }))
     let houses = chunks.flat()
     if (activeIds.includes('default') && await canReadLegacyHouseRecords()) {
-      const knownIds = new Set(houses.map((h) => h.id))
-      const legacySnap = await getDocs(housesRef)
-      houses = houses.concat(legacySnap.docs
-        .filter((d) => !d.data().propertyId && !knownIds.has(d.id))
-        .map((d) => ({ id: d.id, ...d.data(), propertyId: 'default' })))
+      try {
+        const knownIds = new Set(houses.map((h) => h.id))
+        const legacySnap = await getDocs(housesRef)
+        houses = houses.concat(legacySnap.docs
+          .filter((d) => !d.data().propertyId && !knownIds.has(d.id))
+          .map((d) => ({ id: d.id, ...d.data(), propertyId: 'default' })))
+      } catch (error) {
+        console.warn('Legacy house records were skipped in the all-houses view:', error?.message || error)
+      }
     }
     return sortHouses(houses)
   }, 30000)

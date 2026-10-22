@@ -25,8 +25,15 @@ export default function OwnerHome({ onNavigate }) {
       const houses = await listHouses()
       const occupied = houses.filter(h => h.status === 'occupied')
       const month = currentMonthStr()
-      const histories = await Promise.all(occupied.map(h => listRentHistory(h.id)))
-      const payments = histories.flat()
+      // Rent history is supplementary to the house directory. If one legacy
+      // house has a stale rule or missing payment access, keep the dashboard
+      // usable and calculate the remaining cards from the records we can read.
+      const historyResults = await Promise.allSettled(occupied.map(h => listRentHistory(h.id)))
+      const historyIncomplete = historyResults.some(result => result.status === 'rejected')
+      historyResults.forEach((result, index) => {
+        if (result.status === 'rejected') console.warn(`Rent history unavailable for house ${occupied[index]?.id}`, result.reason)
+      })
+      const payments = historyResults.flatMap(result => result.status === 'fulfilled' ? result.value : [])
       const expected = occupied.reduce((sum, house) => sum + Number(house.rentAmount || 0), 0)
       const received = payments.filter(p => p.month === month && p.status === 'approved').reduce((sum, p) => sum + Number(p.amount || 0), 0)
       const pending = payments.filter(p => p.month === month && p.status === 'waiting_approval')
@@ -36,11 +43,16 @@ export default function OwnerHome({ onNavigate }) {
         const paid = payments.some(p => p.houseId === h.id && p.month === month && p.status === 'approved')
         return !paid && !pendingHouseIds.has(h.id)
       }).slice(0, 4)
-      const [notices, complaints, maintenance] = await Promise.all([
+      const optionalReads = await Promise.allSettled([
         listActiveNoticesForHouses(houses.map(h => h.id)),
         listAllComplaints(houses.map(h => h.id), houses[0]?.propertyId || null),
         listAllRequests('all', houses.map(h => h.id)),
       ])
+      const [notices, complaints, maintenance] = optionalReads.map(result => {
+        if (result.status === 'fulfilled') return result.value
+        console.warn('Optional dashboard information is unavailable', result.reason)
+        return []
+      })
       const current = new Date()
       const months = Array.from({ length: 7 }, (_, index) => {
         const date = new Date(current.getFullYear(), current.getMonth() - 6 + index, 1)
@@ -51,7 +63,7 @@ export default function OwnerHome({ onNavigate }) {
         ...payments.map(p => ({ id: `rent-${p.id}`, type: 'rent', title: `${p.houseId ? `${houses.find(h => h.id === p.houseId)?.internalDoorNumber || 'House'} · ` : ''}Rent ${p.status === 'approved' ? 'approved' : p.status === 'waiting_approval' ? 'submitted for review' : 'updated'}`, detail: `${p.month || month} · ${money(p.amount)}${p.mode ? ` · ${p.mode}` : ''}`, time: Number(p.updatedAt || p.createdAt || p.timestamp || 0), action: p.status === 'waiting_approval' ? 'Review' : 'Payment history', route: p.status === 'waiting_approval' ? 'approvals' : 'reports' })),
         ...notices.map(n => ({ id: `notice-${n.id}`, type: 'notice', title: 'Notice published', detail: n.message || n.title || 'Resident announcement', time: Number(n.createdAt || n.timestamp || 0), action: 'View notice', route: 'notices' })),
       ].sort((a, b) => b.time - a.time).slice(0, 5)
-      setData({ houses, occupied, expected, received, outstanding: Math.max(expected - received, 0), pendingAmount, pendingCount: pending.length, needsAttention, notices, openIssues: maintenance.filter(request => request.status === 'open' || request.status === 'in_progress').length + complaints.filter(c => c.status === 'open').length, months, activity, month })
+      setData({ houses, occupied, expected, received, outstanding: Math.max(expected - received, 0), historyIncomplete, pendingAmount, pendingCount: pending.length, needsAttention, notices, openIssues: maintenance.filter(request => request.status === 'open' || request.status === 'in_progress').length + complaints.filter(c => c.status === 'open').length, months, activity, month })
     } catch (err) {
       console.error(err)
       setError(err)
@@ -77,30 +89,34 @@ export default function OwnerHome({ onNavigate }) {
       <button className="rm-month-picker" type="button" aria-label={`Selected month ${monthLabel}`}><span>{monthLabel}</span><CalendarDays size={15}/></button>
     </section>
 
+    {data.historyIncomplete && <div className="rm-data-note" role="status">Some rent history could not be read. Collection totals and approval counts are hidden until the records are available.</div>}
+
     <section className="rm-summary-grid" aria-label="Monthly rent summary">
       <Summary label="Expected rent" value={money(data.expected)} detail={`${monthLabel} · ${data.occupied.length} occupied houses`} />
-      <Summary label="Rent received" value={money(data.received)} detail={data.expected ? `${Math.round(data.received / data.expected * 100)}% collected` : 'No active rent this month'} />
-      <Summary label="Outstanding rent" value={money(data.outstanding)} detail={data.pendingAmount ? `Includes ${money(data.pendingAmount)} pending approval` : 'Approved payments deducted'} />
+      <Summary label="Rent received" value={data.historyIncomplete ? '—' : money(data.received)} detail={data.historyIncomplete ? 'Payment history unavailable' : data.expected ? `${Math.round(data.received / data.expected * 100)}% collected` : 'No active rent this month'} />
+      <Summary label="Outstanding rent" value={data.historyIncomplete ? '—' : money(data.outstanding)} detail={data.historyIncomplete ? 'Payment history unavailable' : data.pendingAmount ? `Includes ${money(data.pendingAmount)} pending approval` : 'Approved payments deducted'} />
     </section>
 
     <section className="rm-dashboard-grid rm-dashboard-grid-primary">
       <div className="rm-panel rm-collection-panel">
         <div className="rm-panel-heading"><div><h2>Rent collection</h2><p>Received as a share of expected rent</p></div><button className="rm-inline-link" onClick={() => onNavigate('reports')}>View report <ArrowRight size={14}/></button></div>
-        <div className="rm-chart-heading"><span>{monthLabel}</span><strong>{data.expected ? `${Math.round(data.received / data.expected * 100)}%` : '0%'} collected</strong></div>
-        <div className="rm-collection-chart" role="img" aria-label={`Rent received for seven months, current collection ${money(data.received)}`}>
-          {data.months.map(item => <div className="rm-chart-column" key={item.key}><div className={`rm-chart-bar ${item.key === data.month ? 'is-current' : ''}`} style={{ height: `${Math.max(item.amount ? item.amount / maxBar * 100 : 0, 8)}%` }} title={`${item.label}: ${money(item.amount)}`}/><span>{item.label}</span></div>)}
+        <div className="rm-chart-heading"><span>{monthLabel}</span><strong>{data.historyIncomplete ? 'Unavailable' : `${data.expected ? Math.round(data.received / data.expected * 100) : 0}% collected`}</strong></div>
+        <div className="rm-collection-chart" role="img" aria-label={data.historyIncomplete ? 'Rent history unavailable' : `Rent received for seven months, current collection ${money(data.received)}`}>
+          {data.historyIncomplete ? <span className="rm-chart-unavailable">Payment history unavailable</span> : data.months.map(item => <div className="rm-chart-column" key={item.key}><div className={`rm-chart-bar ${item.key === data.month ? 'is-current' : ''}`} style={{ height: `${Math.max(item.amount ? item.amount / maxBar * 100 : 0, 8)}%` }} title={`${item.label}: ${money(item.amount)}`}/><span>{item.label}</span></div>)}
         </div>
-        <p className="rm-chart-note">{money(data.received)} collected in approved rent this month.</p>
+        <p className="rm-chart-note">{data.historyIncomplete ? 'The chart will return when rent history access is restored.' : `${money(data.received)} collected in approved rent this month.`}</p>
       </div>
 
       <div className="rm-panel rm-attention-panel">
         <div className="rm-panel-heading"><div><h2>Needs your attention</h2><p>{data.pendingCount + data.needsAttention.length + data.openIssues} items need a look</p></div></div>
-        {data.pendingCount > 0 && <div className="rm-approval-summary"><div><strong>{data.pendingCount} rent submission{data.pendingCount === 1 ? '' : 's'} · {money(data.pendingAmount)}</strong><small>Waiting for owner review</small></div><button onClick={() => onNavigate('approvals')}>Approve rent</button></div>}
-        <div className="rm-attention-list">
-          {data.needsAttention.slice(0, 3).map(h => <button key={h.id} className="rm-attention-row" onClick={() => onNavigate('houses')}><span className="rm-attention-icon"><CircleAlert size={15}/></span><span><strong>{h.internalDoorNumber} · {h.tenantName || 'Tenant'}</strong><small>{money(h.rentAmount)} rent not yet approved</small></span><ArrowRight size={15}/></button>)}
-          {data.openIssues > 0 && <button className="rm-attention-row" onClick={() => onNavigate('maintenance')}><span className="rm-attention-icon"><Wrench size={15}/></span><span><strong>{data.openIssues} open maintenance request{data.openIssues === 1 ? '' : 's'}</strong><small>Review resident issues</small></span><ArrowRight size={15}/></button>}
-          {!data.pendingCount && !data.needsAttention.length && !data.openIssues && <div className="rm-attention-clear"><CircleCheck size={17}/> Everything is up to date.</div>}
-        </div>
+        {data.historyIncomplete ? <p className="rm-attention-unavailable">Rent approvals and overdue follow-ups are hidden until payment history access is restored.</p> : <>
+          {data.pendingCount > 0 && <div className="rm-approval-summary"><div><strong>{data.pendingCount} rent submission{data.pendingCount === 1 ? '' : 's'} · {money(data.pendingAmount)}</strong><small>Waiting for owner review</small></div><button onClick={() => onNavigate('approvals')}>Approve rent</button></div>}
+          <div className="rm-attention-list">
+            {data.needsAttention.slice(0, 3).map(h => <button key={h.id} className="rm-attention-row" onClick={() => onNavigate('houses')}><span className="rm-attention-icon"><CircleAlert size={15}/></span><span><strong>{h.internalDoorNumber} · {h.tenantName || 'Tenant'}</strong><small>{money(h.rentAmount)} rent not yet approved</small></span><ArrowRight size={15}/></button>)}
+            {data.openIssues > 0 && <button className="rm-attention-row" onClick={() => onNavigate('maintenance')}><span className="rm-attention-icon"><Wrench size={15}/></span><span><strong>{data.openIssues} open maintenance request{data.openIssues === 1 ? '' : 's'}</strong><small>Review resident issues</small></span><ArrowRight size={15}/></button>}
+            {!data.pendingCount && !data.needsAttention.length && !data.openIssues && <div className="rm-attention-clear"><CircleCheck size={17}/> Everything is up to date.</div>}
+          </div>
+        </>}
         {data.notices.length > 0 && <div className="rm-attention-foot"><span>Latest notice</span><strong>{data.notices[0].title || data.notices[0].message || 'Resident announcement'}</strong></div>}
       </div>
     </section>
